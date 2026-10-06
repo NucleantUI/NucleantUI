@@ -4,7 +4,7 @@
 //
 //  `.preference`, `.transformPreference` and `.onPreferenceChange`. The
 //  first two are nodes that change what flows up through them (see
-//  `PreferenceContent`); the third registers the node it builds with the
+//  `NodeContent.preference(_:below:)`); the third registers the node it builds with the
 //  pass's effects, which read its subtree's value once the tree stands.
 //
 
@@ -52,7 +52,7 @@ extension View {
 // MARK: - Nodes
 
 /// `.preference(key:value:)`: the subtree's value for `K` is this one.
-struct PreferenceWriterContent<K: PreferenceKey>: NodeContent, PreferenceContent {
+struct PreferenceWriterContent<K: PreferenceKey>: NodeContent {
     let value: K.Value
 
     func preference<Key: PreferenceKey>(_ key: Key.Type, below: Key.Value?) -> Key.Value? {
@@ -62,7 +62,7 @@ struct PreferenceWriterContent<K: PreferenceKey>: NodeContent, PreferenceContent
 }
 
 /// `.transformPreference(_:_:)`: the subtree's value for `K`, edited.
-struct PreferenceTransformContent<K: PreferenceKey>: NodeContent, PreferenceContent {
+struct PreferenceTransformContent<K: PreferenceKey>: NodeContent {
     let transform: (inout K.Value) -> Void
 
     func preference<Key: PreferenceKey>(_ key: Key.Type, below: Key.Value?) -> Key.Value? {

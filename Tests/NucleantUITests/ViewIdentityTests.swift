@@ -8,6 +8,7 @@
 //  anything that says none of those.
 //
 
+import Observation
 import Testing
 @testable import NucleantUI
 
@@ -59,9 +60,48 @@ struct ViewIdentityTests {
         #expect(first._viewID != second._viewID)
     }
 
+    /// The same, for a view declared in the framework and constructed from
+    /// another module: the macro in `Text.init`'s default argument is
+    /// expanded at *this* module's call site, not at the one in
+    /// `Views/Text.swift` where the parameter is written.
+    ///
+    /// `Text("…")` written with a literal is the case that bites: while
+    /// `Text` conformed to `ExpressibleByStringLiteral`, the compiler read
+    /// it as the literal becoming a `Text` rather than a call to
+    /// `init(_:_viewID:)`, and the site was lost — every `Text` literal in
+    /// the program shared one identity.
+    @Test func aFrameworkViewTakesTheCallSiteOfTheModuleUsingIt() {
+        let first = Text("a")
+        let second = Text("a")
+        #expect(first._viewID != .unknown)
+        #expect(first._viewID != second._viewID)
+    }
+
     @Test func oneCallSiteIsOneViewIDEveryTime() {
         func make() -> Label { Label(title: "a") }
         #expect(make()._viewID == make()._viewID)
+    }
+
+    /// Erasing a view keeps its site. Nothing builds an `AnyView` where the
+    /// author wrote the view — every one in the framework is plumbing — so
+    /// the only site worth carrying is the erased view's own.
+    @Test func anAnyViewCarriesTheErasedViewsCallSite() {
+        let first = Label(title: "a")
+        let second = Label(title: "a")
+        #expect(AnyView(first)._viewID == first._viewID)
+        #expect(AnyView(first)._viewID != AnyView(second)._viewID)
+    }
+
+    /// And an `AnyView` written in a body around a view with no site of its
+    /// own still takes the builder's stamp, one per expression.
+    @Test func anAnyViewWithNothingToCarryIsStampedByTheBuilder() {
+        @ViewBuilder func pair() -> TupleView<AnyView, AnyView> {
+            AnyView(EmptyView())
+            AnyView(EmptyView())
+        }
+        let (first, second) = pair().value
+        #expect(first._viewID != .unknown)
+        #expect(first._viewID != second._viewID)
     }
 
     @Test func eachViewInABuilderHasItsOwnSite() {
@@ -251,6 +291,98 @@ extension HostedViews {
             #expect(log.take() == ["b 1"])
             await harness.tap(Point(x: 100, y: 50))    // row "a"
             #expect(log.take() == ["a 1"])
+        }
+    }
+}
+
+// MARK: - Splicing a scoped rebuild back into the tree
+
+@MainActor
+@Observable
+private final class Flag {
+    var on = false
+}
+
+/// The sibling that must survive. Logs when it is the thing tapped.
+@View
+private struct Marker {
+    let log: Log
+
+    var body: some View {
+        Color.red
+            .frame(width: 100, height: 160)
+            .contentShape(Rectangle())
+            .onTapGesture { log("left") }
+    }
+}
+
+/// Flips the model, from outside the panel — so the panel's own body holds
+/// no gesture and compares equivalent on the rebuild the write causes.
+@View
+private struct Switcher {
+    let model: Flag
+
+    var body: some View {
+        Color.gray
+            .frame(width: 200, height: 40)
+            .contentShape(Rectangle())
+            .onTapGesture { model.on.toggle() }
+    }
+}
+
+/// The view the write dirties. It reads the model, so the write rebuilds
+/// exactly this path — and a view rebuilt at its own path draws into a
+/// render node of its own from then on. That boundary node adopts the body
+/// node the rebuild just *reused*, which rewrites that node's
+/// `indexInParent` while it is still standing in the stack: read after the
+/// rebuild, it says 0, and the splice lands on the first sibling.
+///
+/// It draws the same thing either way, so the body node is reused rather
+/// than built again. Both halves matter.
+@View
+private struct Panel {
+    let model: Flag
+
+    var body: some View {
+        let _ = model.on
+        VStack(spacing: 0) {
+            Color.blue
+        }
+        .frame(width: 100, height: 160)
+    }
+}
+
+@View
+private struct SideBySide {
+    let model: Flag
+    let log: Log
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Switcher(model: model)
+            HStack(spacing: 0) {
+                Marker(log: log)
+                Panel(model: model)
+            }
+        }
+    }
+}
+
+extension HostedViews {
+
+    @MainActor
+    @Suite
+    struct ScopedRebuildSplicing {
+
+        /// A scoped rebuild puts the view back where it stood — not over
+        /// whichever sibling happens to be first.
+        @Test func aScopedRebuildDoesNotDisplaceItsSibling() async {
+            let log = Log()
+            let harness = Harness(SideBySide(model: Flag(), log: log))
+            await harness.tap(Point(x: 100, y: 20))     // dirty the panel
+            #expect(log.take() == [])
+            await harness.tap(Point(x: 50, y: 120))     // the sibling, still its own view
+            #expect(log.take() == ["left"])
         }
     }
 }

@@ -2,40 +2,54 @@
 //  Geometry.swift
 //  NucleantUI
 //
-//  Doubles throughout, matching the rest of the Nucleant stack (SIMD2<Double>
-//  frames in PyNucleantUI's layout), rather than SDLUI's Float RectF.
+//  Doubles throughout. `Point` and `Size` are `SIMD2<Double>`, the vector
+//  the render side (render nodes, Skia, ThorVG) already takes, so layout math
+//  runs packed and hands over without repacking. `Rect` is SwiftUI's
+//  origin + size.
 //
 
-public struct Point: Hashable, Sendable {
-    public var x: Double
-    public var y: Double
+/// A position: SwiftUI's `CGPoint`. `x`/`y`, `init(x:y:)`, `.zero` and the
+/// arithmetic all come with `SIMD2`.
+public typealias Point = SIMD2<Double>
 
-    public init(x: Double = 0, y: Double = 0) {
-        self.x = x
-        self.y = y
+/// An extent: SwiftUI's `CGSize`. `width`/`height` name the same two lanes as
+/// `x`/`y`, so a size adds straight onto a point.
+public typealias Size = SIMD2<Double>
+
+extension SIMD2 where Scalar == Double {
+    public init(width: Double, height: Double) {
+        self.init(width, height)
     }
 
-    public static let zero = Point()
-}
-
-public struct Size: Hashable, Sendable {
-    public var width: Double
-    public var height: Double
-
-    public init(width: Double = 0, height: Double = 0) {
-        self.width = width
-        self.height = height
+    public var width: Double {
+        get { x }
+        set { x = newValue }
     }
 
-    public static let zero = Size()
+    public var height: Double {
+        get { y }
+        set { y = newValue }
+    }
 
-    /// The extent along one axis — lets the stack maths read a size the same
-    /// way it reads a `ProposedSize`.
+    /// One axis of a point or size, so stack maths can be written once for
+    /// both axes and read a size the same way it reads a `ProposedSize`.
     public subscript(axis: Axis) -> Double {
-        get { axis == .horizontal ? width : height }
+        get { axis == .horizontal ? x : y }
         set {
-            if axis == .horizontal { width = newValue } else { height = newValue }
+            if axis == .horizontal { x = newValue } else { y = newValue }
         }
+    }
+
+    /// `Swift.max(self, other)` in each lane, as one packed compare and
+    /// select. The stdlib's `pointwiseMax` follows IEEE NaN rules lane by
+    /// lane instead, which compiles to branchy scalar code.
+    func lanewiseMax(_ other: Self) -> Self {
+        replacing(with: other, where: other .>= self)
+    }
+
+    /// `Swift.min(self, other)` in each lane; see `lanewiseMax`.
+    func lanewiseMin(_ other: Self) -> Self {
+        replacing(with: other, where: other .< self)
     }
 }
 
@@ -49,10 +63,10 @@ public struct Rect: Hashable, Sendable {
     }
 
     public init(x: Double, y: Double, width: Double, height: Double) {
-        self.init(origin: .init(x: x, y: y), size: .init(width: width, height: height))
+        self.init(origin: Point(x, y), size: Size(width, height))
     }
 
-    public static let zero = Rect(x: 0, y: 0, width: 0, height: 0)
+    public static let zero = Rect(origin: .zero, size: .zero)
 
     public var x: Double { origin.x }
     public var y: Double { origin.y }
@@ -66,23 +80,20 @@ public struct Rect: Hashable, Sendable {
     public var midX: Double { origin.x + size.width / 2 }
     public var midY: Double { origin.y + size.height / 2 }
 
-    public var center: Point { .init(x: midX, y: midY) }
+    public var center: Point { origin + size / 2 }
 
     public func contains(_ point: Point) -> Bool {
-        point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
+        all((point .>= origin) .& (point .< origin + size))
     }
 
     public func offsetBy(dx: Double, dy: Double) -> Rect {
-        Rect(x: x + dx, y: y + dy, width: width, height: height)
+        Rect(origin: origin + Point(dx, dy), size: size)
     }
 
     public func insetBy(_ insets: EdgeInsets) -> Rect {
-        Rect(
-            x:      x + insets.leading,
-            y:      y + insets.top,
-            width:  Swift.max(0, width  - insets.leading - insets.trailing),
-            height: Swift.max(0, height - insets.top     - insets.bottom)
-        )
+        let leadingTop = SIMD2(insets.leading, insets.top)
+        let inner = size - leadingTop - SIMD2(insets.trailing, insets.bottom)
+        return Rect(origin: origin + leadingTop, size: Size.zero.lanewiseMax(inner))
     }
 
     public func insetBy(_ amount: Double) -> Rect {
@@ -92,12 +103,10 @@ public struct Rect: Hashable, Sendable {
     /// The intersection with `other`, or a zero-size rect at this origin when
     /// they don't overlap. Used for clipping a child into its parent.
     public func intersection(_ other: Rect) -> Rect {
-        let x0 = Swift.max(minX, other.minX)
-        let y0 = Swift.max(minY, other.minY)
-        let x1 = Swift.min(maxX, other.maxX)
-        let y1 = Swift.min(maxY, other.maxY)
-        guard x1 > x0, y1 > y0 else { return Rect(x: x0, y: y0, width: 0, height: 0) }
-        return Rect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+        let lo = origin.lanewiseMax(other.origin)
+        let hi = (origin + size).lanewiseMin(other.origin + other.size)
+        guard all(hi .> lo) else { return Rect(origin: lo, size: .zero) }
+        return Rect(origin: lo, size: hi - lo)
     }
 }
 
@@ -151,8 +160,7 @@ public enum Edge: Int8, CaseIterable, Sendable {
     }
 }
 
-/// The axis a stack lays out along. Named `Axis` to match SwiftUI; the
-/// engine-side equivalent in PyNucleantUI is `Orientation`.
+/// The axis a stack lays out along. Named `Axis` to match SwiftUI.
 public enum Axis: Hashable, Sendable {
     case horizontal
     case vertical
@@ -205,6 +213,6 @@ public struct UnitPoint: Hashable, Sendable {
 
     /// This unit point resolved into `rect`.
     public func resolved(in rect: Rect) -> Point {
-        .init(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        rect.origin + rect.size * Point(x, y)
     }
 }

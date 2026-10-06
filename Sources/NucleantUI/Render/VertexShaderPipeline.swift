@@ -30,10 +30,12 @@ enum GraphicsShaderCode {
     case spirv([UInt32], vertexEntryPoint: String, fragmentEntryPoint: String)
 
     /// `samplesContent` adds the view's own pixels at binding 2 (`layer(uv)`),
-    /// as `ShaderCode.compute` does for a compute effect.
+    /// and `contentIsTopDown` reads a canvas node's image upright, as
+    /// `ShaderCode.compute` does for a compute effect.
     static func graphics(
         _ function: ShaderFunction,
         samplesContent: Bool = false,
+        contentIsTopDown: Bool = false,
         arguments: ShaderArguments
     ) throws -> GraphicsShaderCode {
         switch function.language {
@@ -53,6 +55,7 @@ enum GraphicsShaderCode {
         case .pyshader:
             let interface = GraphicsInterface.nucleantUI(
                 samplesContent: samplesContent,
+                contentIsTopDown: contentIsTopDown,
                 arguments: try ShaderArgumentKind.kinds(of: arguments)
             )
             do {

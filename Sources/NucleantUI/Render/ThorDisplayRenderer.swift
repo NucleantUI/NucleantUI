@@ -3,8 +3,7 @@
 //  NucleantUI
 //
 //  The only file that turns `DisplayList` into ThorVG paints. Everything above
-//  it is backend-agnostic — swapping in the Skia node kind PyNucleantUI also
-//  supports would mean a sibling of this file and nothing else.
+//  it is backend-agnostic; `SkiaDisplayRenderer` is its sibling for Skia.
 //
 //  Paints are handed to the canvas with `tvg_canvas_add`, which takes
 //  ownership. A rebuild therefore clears the canvas (`tvg_canvas_remove` with a
@@ -106,6 +105,9 @@ public final class ThorDisplayRenderer {
                 emit(draw)
             case .image(let draw):
                 emit(draw)
+            case .canvas:
+                // Draws into a Skia canvas; a ThorVG node has none.
+                break
             }
         }
     }
@@ -142,16 +144,31 @@ public final class ThorDisplayRenderer {
     }
 
     private func appendPath(_ path: Path, to shape: Tvg_Paint) {
+        // Where the pen is, which a quadratic needs to become a cubic.
+        var current = Point.zero
+        var subpathStart = Point.zero
         for element in path.elements {
             switch element {
             case .move(let point):
                 _ = tvg_shape_move_to(shape, f(point.x), f(point.y))
+                current = point
+                subpathStart = point
             case .line(let point):
                 _ = tvg_shape_line_to(shape, f(point.x), f(point.y))
+                current = point
+            case .quad(let control, let end):
+                // ThorVG has no quadratic; the cubic through the same curve.
+                let from = current
+                let c1 = Point(x: from.x + 2.0 / 3.0 * (control.x - from.x), y: from.y + 2.0 / 3.0 * (control.y - from.y))
+                let c2 = Point(x: end.x + 2.0 / 3.0 * (control.x - end.x), y: end.y + 2.0 / 3.0 * (control.y - end.y))
+                _ = tvg_shape_cubic_to(shape, f(c1.x), f(c1.y), f(c2.x), f(c2.y), f(end.x), f(end.y))
+                current = end
             case .cubic(let c1, let c2, let end):
                 _ = tvg_shape_cubic_to(shape, f(c1.x), f(c1.y), f(c2.x), f(c2.y), f(end.x), f(end.y))
+                current = end
             case .close:
                 _ = tvg_shape_close(shape)
+                current = subpathStart
             case .rect(let rect, let radiusX, let radiusY):
                 _ = tvg_shape_append_rect(
                     shape,
@@ -165,6 +182,9 @@ public final class ThorDisplayRenderer {
                     f(center.x), f(center.y), f(radiusX), f(radiusY),
                     true
                 )
+            case .text, .image:
+                // Not geometry: a ThorVG shape holds none.
+                break
             }
         }
     }

@@ -99,17 +99,16 @@ struct LineChart {
 
     var body: some View {
         ZStack {
-            // Three horizontal grid lines.
-            PathShape { size in
+            // Three horizontal grid lines, drawn straight into a `Canvas`.
+            Canvas { context, size in
                 var path = Path()
                 for i in 1...3 {
                     let y = size.height * Double(i) / 4
                     path.move(to: Point(x: 0, y: y))
                     path.addLine(to: Point(x: size.width, y: y))
                 }
-                return path
+                context.stroke(path, with: .color(Theme.grid), lineWidth: 1)
             }
-            .stroke(Theme.grid, lineWidth: 1)
 
             PathShape { size in
                 var path = linePath(in: size)

@@ -17,6 +17,10 @@
 //  * Keys, with the canvas focused: Tab adds a child, Return a sibling,
 //    Delete removes the branch, Space folds it, arrows walk the map,
 //    Escape clears the selection.
+//  * Sticky notes are put with `.framed(_:)` instead: a note is the size it
+//    was made, wherever it was put, so the model keeps its whole rect and
+//    the canvas hands that over (with the pan added). Drag its bar to move
+//    it, its corner to resize it; right-click to delete it.
 //
 
 import Foundation
@@ -37,6 +41,11 @@ struct MapCanvas {
             ForEach(map.branches) { branch in
                 BranchShape(from: branch.from.shifted(by: pan), to: branch.to.shifted(by: pan))
                     .stroke(Palette.color(branch.colorIndex), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            }
+            ForEach(map.notes) { note in
+                StickyNote(map: map, note: note)
+                    .framed(Rect(origin: note.rect.origin + pan, size: note.rect.size))
+                    .transition(.opacity)
             }
             ForEach(map.visibleTopics) { topic in
                 TopicBubble(
@@ -216,6 +225,88 @@ struct TopicBubble {
     }
 }
 
+// MARK: - Note
+
+/// A sticky note filling the rect the canvas frames it in: a bar to drag it
+/// by, its text, and a grip in the corner to resize it. Like a bubble's, its
+/// gestures are inside the `.framed`, so only the note takes them.
+@View
+struct StickyNote {
+    let map: MindMap
+    let note: Note
+    /// The note's rect when a drag on its bar or its grip began.
+    @State private var dragStart: Rect? = nil
+
+    var body: some View {
+        let map = self.map
+        let id = note.id
+        VStack(spacing: 0) {
+            HStack {
+                Text("Note")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(EdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10))
+            .background(Theme.noteBar)
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        let start = dragStart ?? note.rect
+                        if dragStart == nil { dragStart = start }
+                        map.moveNote(id, to: start.origin + value.translation)
+                    }
+                    .onEnded { _ in dragStart = nil }
+            )
+            TextEditor(text: Binding(
+                get: { map.note(id)?.text ?? "" },
+                set: { map.setNoteText(id, $0) }
+            ))
+            .textEditorStyle(.plain)
+            .font(.system(size: 13))
+            .padding(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Theme.note)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.noteBar, lineWidth: 1))
+        .overlay(alignment: .bottomTrailing) {
+            ResizeGrip()
+                .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                .frame(width: 16, height: 16)
+                .padding(4)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { value in
+                            let start = dragStart ?? note.rect
+                            if dragStart == nil { dragStart = start }
+                            map.resizeNote(id, to: start.size + value.translation)
+                        }
+                        .onEnded { _ in dragStart = nil }
+                )
+        }
+        .contextMenu {
+            Button("Delete Note") {
+                withAnimation(.snappy) { map.deleteNote(id) }
+            }
+        }
+    }
+}
+
+/// Two short diagonals in the bottom-trailing corner: the resize grip.
+@View
+struct ResizeGrip: Shape {
+    func path(in rect: Rect) -> Path {
+        Path { path in
+            path.move(to: Point(x: rect.maxX, y: rect.minY + rect.height * 0.35))
+            path.addLine(to: Point(x: rect.minX + rect.width * 0.35, y: rect.maxY))
+            path.move(to: Point(x: rect.maxX, y: rect.minY + rect.height * 0.7))
+            path.addLine(to: Point(x: rect.minX + rect.width * 0.7, y: rect.maxY))
+        }
+    }
+}
+
 // MARK: - Branch
 
 /// A soft S-curve from a parent's center to its child's, leaving and
@@ -255,7 +346,7 @@ struct BranchShape: Shape {
 @View
 struct HintBar {
     var body: some View {
-        Text("Drag topics or the canvas  ·  double-click folds  ·  Tab child  ·  Return sibling  ·  Delete removes  ·  arrows walk")
+        Text("Drag topics or the canvas  ·  double-click folds  ·  Tab child  ·  Return sibling  ·  Delete removes  ·  arrows walk  ·  notes: drag the bar, resize at the corner")
             .font(.system(size: 12))
             .foregroundColor(Color(white: 1, opacity: 0.92))
             .padding(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))

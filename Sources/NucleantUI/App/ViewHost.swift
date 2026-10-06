@@ -31,17 +31,11 @@ public final class ViewHost {
     /// The window's content size in points.
     public private(set) var size: Size = .zero
 
-    /// Where the display list goes. `nil` until the window's ThorVG node
+    /// Where the display list goes. `nil` until the window's canvas
     /// exists, which is after the first `on_size` on some platforms.
-    #if SKIA_MODE
-    public var renderer: SkiaDisplayRenderer? {
+    public var renderer: DisplayRenderer? {
         didSet { needsWindowRedraw = true }
     }
-    #else
-    public var renderer: ThorDisplayRenderer? {
-        didSet { needsWindowRedraw = true }
-    }
-    #endif
 
     /// GPU slots for `Shader` views — and the per-view render nodes — if the
     /// window has an engine yet.
@@ -49,7 +43,7 @@ public final class ViewHost {
 
     /// What the window canvas holds. A pass whose list comes out identical
     /// — a change that landed entirely inside a per-view node — leaves the
-    /// canvas alone: no ThorVG scene rebuilt, nothing rasterized.
+    /// canvas alone: nothing redrawn, nothing rasterized.
     private var windowContent: DisplayList?
 
     /// The canvas must be painted whatever the list says: it is new, or a
@@ -366,6 +360,15 @@ public final class ViewHost {
             let old = record.node
             // The root has no parent to splice into; treat it as a full rebuild.
             guard let parent = old.parent else { return false }
+            // Where it stands *now*, read before anything is rebuilt. The
+            // rebuild below can re-parent `old` itself: a view that becomes
+            // a render boundary this pass wraps the body node it just
+            // reused — the very node standing here — in a boundary node,
+            // and adopting a child rewrites that child's `parent` and
+            // `indexInParent`. Read after, the slot is the one it has
+            // inside its new wrapper (0), and the replacement is spliced
+            // over whatever is first among its siblings.
+            let slot = old.indexInParent
 
             records.beginRebuild(under: path)
 
@@ -387,10 +390,10 @@ public final class ViewHost {
             context.lazyCursor = record.lazyKey.map {
                 LazyBuildCursor(owner: $0.owner, window: $0.window, position: $0.start)
             }
-            let replacement = record.rebuild(&context)
+            let replacement = record.view.rebuild(&context)
             releaseDeparted()
 
-            parent.replaceChild(at: old.indexInParent, with: replacement)
+            parent.replaceChild(at: slot, with: replacement)
             records.replaceNode(old, with: replacement, above: path)
             // Every ancestor cached a size computed from the subtree just
             // replaced.
@@ -1110,6 +1113,11 @@ enum LayoutTrace {
                     format: "[layout] %3d image   x=%7.2f y=%7.2f w=%7.2f h=%7.2f  %dx%d\n",
                     index, draw.frame.minX, draw.frame.minY, draw.frame.width, draw.frame.height,
                     draw.image.width, draw.image.height
+                ))
+            case .canvas(let draw):
+                nucleantLogError(String(
+                    format: "[layout] %3d canvas  x=%7.2f y=%7.2f w=%7.2f h=%7.2f\n",
+                    index, draw.frame.minX, draw.frame.minY, draw.frame.width, draw.frame.height
                 ))
             }
         }

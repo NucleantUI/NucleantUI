@@ -178,16 +178,141 @@ struct ViewIdentity: Hashable {
 /// *subtree* — take this one out, put that one back, drop whatever is left.
 /// In a flat dictionary each of those is a scan of every key; here each is
 /// one pointer, found by walking the path.
+///
+/// Every build walks it — to find what stood at a path, to file what was
+/// built there, to ask whether anything under it is dirty — and a path is as
+/// deep as the view tree. So a step costs a scan of a few keys and nothing
+/// else: no hashing, and no reference counting. A walk holds each node it
+/// passes through unretained, which is sound because the trie owns every
+/// node and nothing is removed while a walk is under way.
 final class PathTrie<Value> {
 
     final class Node {
         var value: Value?
-        var children: [Int: Node] = [:]
+
+        // The children, by path component, in no particular order: the
+        // components in `keys`, the nodes in `nodes`, retained by hand. Raw
+        // buffers so that reading them is a load and no more — an array
+        // stored in a class is retained and released around every read.
+        // Most nodes have a handful of children, found by scanning `keys`;
+        // one with many — a long `ForEach` — gets `positions` as well, so
+        // finding one stays a lookup.
+        @exclusivity(unchecked) private var keys: UnsafeMutablePointer<Int>?
+        @exclusivity(unchecked) private var nodes: UnsafeMutablePointer<Unmanaged<Node>>?
+        @exclusivity(unchecked) private(set) var childCount = 0
+        @exclusivity(unchecked) private var capacity = 0
+        private var positions: [Int: Int]?
+
+        private static var indexedAbove: Int { 16 }
+
+        deinit {
+            removeAllChildren()
+            keys?.deallocate()
+            nodes?.deallocate()
+        }
+
+        @inline(__always)
+        private func position(of key: Int) -> Int? {
+            if let positions { return positions[key] }
+            guard let keys else { return nil }
+            for position in 0..<childCount where keys[position] == key {
+                return position
+            }
+            return nil
+        }
+
+        /// The child at `key`, unretained — for a walk that only passes
+        /// through it.
+        @inline(__always)
+        func unretainedChild(_ key: Int) -> Unmanaged<Node>? {
+            position(of: key).map { nodes.unsafelyUnwrapped[$0] }
+        }
+
+        func child(_ key: Int) -> Node? {
+            unretainedChild(key)?.takeUnretainedValue()
+        }
+
+        /// Put `node` at `key`, in place of any child there.
+        func setChild(_ node: Node, at key: Int) {
+            let retained = Unmanaged.passRetained(node)
+            if let position = position(of: key) {
+                nodes.unsafelyUnwrapped[position].release()
+                nodes.unsafelyUnwrapped[position] = retained
+                return
+            }
+            if childCount == capacity { grow() }
+            keys.unsafelyUnwrapped[childCount] = key
+            nodes.unsafelyUnwrapped[childCount] = retained
+            childCount += 1
+            if positions != nil {
+                positions![key] = childCount - 1
+            } else if childCount > Self.indexedAbove {
+                var index: [Int: Int] = [:]
+                index.reserveCapacity(childCount)
+                for position in 0..<childCount { index[keys.unsafelyUnwrapped[position]] = position }
+                positions = index
+            }
+        }
+
+        private func grow() {
+            let newCapacity = max(4, capacity * 2)
+            let newKeys = UnsafeMutablePointer<Int>.allocate(capacity: newCapacity)
+            let newNodes = UnsafeMutablePointer<Unmanaged<Node>>.allocate(capacity: newCapacity)
+            if let keys, let nodes {
+                newKeys.moveInitialize(from: keys, count: childCount)
+                newNodes.moveInitialize(from: nodes, count: childCount)
+                keys.deallocate()
+                nodes.deallocate()
+            }
+            keys = newKeys
+            nodes = newNodes
+            capacity = newCapacity
+        }
+
+        /// Take out the child at `key`. The last child moves into its place.
+        @discardableResult
+        func removeChild(at key: Int) -> Node? {
+            guard let position = position(of: key) else { return nil }
+            let keys = keys.unsafelyUnwrapped
+            let nodes = nodes.unsafelyUnwrapped
+            let removed = nodes[position].takeRetainedValue()
+            let last = childCount - 1
+            if position != last {
+                keys[position] = keys[last]
+                nodes[position] = nodes[last]
+                positions?[keys[position]] = position
+            }
+            childCount = last
+            positions?[key] = nil
+            return removed
+        }
+
+        /// Drop every child, keeping the room they took.
+        func removeAllChildren() {
+            if let nodes {
+                for position in 0..<childCount { nodes[position].release() }
+            }
+            childCount = 0
+            positions = nil
+        }
+
+        /// Make this node's children `other`'s — the same nodes, now held by
+        /// both.
+        func setChildren(from other: Node) {
+            removeAllChildren()
+            other.forEachChild { key, child in setChild(child, at: key) }
+        }
+
+        func forEachChild(_ body: (Int, Node) -> Void) {
+            for position in 0..<childCount {
+                body(keys.unsafelyUnwrapped[position], nodes.unsafelyUnwrapped[position].takeUnretainedValue())
+            }
+        }
 
         /// Every value in this subtree, with its path relative to `base`.
         func collect(base: [Int], into result: inout [([Int], Value)]) {
             if let value { result.append((base, value)) }
-            for (index, child) in children {
+            forEachChild { index, child in
                 child.collect(base: base + [index], into: &result)
             }
         }
@@ -195,28 +320,34 @@ final class PathTrie<Value> {
 
     let root = Node()
 
-    func node(at path: [Int]) -> Node? {
-        var node = root
+    /// The node at `path` below `start`, or `nil` where the path runs out of
+    /// the tree.
+    static func descend<Path: Collection<Int>>(from start: Node, along path: Path) -> Node? {
+        var node = Unmanaged.passUnretained(start)
         for index in path {
-            guard let next = node.children[index] else { return nil }
+            guard let next = node._withUnsafeGuaranteedRef({ $0.unretainedChild(index) }) else { return nil }
             node = next
         }
-        return node
+        return node.takeUnretainedValue()
+    }
+
+    func node<Path: Collection<Int>>(at path: Path) -> Node? {
+        Self.descend(from: root, along: path)
     }
 
     /// The node at `path`, created along with any missing ancestors.
-    func makeNode(at path: [Int]) -> Node {
-        var node = root
+    func makeNode<Path: Collection<Int>>(at path: Path) -> Node {
+        var node = Unmanaged.passUnretained(root)
         for index in path {
-            if let next = node.children[index] {
+            if let next = node._withUnsafeGuaranteedRef({ $0.unretainedChild(index) }) {
                 node = next
             } else {
                 let next = Node()
-                node.children[index] = next
-                node = next
+                node._withUnsafeGuaranteedRef { $0.setChild(next, at: index) }
+                node = Unmanaged.passUnretained(next)
             }
         }
-        return node
+        return node.takeUnretainedValue()
     }
 
     func value(at path: [Int]) -> Value? { node(at: path)?.value }
@@ -231,23 +362,23 @@ final class PathTrie<Value> {
         guard let last = path.last else {
             let detached = Node()
             detached.value = root.value
-            detached.children = root.children
+            detached.setChildren(from: root)
             root.value = nil
-            root.children.removeAll(keepingCapacity: true)
+            root.removeAllChildren()
             return detached
         }
-        guard let parent = node(at: Array(path.dropLast())) else { return nil }
-        return parent.children.removeValue(forKey: last)
+        guard let parent = node(at: path.dropLast()) else { return nil }
+        return parent.removeChild(at: last)
     }
 
     /// Graft `subtree` in at `path`, replacing whatever stood there.
     func attach(_ subtree: Node, at path: [Int]) {
         guard let last = path.last else {
             root.value = subtree.value
-            root.children = subtree.children
+            root.setChildren(from: subtree)
             return
         }
-        makeNode(at: Array(path.dropLast())).children[last] = subtree
+        makeNode(at: path.dropLast()).setChild(subtree, at: last)
     }
 }
 
@@ -269,9 +400,9 @@ final class RebuildRecords {
         let identity: ViewIdentity
         let environment: EnvironmentValues
         let stackAxis: Axis?
-        let rebuild: @MainActor (inout BuildContext) -> ViewNode
-        /// Is this freshly built view equivalent to the one recorded?
-        let isEquivalent: @MainActor (Any) -> Bool
+        /// The view built here: rebuilds it in place, and says whether a
+        /// freshly built view is equivalent to it.
+        let view: RecordedView
         /// The node this position produced — what a rebuild splices out and
         /// what a reuse hands back. A pass-through wrapper (`Optional`, an
         /// `if`) records its child's node as its own; `replaceNode` keeps
@@ -310,13 +441,9 @@ final class RebuildRecords {
         previousBase = path
     }
 
-    private func previousNode(at path: [Int]) -> PathTrie<Entry>.Node? {
-        guard var node = previous, path.starts(with: previousBase) else { return nil }
-        for index in path.dropFirst(previousBase.count) {
-            guard let next = node.children[index] else { return nil }
-            node = next
-        }
-        return node
+    private func previousNode<Path: Collection<Int>>(at path: Path) -> PathTrie<Entry>.Node? {
+        guard let previous, path.starts(with: previousBase) else { return nil }
+        return PathTrie.descend(from: previous, along: path.dropFirst(previousBase.count))
     }
 
     /// What stood at `path` before this rebuild began, as a handle the
@@ -326,9 +453,28 @@ final class RebuildRecords {
         return Candidate(node: node)
     }
 
+    /// Read in place on the trie node: deciding whether to reuse a view
+    /// needs a few of its entry's fields, not a copy of the whole entry.
+    @MainActor
     struct Candidate {
         fileprivate let node: PathTrie<Entry>.Node
         var entry: Entry { node.value! }
+        var identity: ViewIdentity { node.value.unsafelyUnwrapped.identity }
+        var stackAxis: Axis? { node.value.unsafelyUnwrapped.stackAxis }
+        var lazyKey: LazyBuildKey? { node.value.unsafelyUnwrapped.lazyKey }
+        var lazyUnits: Int { node.value.unsafelyUnwrapped.lazyUnits }
+        var standingNode: ViewNode { node.value.unsafelyUnwrapped.node }
+
+        func isBuiltUnder(_ environment: EnvironmentValues) -> Bool {
+            node.value.unsafelyUnwrapped.environment._isEquivalent(to: environment)
+        }
+
+        /// Whether `view` is equivalent to the view recorded here. Only for a
+        /// view of the recorded one's own type — the caller has matched
+        /// `identity`, whose type is that type.
+        func isEquivalent<V: View>(to view: V) -> Bool {
+            withUnsafePointer(to: view) { node.value.unsafelyUnwrapped.view.isEquivalent(to: UnsafeRawPointer($0)) }
+        }
     }
 
     /// Keep the standing subtree at `path`: its entries go back to `live`
@@ -336,8 +482,8 @@ final class RebuildRecords {
     func reuse(_ candidate: Candidate, at path: [Int]) {
         if path == previousBase {
             previous = nil
-        } else if let parent = previousNode(at: Array(path.dropLast())), let last = path.last {
-            parent.children.removeValue(forKey: last)
+        } else if let parent = previousNode(at: path.dropLast()), let last = path.last {
+            parent.removeChild(at: last)
         }
         live.attach(candidate.node, at: path)
     }
@@ -377,9 +523,11 @@ final class RebuildRecords {
     /// are built: whatever is left is a child it no longer has.
     func leftoverChildren(under path: [Int]) -> [(Int, ViewNode)] {
         guard let node = previousNode(at: path) else { return [] }
-        return node.children.compactMap { index, child in
-            child.value.map { (index, $0.node) }
+        var leftover: [(Int, ViewNode)] = []
+        node.forEachChild { index, child in
+            if let value = child.value { leftover.append((index, value.node)) }
         }
+        return leftover
     }
 
     /// Finish the rebuild: whatever is still `previous` belonged to views that
@@ -391,5 +539,39 @@ final class RebuildRecords {
         var departed: [([Int], Entry)] = []
         previous.collect(base: previousBase, into: &departed)
         return departed
+    }
+}
+
+/// The view a position was built from, as `RebuildRecords` keeps it — to
+/// rebuild it in place, and to tell whether the next build of that position
+/// is the same view. One object holds the view for both, where two closures
+/// would each box a copy of it, and the comparison takes the candidate by
+/// pointer rather than boxed as `Any` and cast back.
+@MainActor
+class RecordedView {
+    func rebuild(_ context: inout BuildContext) -> ViewNode {
+        fatalError("RecordedView is abstract")
+    }
+
+    /// `candidate` points at a view of the recorded view's own type.
+    func isEquivalent(to candidate: UnsafeRawPointer) -> Bool {
+        fatalError("RecordedView is abstract")
+    }
+}
+
+@MainActor
+final class RecordedViewOf<V: View>: RecordedView {
+    let view: V
+
+    init(_ view: V) {
+        self.view = view
+    }
+
+    override func rebuild(_ context: inout BuildContext) -> ViewNode {
+        buildNode(view, &context)
+    }
+
+    override func isEquivalent(to candidate: UnsafeRawPointer) -> Bool {
+        view._isEquivalent(to: candidate.assumingMemoryBound(to: V.self).pointee)
     }
 }

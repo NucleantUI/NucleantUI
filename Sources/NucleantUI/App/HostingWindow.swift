@@ -2,9 +2,8 @@
 //  HostingWindow.swift
 //  NucleantUI
 //
-//  The pure-Swift counterpart of PyNucleantUI's `WindowBase`: a
-//  `NucleantWindow` that owns a platform window, a Vulkan engine and one
-//  window-filling ThorVG node, and drives a `ViewHost` from the display link.
+//  A `NucleantWindow` that owns a platform window, a Vulkan engine and one
+//  window-filling canvas, and drives a `ViewHost` from the display link.
 //
 //  `NucleantWindow` and `WindowBaseDelegate` are non-isolated protocols, so the
 //  witnesses here are non-isolated too; every one of them is in fact called on
@@ -13,7 +12,6 @@
 //
 
 import NucleantVulkan
-import NucleantThorVG
 import NucleantWindow
 import Foundation
 import NucleantSkia
@@ -64,12 +62,6 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     private var editCommandResponder: EditCommandResponder?
     #endif
 
-    #if SKIA_MODE
-    private var skiaNode: SkiaShaderNode<NucleantRenderNode>?
-    #else
-    private var thorNode: ThorShaderNode<NucleantRenderNode>?
-    #endif
-
     /// GPU slots for `Shader` views — one per live shader, composited into the
     /// view's own rect rather than into the shared canvas.
     private var shaderSlots: ShaderSlotRegistry?
@@ -77,10 +69,12 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     /// Where the pointer last was, in points — shaders get it as a uniform.
     private var pointerLocation: Point = .zero
 
-    /// The engine slot the canvas is bound to — held so a repaint can re-arm
-    /// it directly. Its id also keys every engine-side map, so a resize has to
-    /// name the same one the slot was appended with.
-    private var slot: NucleantRenderNode?
+    /// The window's canvas, filling the swapchain — in this build's backend
+    /// (`CanvasBackend`). Its container is the engine slot the canvas is
+    /// bound to, held so a repaint can re-arm it directly; its id also keys
+    /// every engine-side map, so a resize names the same one it was appended
+    /// with.
+    private var windowCanvas: RenderNodeManager.CanvasNode?
 
     /// Backing-store pixels per point. Layout is in points; the renderer scales.
     private var displayScale: Double = 1
@@ -178,7 +172,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
 
         displayScale = Double(platformWindow.metalLayer.contentsScale)
 
-        // 3. One window-filling ThorVG node for the whole tree.
+        // 3. One window-filling canvas for the whole tree.
         attachCanvas(engine: engine, width: win_rect.z, height: win_rect.w)
 
         // 4. Light or dark, now and whenever the system changes its mind.
@@ -299,7 +293,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
 
         displayScale = platformWindow.scale
 
-        // 3. One window-filling ThorVG node for the whole tree, in pixels.
+        // 3. One window-filling canvas for the whole tree, in pixels.
         attachCanvas(engine: engine, width: win_rect.z, height: win_rect.w)
 
         // 4. Light or dark, from the desktop. Neither Wayland nor X11 carries
@@ -376,65 +370,20 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         }
     }
 
-    /// Build the ThorVG node and bind it as the engine's single slot. Mirrors
-    /// what `RenderBinder.bindSlot` does for a Python canvas, minus the switch
-    /// over canvas kinds — there is only one here.
+    /// Build the window's canvas and bind it as the engine's slot for the
+    /// tree, drawn by the window's renderer.
     @MainActor
     private func attachCanvas(engine: NucleantRenderEngine, width: Int, height: Int) {
         guard width > 0, height > 0 else { return }
-        #if SKIA_MODE
-        // The registry first: its node manager holds the Ganesh context the
-        // window canvas shares with every other Skia node.
+        // The registry first: its node manager makes every canvas, the
+        // window's included, and holds what they share.
         let shaderSlots = ShaderSlotRegistry(engine: engine)
         shaderSlots.scale = displayScale
-        guard let context = shaderSlots.renderNodes.skia.sharedContext(),
-              let node = engine.makeSkiaWidgetNode(context: context, width: width, height: height) else {
-            nucleantFlushStandardOutput()
-            nucleantLogError("NucleantUI: Skia node build (\(width)x\(height)) failed\n")
-            return
-        }
-        let slot = NucleantRenderNode(
-            id: Int.random(in: Int.min...Int.max),
-            context: .skia(node)
-        )
-        slot.observeContext()
-        engine.append(slot)
-        skiaNode = node
-        self.slot = slot
-
-        let renderer = SkiaDisplayRenderer(node: node)
-        renderer.scale = displayScale
-        host.renderer = renderer
-
+        guard let canvas = shaderSlots.renderNodes.makeWindowCanvas(width: width, height: height) else { return }
+        windowCanvas = canvas
+        host.renderer = canvas.renderer
         host.shaderSlots = shaderSlots
         self.shaderSlots = shaderSlots
-        #else
-        guard let node = engine.makeThorWidgetNode(width: width, height: height) else {
-            // The engine reports *why* on stdout, which is fully buffered when
-            // the process isn't attached to a terminal — flush it so the
-            // reason lands next to this line rather than being lost.
-            nucleantFlushStandardOutput()
-            nucleantLogError("NucleantUI: ThorVG node build (\(width)x\(height)) failed\n")
-            return
-        }
-        let slot = NucleantRenderNode(
-            id: Int.random(in: Int.min...Int.max),
-            context: .thor(node)
-        )
-        slot.observeContext()
-        engine.append(slot)
-        thorNode = node
-        self.slot = slot
-
-        let renderer = ThorDisplayRenderer(canvas: node.canvas.base)
-        renderer.scale = displayScale
-        host.renderer = renderer
-
-        let shaderSlots = ShaderSlotRegistry(engine: engine)
-        shaderSlots.scale = displayScale
-        host.shaderSlots = shaderSlots
-        self.shaderSlots = shaderSlots
-        #endif
         host.environment.displayScale = displayScale
         // The tree may already have been laid out against a size that arrived
         // before the canvas existed; force one pass through the new renderer.
@@ -449,12 +398,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     /// was already `true` would raise no notification.
     @MainActor
     private func markNeedsRedraw() {
-        #if SKIA_MODE
-        skiaNode?.dirty = true
-        #else
-        thorNode?.dirty = true
-        #endif
-        slot?.needsRender = true
+        windowCanvas?.markDirty()
     }
 
     // MARK: - NucleantWindow
@@ -581,33 +525,12 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
             host.setSize(Size(width: w, height: h))
 
             // The canvas is sized in pixels and fills the window, so it follows
-            // the swapchain. `resizeThorNode` keeps the node's identity — the
-            // slot, its z-order and the `Tvg_Canvas` all survive.
+            // the swapchain, keeping the node's identity — the slot and its
+            // z-order survive.
             if let engine = renderEngine {
-                #if SKIA_MODE
-                let windowNode = skiaNode
-                #else
-                let windowNode = thorNode
-                #endif
-                if let node = windowNode, let slot {
-                    if node.width != UInt32(pixelWidth) || node.height != UInt32(pixelHeight) {
-                        // A Skia node gets a new, empty surface — repainted
-                        // below like ThorVG's retargeted canvas.
-                        #if SKIA_MODE
-                        _ = engine.resizeSkiaNode(
-                            node,
-                            id: slot.id,
-                            width: pixelWidth,
-                            height: pixelHeight
-                        )
-                        #else
-                        _ = engine.resizeThorNode(
-                            node,
-                            id: slot.id,
-                            width: pixelWidth,
-                            height: pixelHeight
-                        )
-                        #endif
+                if let canvas = windowCanvas, let renderNodes = shaderSlots?.renderNodes {
+                    if canvas.width != pixelWidth || canvas.height != pixelHeight {
+                        _ = renderNodes.resize(canvas, width: pixelWidth, height: pixelHeight)
                         // The canvas is a new target at a new size — the tree
                         // has to be repainted onto it, not just relaid out.
                         host.invalidate()

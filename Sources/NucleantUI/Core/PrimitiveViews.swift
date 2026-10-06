@@ -146,9 +146,36 @@ public struct AnyView: View {
     /// The same, for the erased value's menu rows (see `MenuItems.swift`).
     let lowerMenuItems: @MainActor (inout MenuLowering) -> [MenuBar.Item]
 
+    /// The erased view's call site, carried through the erasure.
+    ///
+    /// Not this `AnyView`'s own: nothing in the framework builds one where
+    /// the author wrote the view. Every `AnyView(…)` is plumbing — the one
+    /// in `Popover.swift`, the one in `ContextMenu.swift`, the handful in
+    /// `Form.swift` — so a `#viewID` default here would give every popover
+    /// in the program the identity of one line in `Popover.swift`. The site
+    /// that means something is the one the view being erased already
+    /// carries, stamped by `ViewBuilder` at the expression the author wrote
+    /// or by that view's own initializer.
+    ///
+    /// Settable like any view's, so an `AnyView` written directly in a body
+    /// around a view with no site of its own still gets the builder's stamp.
+    /// That stamp stops here: the erased value is already captured in the
+    /// closures above and is built with whatever site it had.
+    public var _viewID: ViewID
+
     public init<V: View>(_ view: V) {
-        self.makeErasedNode = { context in buildNode(view, &context) }
+        // Slot `[0]`, like every other pass-through wrapper (`Group`,
+        // `_ConditionalContent`, `Optional`, `_HostRoot`). Building the
+        // erased view at the *same* path as the `AnyView` put two views'
+        // records on one path: the inner one filed its state keys, reads and
+        // boundary flag, the `AnyView`'s overwrote them a moment later, and
+        // the next pass found an identity that could not match — so the
+        // erased view was rebuilt from nothing every pass, its `@State`
+        // released under it, and an ancestor holding its node could be
+        // repointed at a subtree that was never its own.
+        self.makeErasedNode = { context in context.child(0) { ctx in buildNode(view, &ctx) } }
         self.lowerMenuItems = { lowering in menuItems(of: view, &lowering) }
+        self._viewID = view._viewID
     }
 
     public var body: Never { bodyUnavailable() }

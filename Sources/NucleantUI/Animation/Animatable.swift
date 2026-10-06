@@ -167,17 +167,11 @@ extension Angle: Animatable {
     }
 }
 
-extension Point: Animatable {
+/// `Point` and `Size` both.
+extension SIMD2: Animatable where Scalar == Double {
     public var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(x, y) }
         set { (x, y) = (newValue.first, newValue.second) }
-    }
-}
-
-extension Size: Animatable {
-    public var animatableData: AnimatablePair<Double, Double> {
-        get { AnimatablePair(width, height) }
-        set { (width, height) = (newValue.first, newValue.second) }
     }
 }
 

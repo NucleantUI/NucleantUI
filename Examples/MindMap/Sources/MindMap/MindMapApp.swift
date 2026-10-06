@@ -7,8 +7,9 @@
 //  the map and the selected topic, adding and removing topics, colouring a
 //  branch, folding it, and tidying the whole map up.
 //
-//  Every topic is placed by `.position`, at a point the model keeps (see
-//  Model.swift and MapCanvas.swift).
+//  Every topic is placed by `.position`, at a point the model keeps, and
+//  every sticky note by `.framed`, in a rect the model keeps (see Model.swift
+//  and MapCanvas.swift).
 //
 //  Where the keys are is one `@FocusState`: the canvas, the map name, the
 //  topic title. Adding a topic — Tab or Return on the canvas, or the
@@ -26,6 +27,8 @@ enum Theme {
     static let bubble = Color.dynamic(light: Color(hex: 0xFFFFFF), dark: Color(hex: 0x33353C))
     static let selection = Color.dynamic(light: Color(hex: 0x1F2329), dark: Color(hex: 0xFFFFFF))
     static let accent = Color(hex: 0x7A6FF0)
+    static let note = Color.dynamic(light: Color(hex: 0xFFF3B0), dark: Color(hex: 0x4A4426))
+    static let noteBar = Color.dynamic(light: Color(hex: 0xF5E27E), dark: Color(hex: 0x5E5630))
 }
 
 /// Where the keys can be.
@@ -108,6 +111,12 @@ struct Toolbar {
                 }
                 Button("Recenter") {
                     withAnimation(.snappy) { map.setPan(.zero) }
+                }
+                Button("Add Note") {
+                    // Centered just below the selected topic.
+                    let anchor = (map.selectedTopic ?? map.root).point
+                    let origin = anchor + Point(x: -MindMap.noteSize.width / 2, y: 44)
+                    withAnimation(.snappy) { map.addNote(at: origin) }
                 }
             }
             // The selected topic.

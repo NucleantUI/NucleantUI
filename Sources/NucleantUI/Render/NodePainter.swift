@@ -4,7 +4,7 @@
 //
 //  How the automatic per-view nodes get their pixels. They are the engine's
 //  copy-target images (`RenderNodeManager.ImageEntry`) and own no canvas —
-//  a fresh ThorVG wg canvas costs ~70ms whatever its size, a VkImage
+//  a fresh canvas costs tens of milliseconds whatever its size, a VkImage
 //  microseconds — so they are filled through one shared canvas node, the
 //  painter: at the end of a pass every image whose content changed is drawn
 //  into the painter side by side (tallest first on shelves, a granule of
@@ -47,11 +47,7 @@ final class NodePainter {
     static let maxHeight = 8192
 
     /// The painter's canvas node, made on first use.
-    #if SKIA_MODE
-    private var canvas: RenderNodeManager.SkiaCanvasNode?
-    #else
     private var canvas: RenderNodeManager.CanvasNode?
-    #endif
     private var warned = false
 
     /// Entries with `pending` content, painted at the end of the pass — or
@@ -140,6 +136,7 @@ final class NodePainter {
             case .shape(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             case .text(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             case .image(let draw): radius = draw.clipCornerRadius; clip = draw.clip
+            case .canvas(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             }
             if radius > 0, let clip, !clip.insetBy(radius).contains(damage) { return nil }
         }
@@ -326,30 +323,6 @@ final class NodePainter {
     /// The painter at `width × height` — retargeted when that changed, made
     /// on first use: a canvas node pulled from the manager like any other,
     /// composited nowhere.
-    #if SKIA_MODE
-    private func painter(width: Int, height: Int) -> RenderNodeManager.SkiaCanvasNode? {
-        if let canvas {
-            guard canvas.width != width || canvas.height != height else { return canvas }
-            if nodes.skia.resize(canvas, width: width, height: height) { return canvas }
-            nodes.skia.retire(canvas)
-            self.canvas = nil
-        }
-        let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
-        guard let canvas = nodes.skia.acquire(width: width, height: height) else {
-            if !warned {
-                warned = true
-                nucleantFlushStandardOutput()
-                nucleantLogError("NucleantUI: painter canvas (\(width)x\(height)) failed — per-view nodes are off\n")
-            }
-            return nil
-        }
-        canvas.container.compositesToWindow = false
-        canvas.container.needsRender = false
-        self.canvas = canvas
-        PerfTrace.trace("painter canvas \(width)x\(height): \(PerfTrace.millis(since: started))")
-        return canvas
-    }
-    #else
     private func painter(width: Int, height: Int) -> RenderNodeManager.CanvasNode? {
         if let canvas {
             guard canvas.width != width || canvas.height != height else { return canvas }
@@ -372,7 +345,6 @@ final class NodePainter {
         PerfTrace.trace("painter canvas \(width)x\(height): \(PerfTrace.millis(since: started))")
         return canvas
     }
-    #endif
 
     /// Give the painter's canvas back to the manager; nothing is pending
     /// after this.
@@ -380,11 +352,7 @@ final class NodePainter {
         pending.removeAll()
         painted.removeAll()
         if let canvas {
-            #if SKIA_MODE
-            nodes.skia.retire(canvas)
-            #else
             nodes.retire(canvas)
-            #endif
             self.canvas = nil
         }
     }

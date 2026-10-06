@@ -7,14 +7,16 @@
 //  is keyed by, every pass it is placed; a node not pulled by the end of a
 //  pass belongs to a view that left the tree, and is retired.
 //
-//  Two kinds of node, both the engine's. A canvas node (`CanvasNode`) is a
-//  ThorVG canvas the size of the view's frame — `.drawingGroup()`,
-//  `ThorCanvas`, the `.shader` layer canvases, and the painter that fills
-//  the image nodes. A fresh wg canvas costs ~60ms (its renderer compiles
-//  pipelines on first target), a retargeted one under a millisecond, so a
-//  retired canvas is pooled, never thrown away lightly. An image node
-//  (`ImageEntry`) is the engine's copy-target image, for the automatic
-//  per-view nodes: microseconds to make, pooled by size.
+//  Three kinds of node, all the engine's. A canvas node (`CanvasNode`,
+//  CanvasNode.swift) is a canvas the size of the view's frame that a display
+//  list is drawn into — `.drawingGroup()`, the `.shader` layer canvases, and
+//  the painter that fills the image nodes — in whichever backend the build
+//  has (`CanvasBackend`: CanvasBackend+Skia.swift under `SKIA_MODE`,
+//  CanvasBackend+Thor.swift otherwise). A `ThorCanvas` view's node is ThorVG
+//  in every build, and kept apart (ThorCanvasNodes.swift). Canvases are
+//  pooled on retirement: a fresh one is far dearer than one retargeted. An
+//  image node (`ImageEntry`) is the engine's copy-target image, for the
+//  automatic per-view nodes: microseconds to make, pooled by size.
 //
 //  What a node holds is the view's business (it draws into the node it
 //  pulled); where its runs split around nested nodes is `RenderBoundaries`';
@@ -24,9 +26,7 @@
 //
 
 import NucleantVulkan
-import NucleantThorVG
 import Dispatch
-import CVulkan
 
 /// What a per-view node is keyed by: where the view stands, which view it is
 /// (type and stamped call site), and — when the author asked to start over —
@@ -49,110 +49,6 @@ struct RenderNodeKey: Hashable {
 
 @MainActor
 final class RenderNodeManager {
-
-    /// One ThorVG canvas the size of a view's frame, composited into it —
-    /// or, for a `.shader` layer and the painter, sampled or copied by
-    /// another node instead of composited.
-    @MainActor
-    final class CanvasNode {
-        let node: ThorShaderNode<NucleantRenderNode>
-        let container: NucleantRenderNode
-        let renderer: ThorDisplayRenderer
-        /// The canvas as a `ThorCanvas` view's closures see it.
-        let thorContext: ThorContext
-        /// Pixel size of the image — the frame rounded up to whole granules,
-        /// and kept while the frame fits with under two granules spare, so a
-        /// frame that jitters or animates keeps its image.
-        var width: Int
-        var height: Int
-        /// What the canvas holds: node-local for a drawing group, absolute for
-        /// a `.shader` layer — and for the latter, the origin it was drawn
-        /// from. An identical list is not drawn again.
-        var content: DisplayList?
-        var origin: Point = .zero
-        /// For a `ThorCanvas`: whether `onInit` has run on this canvas, which
-        /// build's `renderer` last ran, and the frame it ran for.
-        var initialized = false
-        var generation = -1
-        var renderedSize: Size = .zero
-        /// State the `renderer` closure read, each slot listing the view's
-        /// path (`readerPath`) among its readers — undone before it runs
-        /// again and when the node retires.
-        var reads: [any AnyStateStorage] = []
-        var readerPath: [Int] = []
-        /// Seen during the current layout pass. Anything not seen has left
-        /// the tree and is retired.
-        var used = true
-        /// Where the view was last placed, in points, and that origin snapped
-        /// to a whole pixel: where the image actually composites, so texels
-        /// land on pixels (a fractional origin bilinearly blurs everything).
-        var rect: Rect = .zero
-        var pixelOrigin: Point = .zero
-
-        init(
-            node: ThorShaderNode<NucleantRenderNode>,
-            container: NucleantRenderNode,
-            renderer: ThorDisplayRenderer,
-            width: Int,
-            height: Int
-        ) {
-            self.node = node
-            self.container = container
-            self.renderer = renderer
-            self.thorContext = ThorContext(base: node.canvas.base)
-            self.width = width
-            self.height = height
-        }
-
-        /// Point the node at its frame, and at whatever its container lets
-        /// it show. `scale` is pixels per point.
-        func place(rect: Rect, clip: Rect?, scale: Double) {
-            self.rect = rect
-            // Whole pixels, at the image's own size, so texels map 1:1. The
-            // image is bigger than the frame (the granule); the scissor below
-            // cuts the slack.
-            let x = (rect.minX * scale).rounded(.down)
-            let y = (rect.minY * scale).rounded(.down)
-            pixelOrigin = Point(x: x / scale, y: y / scale)
-            container.compositeRect = SIMD4(x, y, Double(width), Double(height))
-            // The frame — from the snapped origin to the last pixel it touches —
-            // intersected with the container's clip, as a shader slot's is.
-            let visible = clip.map { rect.intersection($0) } ?? rect
-            let minX = (visible.minX * scale).rounded(.down)
-            let minY = (visible.minY * scale).rounded(.down)
-            let maxX = (visible.maxX * scale).rounded(.up)
-            let maxY = (visible.maxY * scale).rounded(.up)
-            container.compositeScissor = SIMD4(minX, minY, max(0, maxX - minX), max(0, maxY - minY))
-            if LayoutTrace.isEnabled {
-                nucleantLogError(String(
-                    format: "[layout] node    rect x=%7.2f y=%7.2f w=%7.2f h=%7.2f  image %dx%d\n",
-                    rect.minX, rect.minY, rect.width, rect.height, width, height
-                ))
-            }
-        }
-
-        /// Draw `list` into the canvas — unless it is what the canvas already
-        /// holds — for the engine to rasterize at the frame.
-        func render(_ list: DisplayList, at path: [Int]) {
-            guard content != list else { return }
-            if PerfTrace.isEnabled { PerfTrace.nodesDrawn += 1 }
-            PerfTrace.trace("node \(width)x\(height) at \(path): \(list.commands.count) commands drawn")
-            renderer.render(list)
-            content = list
-            node.dirty = true
-            container.needsRender = true
-        }
-
-        /// Have the engine rasterize the canvas at the frame after its
-        /// paints were changed in place: ThorVG re-prepares only what it is
-        /// told changed, and `draw` alone is not guaranteed to ask.
-        func rasterize() {
-            _ = thorContext.update()
-            if PerfTrace.isEnabled { PerfTrace.nodesDrawn += 1 }
-            node.dirty = true
-            container.needsRender = true
-        }
-    }
 
     /// A standing automatic node: the engine's copy-target image, and what
     /// `NodePainter` knows it holds.
@@ -187,9 +83,11 @@ final class RenderNodeManager {
 
     private unowned let engine: NucleantRenderEngine
 
-    /// The Skia canvas nodes — with `SKIA_MODE`, those of `.drawingGroup()`,
-    /// the `.shader` layers and the painter.
-    private(set) lazy var skia = SkiaCanvasNodes(engine: engine, manager: self)
+    /// How this build's canvases are made — Skia's or ThorVG's.
+    private let backend: CanvasBackend
+
+    /// The `ThorCanvas` views' nodes, ThorVG in every build.
+    private(set) lazy var thorCanvases = ThorCanvasNodes(engine: engine, manager: self)
 
     /// The canvas nodes standing, by the identity of the view that owns
     /// each; and the image nodes, by the view (and run) each holds.
@@ -200,7 +98,7 @@ final class RenderNodeManager {
     var scale: Double = 1 {
         didSet {
             for node in nodes.values { node.renderer.scale = scale }
-            skia.scale = scale
+            thorCanvases.scale = scale
         }
     }
 
@@ -239,6 +137,7 @@ final class RenderNodeManager {
 
     init(engine: NucleantRenderEngine) {
         self.engine = engine
+        self.backend = CanvasBackend(engine: engine)
     }
 
     // MARK: - Layout-pass lifecycle
@@ -247,7 +146,7 @@ final class RenderNodeManager {
         self.windowSize = windowSize
         for node in nodes.values { node.used = false }
         for entry in images.values { entry.used = false }
-        skia.beginPass()
+        thorCanvases.beginPass()
         paintOrders.removeAll(keepingCapacity: true)
         paintCounter = 0
     }
@@ -277,7 +176,7 @@ final class RenderNodeManager {
             retire(entry)
             images[key] = nil
         }
-        skia.retireUnused()
+        thorCanvases.retireUnused()
     }
 
     /// Put the engine's list in this pass's paint order: the window canvas
@@ -338,6 +237,11 @@ final class RenderNodeManager {
         return (round(pixelWidth, limit: windowSize.width), round(pixelHeight, limit: windowSize.height))
     }
 
+    /// `rect` in whole pixels, as a shader slot sizes its own image.
+    func exactImageSize(for rect: Rect) -> (width: Int, height: Int) {
+        (max(1, Int((rect.width * scale).rounded())), max(1, Int((rect.height * scale).rounded())))
+    }
+
     // MARK: - Canvas nodes: by view, pool, build, retire, free
 
     /// The canvas node standing for `key`, resized if its frame outgrew the
@@ -348,10 +252,10 @@ final class RenderNodeManager {
         if let existing = nodes[key] {
             existing.used = true
             // An image a little bigger than the frame is kept — the scissor
-            // cuts what it draws past the frame — so a frame animating through
-            // sizes doesn't reallocate at every granule edge it crosses. Never
-            // past the window, though: the composite drops a viewport wider
-            // than the swapchain.
+            // cuts what it draws past the frame — so a frame animating
+            // through sizes doesn't reallocate at every granule edge it
+            // crosses. Never past the window, though: the composite drops a
+            // viewport wider than the swapchain.
             let slack = 2 * Self.granule
             let cap = imageSize(for: Rect(origin: .zero, size: windowSize))
             if size.width <= existing.width, size.height <= existing.height,
@@ -359,9 +263,8 @@ final class RenderNodeManager {
                existing.width <= cap.width, existing.height <= cap.height {
                 return existing
             }
-            // Same node, new image — the canvas keeps its paints, so an
-            // author's shapes survive; the display list is drawn again
-            // because its frames changed with the size anyway.
+            // Same node, new image — the display list is drawn again because
+            // its frames changed with the size anyway.
             if resize(existing, width: size.width, height: size.height) {
                 existing.content = nil
                 existing.container.needsRender = true
@@ -390,11 +293,7 @@ final class RenderNodeManager {
         if let node = handed ?? spare.popLast() {
             if resize(node, width: width, height: height) {
                 node.renderer.scale = scale
-                node.thorContext.scale = scale
                 node.content = nil
-                node.initialized = false
-                node.generation = -1
-                node.renderedSize = .zero
                 node.used = true
                 node.container.needsRender = true
                 engine.append(node.container)
@@ -403,31 +302,31 @@ final class RenderNodeManager {
             // Left at its old size, which is no use here — replace it.
             destroy(node)
         }
-        let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
-        guard let thor = engine.makeThorWidgetNode(width: width, height: height) else {
-            nucleantFlushStandardOutput()
-            nucleantLogError("NucleantUI: canvas node build (\(width)x\(height)) failed\n")
-            return nil
-        }
-        let container = NucleantRenderNode(
-            id: Int.random(in: Int.min...Int.max),
-            context: .thor(thor)
-        )
-        container.observeContext()
-        engine.append(container)
+        return makeCanvasNode(width: width, height: height)
+    }
 
-        let renderer = ThorDisplayRenderer(canvas: thor.canvas.base)
-        renderer.scale = scale
-        let node = CanvasNode(node: thor, container: container, renderer: renderer, width: width, height: height)
-        node.thorContext.scale = scale
+    /// The window's own canvas, filling the swapchain: the one the tree
+    /// draws into wherever nothing gives a view a node of its own. Not kept
+    /// here — the window holds it, and resizes it with `resize`.
+    func makeWindowCanvas(width: Int, height: Int) -> CanvasNode? {
+        makeCanvasNode(width: width, height: height)
+    }
+
+    /// A fresh canvas node at `width × height`, in the engine's list.
+    private func makeCanvasNode(width: Int, height: Int) -> CanvasNode? {
+        let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
+        guard let made = backend.makeCanvas(width: width, height: height) else { return nil }
+        engine.append(made.container)
+        made.renderer.scale = scale
+        let node = CanvasNode(node: made.node, container: made.container, renderer: made.renderer, width: width, height: height)
         PerfTrace.trace("canvas node \(width)x\(height): \(PerfTrace.millis(since: started))")
         return node
     }
 
-    /// Retarget the node's canvas at an image of `width × height` — the
-    /// same `Tvg_Canvas`, so its paints survive. False leaves it as it was.
+    /// Give the node an image of `width × height`, keeping its identity in
+    /// the engine. False leaves it as it was.
     func resize(_ node: CanvasNode, width: Int, height: Int) -> Bool {
-        guard engine.resizeThorNode(node.node, id: node.container.id, width: width, height: height) else {
+        guard backend.resize(node.node, id: node.container.id, width: width, height: height) else {
             return false
         }
         node.width = width
@@ -450,7 +349,7 @@ final class RenderNodeManager {
     /// top of a frame, before anything is recorded; a node that is freed
     /// drains the device itself, one that is pooled needs no drain.
     func releasePending() {
-        skia.releasePending()
+        thorCanvases.releasePending()
         guard !pendingDestroy.isEmpty || !pendingDestroyImages.isEmpty else { return }
         let retired = pendingDestroy
         let retiredImages = pendingDestroyImages
@@ -460,36 +359,24 @@ final class RenderNodeManager {
         for entry in retiredImages { recycle(entry) }
     }
 
-    /// Keep a canvas for the next node to appear, emptied of its paints and
-    /// of the reader registrations its `renderer` made; past the limit it
-    /// is freed.
+    /// Keep a canvas for the next node to appear, emptied of what it held;
+    /// past the limit it is freed.
     func recycle(_ node: CanvasNode) {
-        for storage in node.reads {
-            storage.readers.removeValue(forKey: node.readerPath)
-        }
-        node.reads.removeAll()
-        node.generation = -1
-        node.renderedSize = .zero
         guard spare.count < spareLimit else {
             destroy(node)
             return
         }
-        _ = tvg_canvas_remove(node.node.canvas.base, nil)
+        backend.clear(node.node)
         node.content = nil
-        node.initialized = false
         spare.append(node)
     }
 
-    /// The canvas first: ThorVG holds its own reference to the wgpu texture
-    /// behind the node's image for as long as it is the canvas's target, and
-    /// the node's teardown releases that texture last.
     func destroy(_ node: CanvasNode) {
-        _ = tvg_canvas_destroy(node.node.canvas.base)
-        node.node.destroyResources(engine)
+        backend.destroy(node.node)
     }
 
     func destroyAll() {
-        skia.destroyAll()
+        thorCanvases.destroyAll()
         for node in nodes.values { retire(node) }
         nodes.removeAll()
         for entry in images.values { retire(entry) }
@@ -537,16 +424,7 @@ final class RenderNodeManager {
         }
         let node: ImageNode<NucleantRenderNode>
         do {
-            #if SKIA_MODE
-            // Copied out of a Skia painter, whose image is RGBA and read as
-            // RGBA — the copy is bytes, so this one is the same.
-            node = try engine.makeImageNode(
-                width: width, height: height,
-                format: VK_FORMAT_R8G8B8A8_UNORM, viewFormat: VK_FORMAT_R8G8B8A8_UNORM
-            )
-            #else
-            node = try engine.makeImageNode(width: width, height: height)
-            #endif
+            node = try backend.makeImageNode(width: width, height: height)
         } catch {
             nucleantFlushStandardOutput()
             nucleantLogError("NucleantUI: image node (\(width)x\(height)) failed: \(error)\n")

@@ -168,6 +168,11 @@ extension DrawCommand {
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
             draw.transform = moved(draw.transform)
             return .image(draw)
+        case .canvas(var draw):
+            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
+            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
+            draw.transform = moved(draw.transform)
+            return .canvas(draw)
         }
     }
 
@@ -186,6 +191,9 @@ extension DrawCommand {
         case .image(var draw):
             draw.opacity *= context.opacity
             return .image(draw)
+        case .canvas(var draw):
+            draw.opacity *= context.opacity
+            return .canvas(draw)
         }
     }
 }
