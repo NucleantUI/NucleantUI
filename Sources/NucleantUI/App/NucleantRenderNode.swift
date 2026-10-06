@@ -3,11 +3,8 @@
 //  NucleantUI
 //
 //  The engine slot type for this framework. `VulkanRenderEngine` is generic
-//  over its container node so each host picks its own set of backends;
-//  PyNucleantUI's carries five cases (thor / skia / pixel / py buffer / group)
-//  because Python code can ask for any of them. A SwiftUI tree draws through
-//  ThorVG only, so there is one case — and no dependency on PyNucleantUI (and
-//  therefore none on Python) is needed to get it.
+//  over its container node so each host picks its own set of backends; these
+//  are the ones a NucleantUI view tree draws through.
 //
 
 import CVulkan
@@ -18,10 +15,11 @@ import NucleantSkia
 public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable {
 
     public enum Context: RenderNodeContext {
-        /// The window-filling 2D canvas every view draws into.
+        /// A ThorVG canvas: a `ThorCanvas` view's in every build, and every
+        /// display-list canvas in the ThorVG build (CanvasBackend+Thor.swift).
         case thor(ThorShaderNode<NucleantRenderNode>)
-        /// A Skia canvas. With `SKIA_MODE` it is the one every view draws
-        /// into, as `.thor` is otherwise.
+        /// A Skia canvas: every display-list canvas in the `SKIA_MODE` build
+        /// (CanvasBackend+Skia.swift).
         case skia(SkiaShaderNode<NucleantRenderNode>)
         /// One `Shader` view's own compute-written image, composited into the
         /// view's rect. A vector canvas can't run a fragment shader, so these

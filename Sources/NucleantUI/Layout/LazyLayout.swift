@@ -123,7 +123,7 @@ extension ViewNode {
     /// Tag every node `self` flattens into as part of one element.
     func tagLazyElement(_ tag: LazyElementTag) {
         if content.isTransparent {
-            for child in children where child.removal == nil {
+            for child in children where !child.isLeaving {
                 child.tagLazyElement(tag)
             }
         } else {

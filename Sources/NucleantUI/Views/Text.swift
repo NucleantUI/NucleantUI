@@ -76,16 +76,14 @@ extension Text {
     }
 }
 
-extension Text: @preconcurrency ExpressibleByStringLiteral {
-    /// A literal's own site is out of reach — the protocol fixes the
-    /// signature — so this leaves the identity unknown rather than passing
-    /// off this line as the call site. In a body the builder stamps it.
-    public init(stringLiteral value: String) {
-        self.init(value, _viewID: .unknown)
-    }
-}
-
-extension Text: ExpressibleByStringInterpolation {}
+// `Text` is deliberately not `ExpressibleByStringLiteral` — SwiftUI's isn't
+// either, and the conformance costs every text in the program its identity.
+// `Text("…")` with a literal is read by the compiler as the literal becoming
+// a `Text`, not as a call to `init(_:_viewID:)`, so the `#viewID` default
+// never runs and the view falls back to `ViewID.unknown`: inside a body the
+// builder's stamp covers it, but a `Text` built anywhere else — as a plain
+// argument, in a `let`, in a ternary passed to a modifier — is then told
+// apart from every other `Text` by position and type alone.
 
 extension Text: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {

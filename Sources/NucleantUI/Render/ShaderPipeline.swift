@@ -60,10 +60,13 @@ enum ShaderCode {
 
     /// The code for a function under the compute contract. `samplesContent`
     /// adds the view's own pixels at binding 2 (`layer(uv)`); `arguments`
-    /// declares the `ShaderArgument`s at binding 3.
+    /// declares the `ShaderArgument`s at binding 3. `contentIsTopDown` — the
+    /// pixels are a canvas node's own image, stored top-down rather than
+    /// drawn y-up as a layer is — has `layer(uv)` read them upright.
     static func compute(
         _ function: ShaderFunction,
         samplesContent: Bool,
+        contentIsTopDown: Bool = false,
         arguments: ShaderArguments
     ) throws -> ShaderCode {
         switch function.language {
@@ -77,6 +80,7 @@ enum ShaderCode {
         case .pyshader:
             let interface = ComputeImageInterface.nucleantUI(
                 samplesContent: samplesContent,
+                contentIsTopDown: contentIsTopDown,
                 arguments: try ShaderArgumentKind.kinds(of: arguments)
             )
             do {

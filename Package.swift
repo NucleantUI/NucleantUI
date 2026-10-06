@@ -6,16 +6,19 @@ import Foundation
 
 // MARK: - Primary renderer
 
-/// Which display renderer draws the views' display list — the window
-/// canvas, `.drawingGroup()`, the per-view painter and the `.shader`
-/// layers. `false`: `ThorDisplayRenderer`. `true`: `SkiaDisplayRenderer`,
-/// compiled in as `SKIA_MODE`. Both backends' nodes are always there either
-/// way (`ThorCanvas` is ThorVG whatever this says); text is measured through
-/// ThorVG in both.
+/// Which backend's canvases the views' display list is drawn into — the
+/// window canvas, `.drawingGroup()`, the per-view painter and the `.shader`
+/// layers. `true` defines `SKIA_MODE`, which compiles
+/// `App/CanvasBackend+Skia.swift` (Skia nodes, `SkiaDisplayRenderer`);
+/// `false` compiles `App/CanvasBackend+Thor.swift` (ThorVG nodes,
+/// `ThorDisplayRenderer`) instead. Exactly one is in a build, and the code
+/// above them names neither. `ThorCanvas` views keep their own ThorVG nodes
+/// in both (`App/ThorCanvasNodes.swift`); text is measured through ThorVG
+/// in both.
 ///
-/// Skia by default; ThorVG stays for `ThorCanvas`. `NUCLEANT_SKIA_MODE=1|0`
-/// in the environment wins. (SwiftPM caches the evaluated manifest, but
-/// re-evaluates it when the environment it read changes.)
+/// Skia by default. `NUCLEANT_SKIA_MODE=1|0` in the environment wins.
+/// (SwiftPM caches the evaluated manifest, but re-evaluates it when the
+/// environment it read changes.)
 let skiaMode: Bool = {
     if let flag = ProcessInfo.processInfo.environment["NUCLEANT_SKIA_MODE"] {
         return ["1", "true", "yes"].contains(flag.lowercased())
@@ -172,7 +175,7 @@ let package = Package(
         .target(name: "NucleantAudio"),
         .executableTarget(
             name: "NucleantUIDemo",
-            dependencies: ["NucleantUI"]
+            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]
         ),
         .testTarget(
             name: "NucleantUITests",

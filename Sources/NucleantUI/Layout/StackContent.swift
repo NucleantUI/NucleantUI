@@ -212,13 +212,3 @@ struct ZStackContent: NodeContent {
         }
     }
 }
-
-extension Point {
-    /// One axis of a point, so stack maths can be written once for both.
-    subscript(axis: Axis) -> Double {
-        get { axis == .horizontal ? x : y }
-        set {
-            if axis == .horizontal { x = newValue } else { y = newValue }
-        }
-    }
-}

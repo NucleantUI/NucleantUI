@@ -86,8 +86,7 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
 
         // ThorVG's engine has to be up before any canvas is created —
         // `tvg_wgcanvas_create` returns null otherwise, which is exactly what a
-        // missing init looks like from the outside. PyNucleantUI does the same
-        // thing in `PyApp.init`.
+        // missing init looks like from the outside.
         ThorEngine.ensureInitialized(threads: AppRuntimeSettings.thorVGThreadCount)
 
         windows = app.body._makeWindows()

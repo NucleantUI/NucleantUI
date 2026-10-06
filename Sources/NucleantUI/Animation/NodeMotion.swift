@@ -163,7 +163,7 @@ extension ViewNode {
     /// a group dissolved into this node's layout.
     func placeGhosts(context: DrawContext, store: AnimationStore, into list: inout DisplayList) {
         for child in children {
-            if child.removal != nil {
+            if child.isLeaving {
                 child.placeRemoved(context: context, store: store, into: &list)
             } else if child.content.isTransparent {
                 child.placeGhosts(context: context, store: store, into: &list)

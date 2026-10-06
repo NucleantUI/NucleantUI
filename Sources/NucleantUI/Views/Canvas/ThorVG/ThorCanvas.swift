@@ -116,18 +116,26 @@ struct ThorCanvasContent: NodeContent {
     func place(node viewNode: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0, let host = ShaderHost.current else { return }
         // Inside a capture there is nothing to flatten into — the author's
-        // paints live on the node — so the node is used regardless; it is
-        // composited over the capture, as a `Shader` view inside one is.
+        // paints live on the node — so the node is used regardless. Under a
+        // `.shader` it reports itself instead of compositing: when it is all
+        // the effect's view draws, its image is the effect's input, and it
+        // is sized to the frame exactly so that image is the view's rect.
+        // Otherwise the effect composites it as below.
         let clip = context.compositeClip
-        guard let node = host.renderNodes.canvasNode(for: key, rect: rect) else { return }
+        let shaderInput = context.shaderCanvasInput
+        guard let node = host.renderNodes.thorCanvases.node(for: key, rect: rect, exactSize: shaderInput != nil) else { return }
         let scale = host.renderNodes.scale
-        node.place(rect: rect, clip: clip, scale: scale)
-        host.renderNodes.composite(node.container, at: host.renderNodes.nextPaintOrder())
-        host.boundaries.noteNested(at: list.commands.count, rect: clip.map { rect.intersection($0) } ?? rect)
+        let order = host.renderNodes.nextPaintOrder()
+        node.container.compositesToWindow = shaderInput == nil
+        if shaderInput == nil {
+            node.place(rect: rect, clip: clip, scale: scale)
+            host.renderNodes.composite(node.container, at: order)
+            host.boundaries.noteNested(at: list.commands.count, rect: clip.map { rect.intersection($0) } ?? rect)
+        }
 
         // Canvas pixels: the frame's size, not the image's — the slack past
         // the frame is cut by the scissor and is nobody's to draw in.
-        let size = SIMD2<Float>(Float(rect.width * scale), Float(rect.height * scale))
+        let size = SIMD2<Float>(rect.size * scale)
         var rasterize = false
         if !node.initialized {
             node.initialized = true
@@ -151,6 +159,14 @@ struct ThorCanvasContent: NodeContent {
             rasterize = true
         }
         if rasterize { node.rasterize() }
+        shaderInput?.add(ShaderCanvasInput.Canvas(
+            node: node,
+            rect: rect,
+            clip: clip,
+            changed: rasterize,
+            order: order,
+            listIndex: list.commands.count
+        ))
     }
 }
 

@@ -25,6 +25,8 @@ extension Path {
             switch element {
             case .move(let p), .line(let p):
                 include(p)
+            case .quad(let control, let end):
+                include(control); include(end)
             case .cubic(let c1, let c2, let end):
                 include(c1); include(c2); include(end)
             case .close:
@@ -33,6 +35,11 @@ extension Path {
                 include(Point(x: r.minX, y: r.minY)); include(Point(x: r.maxX, y: r.maxY))
             case .ellipse(let c, let rx, let ry):
                 include(Point(x: c.x - rx, y: c.y - ry)); include(Point(x: c.x + rx, y: c.y + ry))
+            case .text(let string, let origin, let font):
+                let extent = Path.textExtent(string, font: font)
+                include(origin); include(Point(x: origin.x + extent.width, y: origin.y + extent.height))
+            case .image(_, let rect):
+                include(Point(x: rect.minX, y: rect.minY)); include(Point(x: rect.maxX, y: rect.maxY))
             }
         }
         guard minX <= maxX, minY <= maxY else { return nil }
@@ -43,21 +50,19 @@ extension Path {
 extension Rect {
     /// The smallest rect holding both.
     func union(_ other: Rect) -> Rect {
-        let x0 = Swift.min(minX, other.minX)
-        let y0 = Swift.min(minY, other.minY)
-        let x1 = Swift.max(maxX, other.maxX)
-        let y1 = Swift.max(maxY, other.maxY)
-        return Rect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+        let lo = origin.lanewiseMin(other.origin)
+        let hi = (origin + size).lanewiseMax(other.origin + other.size)
+        return Rect(origin: lo, size: hi - lo)
     }
 
     /// Grown by `amount` on every side.
     func expanded(by amount: Double) -> Rect {
-        Rect(x: minX - amount, y: minY - amount, width: width + 2 * amount, height: height + 2 * amount)
+        Rect(origin: origin - amount, size: size + 2 * amount)
     }
 
     /// Whether any area is shared — touching edges do not count.
     func intersects(_ other: Rect) -> Bool {
-        minX < other.maxX && other.minX < maxX && minY < other.maxY && other.minY < maxY
+        all((origin .< other.origin + other.size) .& (other.origin .< origin + size))
     }
 
     /// The box around this rect's corners under `transform`.
@@ -110,6 +115,10 @@ extension DrawCommand {
             box = draw.frame
             transform = draw.transform
             clip = draw.clip
+        case .canvas(let draw):
+            box = draw.frame
+            transform = draw.transform
+            clip = draw.clip
         }
         // Anti-aliasing touches the pixel outside the edge.
         var result = box.applying(transform).expanded(by: 1)
@@ -159,6 +168,9 @@ extension DrawCommand {
         case .image(var draw):
             (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
             return .image(draw)
+        case .canvas(var draw):
+            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
+            return .canvas(draw)
         }
     }
 }
@@ -166,6 +178,6 @@ extension DrawCommand {
 extension Rect {
     /// Whether `other` lies entirely inside.
     func contains(_ other: Rect) -> Bool {
-        other.minX >= minX && other.maxX <= maxX && other.minY >= minY && other.maxY <= maxY
+        all((other.origin .>= origin) .& (other.origin + other.size .<= origin + size))
     }
 }

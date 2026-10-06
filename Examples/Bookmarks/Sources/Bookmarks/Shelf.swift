@@ -53,6 +53,8 @@ enum ShelfMode: Hashable, CaseIterable, Identifiable {
     }
 }
 
+let LAYOUT_TIME = 1.0 / 3.0
+
 @View
 struct Shelf {
     let library: Library
@@ -74,7 +76,9 @@ struct Shelf {
             HStack(spacing: 10) {
                 Picker("View as", selection: Binding(
                     get: { mode },
-                    set: { newValue in withAnimation(.smooth(duration: 0.5)) { mode = newValue } }
+                    set: { newValue in
+                        withAnimation(.smooth(duration: LAYOUT_TIME)) { mode = newValue }
+                    }
                 )) {
                     ForEach(ShelfMode.allCases) { mode in
                         Text(mode.name)

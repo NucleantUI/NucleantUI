@@ -57,36 +57,57 @@ public func _areEquivalent<T>(_ a: T, _ b: T) -> Bool {
 /// Order matters: `ViewInput` first, so a `Binding` compares by source and
 /// not through its `Equatable` conformance (which reads the value — and two
 /// bindings onto the same slot always read the same value, changed or not).
+///
+/// Which of those applies depends only on the type, and asking costs a
+/// protocol conformance lookup per question; so it is asked once per type,
+/// and what to do with two values of that type is kept — see `comparator`.
 @MainActor
 func _dynamicallyEquivalent(_ a: Any, _ b: Any) -> Bool {
-    guard type(of: a) == type(of: b) else { return false }
-    if let a = a as? any ViewInput {
-        return _openViewInput(a, b)
+    let valueType = type(of: a)
+    guard valueType == type(of: b) else { return false }
+    let id = ObjectIdentifier(valueType)
+    if let compare = comparators[id] {
+        return compare(a, b)
+    }
+    let compare = comparator(for: a)
+    comparators[id] = compare
+    return compare(a, b)
+}
+
+/// How to compare two values, by their type.
+@MainActor
+private var comparators: [ObjectIdentifier: @MainActor (Any, Any) -> Bool] = [:]
+
+/// How two values of `value`'s type compare — each is cast back to that
+/// type, which a value of exactly that type always is.
+@MainActor
+private func comparator(for value: Any) -> @MainActor (Any, Any) -> Bool {
+    if let value = value as? any ViewInput {
+        return viewInputComparator(value)
     }
     // The same object is the same input: what a view reads *from* it is
     // tracked by observation, so a change inside it dirties the readers
     // without the reference having to look different. A different object
     // is a different input, whatever its contents.
-    if type(of: a) is AnyClass {
-        return (a as AnyObject) === (b as AnyObject)
+    if type(of: value) is AnyClass {
+        return { a, b in (a as AnyObject) === (b as AnyObject) }
     }
     // Nothing that says how to compare it: undecidable, so not equivalent.
     // A type that should compare declares `Equatable`.
-    if let a = a as? any Equatable {
-        return _openEquatable(a, b)
+    if let value = value as? any Equatable {
+        return equatableComparator(value)
     }
-    return false
+    return { _, _ in false }
 }
 
 @MainActor
-private func _openViewInput<T: ViewInput>(_ a: T, _ b: Any) -> Bool {
-    guard let b = b as? T else { return false }
-    return a._isEquivalent(to: b)
+private func viewInputComparator<T: ViewInput>(_: T) -> @MainActor (Any, Any) -> Bool {
+    { a, b in (a as! T)._isEquivalent(to: b as! T) }
 }
 
-private func _openEquatable<T: Equatable>(_ a: T, _ b: Any) -> Bool {
-    guard let b = b as? T else { return false }
-    return a == b
+@MainActor
+private func equatableComparator<T: Equatable>(_: T) -> @MainActor (Any, Any) -> Bool {
+    { a, b in (a as! T) == (b as! T) }
 }
 
 // MARK: - Property wrappers

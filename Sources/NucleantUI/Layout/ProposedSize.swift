@@ -2,7 +2,7 @@
 //  ProposedSize.swift
 //  NucleantUI
 //
-//  The same contract as PyNucleantUI's `ProposedViewSize` (and SwiftUI's):
+//  The same contract as SwiftUI's `ProposedViewSize`:
 //  either axis may be `nil` — *unspecified* — meaning the container isn't
 //  constraining it, so the child picks its own extent there.
 //

@@ -315,7 +315,7 @@ extension ViewNode {
 
     /// Every `.focused` mark standing in this subtree, with its node.
     func focusBindings(into records: inout [(record: FocusBindingRecord, node: ViewNode)]) {
-        guard !content.isParked, removal == nil else { return }
+        guard !content.isParked, !isLeaving else { return }
         if let record = content.focusBinding {
             records.append((record, self))
         }
@@ -327,7 +327,7 @@ extension ViewNode {
     /// The first enabled view under this node that takes keys — where the
     /// keys go when a focus state names this node's view.
     func firstFocusTarget() -> FocusTarget? {
-        guard !content.isParked, removal == nil else { return nil }
+        guard !content.isParked, !isLeaving else { return nil }
         if let target = content.focusTarget, target.isEnabled { return target }
         for child in children {
             if let found = child.firstFocusTarget() { return found }

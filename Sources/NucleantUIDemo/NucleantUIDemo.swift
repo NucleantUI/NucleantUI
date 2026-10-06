@@ -269,6 +269,10 @@ struct EffectsScreen {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 10) {
+                CanvasEffectsSection()
+
+                Divider()
+
                 Text("\(effectGallery.count) effects over the same card — each row is its own canvas, sampled by its own shader.")
                     .font(.footnote)
                     .foregroundColor(.secondary)

@@ -12,12 +12,18 @@ public struct Path: Hashable, Sendable {
     public enum Element: Hashable, Sendable {
         case move(Point)
         case line(Point)
+        case quad(control: Point, end: Point)
         case cubic(control1: Point, control2: Point, end: Point)
         case close
         /// A rect with per-axis corner radii — `append_rect` handles this in
         /// one call, and doing it here keeps ThorVG's own rounding maths.
         case rect(Rect, radiusX: Double, radiusY: Double)
         case ellipse(center: Point, radiusX: Double, radiusY: Double)
+        /// Text with its top-left at `origin`, a line per `\n`. Painted with
+        /// the path's fill, as an image is; stroking leaves both out.
+        case text(String, origin: Point, font: Font)
+        /// An image stretched into `rect`, faded by the fill's alpha.
+        case image(RasterImage, in: Rect)
     }
 
     public var elements: [Element] = []
@@ -47,6 +53,14 @@ public struct Path: Hashable, Sendable {
         elements.append(.rect(rect, radiusX: radiusX, radiusY: radiusY))
     }
 
+    public mutating func addText(_ string: String, at origin: Point, font: Font) {
+        elements.append(.text(string, origin: origin, font: font))
+    }
+
+    public mutating func addImage(_ image: RasterImage, in rect: Rect) {
+        elements.append(.image(image, in: rect))
+    }
+
     public mutating func addEllipse(in rect: Rect) {
         elements.append(.ellipse(
             center: rect.center,
@@ -65,6 +79,8 @@ public struct Path: Hashable, Sendable {
             switch element {
             case .move(let p):  return .move(shift(p))
             case .line(let p):  return .line(shift(p))
+            case .quad(let control, let end):
+                return .quad(control: shift(control), end: shift(end))
             case .cubic(let c1, let c2, let end):
                 return .cubic(control1: shift(c1), control2: shift(c2), end: shift(end))
             case .close:        return .close
@@ -72,6 +88,10 @@ public struct Path: Hashable, Sendable {
                 return .rect(r.offsetBy(dx: dx, dy: dy), radiusX: rx, radiusY: ry)
             case .ellipse(let c, let rx, let ry):
                 return .ellipse(center: shift(c), radiusX: rx, radiusY: ry)
+            case .text(let string, let origin, let font):
+                return .text(string, origin: shift(origin), font: font)
+            case .image(let image, let rect):
+                return .image(image, in: rect.offsetBy(dx: dx, dy: dy))
             }
         }
         return copy
@@ -189,10 +209,64 @@ public struct ImageDraw: Equatable, Sendable {
     }
 }
 
+/// What a `Canvas` view draws with: handed the raw pointer of the node's
+/// `SkCanvas`, already at the canvas's origin, inside its clip. A pointer
+/// rather than the Skia type so the display list names no backend; builds
+/// without Skia never run it.
+struct CanvasDrawing: @unchecked Sendable {
+    let run: @MainActor (OpaquePointer) -> Void
+}
+
+/// A `Canvas` view's place in the list: the renderer draws straight into the
+/// node's own Skia canvas, at this point in paint order, instead of through
+/// commands.
+///
+/// Compared by `generation` — bumped each time the view is rebuilt, which is
+/// what a change to anything its renderer read does — and the geometry, so
+/// an unchanged canvas leaves the node's list equal and it is not redrawn.
+public struct CanvasDraw: Equatable, Sendable {
+    public var frame: Rect
+    /// The inherited opacity, applied to the canvas as a whole.
+    public var opacity: Double
+    public var transform: Transform
+    public var clip: Rect?
+    public var clipCornerRadius: Double
+    let generation: Int
+    let drawing: CanvasDrawing
+
+    init(
+        frame: Rect,
+        opacity: Double = 1,
+        transform: Transform = .identity,
+        clip: Rect? = nil,
+        clipCornerRadius: Double = 0,
+        generation: Int,
+        drawing: CanvasDrawing
+    ) {
+        self.frame = frame
+        self.opacity = opacity
+        self.transform = transform
+        self.clip = clip
+        self.clipCornerRadius = clipCornerRadius
+        self.generation = generation
+        self.drawing = drawing
+    }
+
+    public static func == (lhs: CanvasDraw, rhs: CanvasDraw) -> Bool {
+        lhs.generation == rhs.generation
+            && lhs.frame == rhs.frame
+            && lhs.opacity == rhs.opacity
+            && lhs.transform == rhs.transform
+            && lhs.clip == rhs.clip
+            && lhs.clipCornerRadius == rhs.clipCornerRadius
+    }
+}
+
 public enum DrawCommand: Equatable, Sendable {
     case shape(ShapeDraw)
     case text(TextDraw)
     case image(ImageDraw)
+    case canvas(CanvasDraw)
 }
 
 /// The commands produced by one layout pass, in paint order.
@@ -246,6 +320,11 @@ public struct DrawContext: Sendable {
     /// inline instead of into a node of its own, which would composite over
     /// the capture rather than into it.
     var flattensRenderNodes = false
+
+    /// Set by a `.shader` effect for the view it is applied to: a canvas
+    /// node placed inside (`ThorCanvas`, `ThorCanvasRender`) reports itself
+    /// here instead of compositing, so its image can be the effect's input.
+    var shaderCanvasInput: ShaderCanvasInput?
 
     /// The clip of the containers above the nearest enclosing render node,
     /// which took it out of `clip` so its content compares equal as it

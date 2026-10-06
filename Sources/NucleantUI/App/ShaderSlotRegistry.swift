@@ -2,7 +2,7 @@
 //  ShaderSlotRegistry.swift
 //  NucleantUI
 //
-//  A `Shader` view does not draw into the shared ThorVG canvas — it cannot,
+//  A `Shader` view does not draw into the shared window canvas — it cannot,
 //  the canvas is a 2D vector surface. It gets its own GPU node, composited
 //  into its own rect of the swapchain, which is what `RenderContainerNode`'s
 //  `compositeRect` is for.
@@ -12,8 +12,8 @@
 //  when it goes away. This registry is that bookkeeping, and the one place in
 //  the framework where the view layer reaches the engine directly.
 //
-//  A `.shader(_:)` effect is the same slot with one more piece: a ThorVG
-//  canvas of its own that the view is drawn into, bound to the compute
+//  A `.shader(_:)` effect is the same slot with one more piece: a canvas
+//  of its own that the view is drawn into, bound to the compute
 //  shader as a texture. Two engine nodes, then — the canvas, which is never
 //  composited, and the effect's output, which is — updated in that order.
 //
@@ -21,10 +21,10 @@
 //  place of the compute one: its image is a colour attachment drawn by a
 //  render pass, and composited exactly like the others.
 //
-//  The canvases themselves — a `.shader` layer's, and the per-view nodes of
-//  `.drawingGroup()` / `ThorCanvas` — are `RenderNodeManager`'s, which this
-//  registry owns and drives through the same pass lifecycle; one pool of
-//  ThorVG canvases serves both. Slots and nodes are composited in the order
+//  The canvases themselves — a `.shader` layer's, the per-view nodes of
+//  `.drawingGroup()`, and `ThorCanvas`'s — are `RenderNodeManager`'s, which
+//  this registry owns and drives through the same pass lifecycle; layers and
+//  drawing groups share one pool of the build's canvases (`CanvasBackend`). Slots and nodes are composited in the order
 //  the tree placed them (`nextPaintOrder`), not the order they were built.
 //
 
@@ -101,6 +101,13 @@ final class ShaderSlotRegistry {
         /// which the shader samples. `nil` for a generative `Shader` view —
         /// and for a retired effect slot whose canvas has been handed on.
         var layer: Layer?
+        /// For a `.shader(_:)` over a `ThorCanvas` / `ThorCanvasRender`: that
+        /// view's own canvas node, whose image the shader samples in place of
+        /// a layer. Borrowed — `RenderNodeManager` keeps and frees it — and
+        /// `canvasView` is the image view the pipeline was bound to, so a
+        /// node that got a new image gets a new slot.
+        let canvas: RenderNodeManager.ThorCanvasNode?
+        let canvasView: VkImageView?
         /// Pixel size the node was built at — a resize rebuilds it.
         var width: Int
         var height: Int
@@ -134,6 +141,7 @@ final class ShaderSlotRegistry {
             backend: Backend,
             container: NucleantRenderNode,
             layer: Layer?,
+            canvas: RenderNodeManager.ThorCanvasNode?,
             width: Int,
             height: Int,
             request: Request,
@@ -142,6 +150,8 @@ final class ShaderSlotRegistry {
             self.backend = backend
             self.container = container
             self.layer = layer
+            self.canvas = canvas
+            self.canvasView = canvas?.node.imageView
             self.width = width
             self.height = height
             self.source = request.source
@@ -150,17 +160,13 @@ final class ShaderSlotRegistry {
         }
     }
 
-    /// The view side of a `.shader(_:)` slot: a ThorVG canvas the size of the
+    /// The view side of a `.shader(_:)` slot: a canvas the size of the
     /// view, rasterized whenever the view draws something different, and
     /// sampled by the slot's compute shader as `uContent`. A per-view canvas
     /// node that is never composited — `content` and `origin` are what it
     /// holds and where the view was when it was drawn; an identical list at
     /// the same place is not drawn again.
-    #if SKIA_MODE
-    typealias Layer = RenderNodeManager.SkiaCanvasNode
-    #else
     typealias Layer = RenderNodeManager.CanvasNode
-    #endif
 
     private unowned let engine: NucleantRenderEngine
 
@@ -277,17 +283,47 @@ final class ShaderSlotRegistry {
         slot.container.needsRender = true
     }
 
+    /// Called from `ShaderEffectContent.place` when the view is a single
+    /// canvas node: the slot for this view, sampling `canvas`'s own image.
+    /// `changed` — the canvas was rasterized again this pass — re-runs the
+    /// shader over it, as new content in a layer does.
+    func useCanvas(
+        path: [Int],
+        function: ShaderFunction,
+        draw: ShaderDraw,
+        arguments: ShaderArguments,
+        rect: Rect,
+        clip: Rect?,
+        canvas: RenderNodeManager.ThorCanvasNode,
+        changed: Bool
+    ) {
+        let request: Request = function.isGraphics
+            ? .graphics(function, draw, withLayer: true)
+            : .compute(function, withLayer: true)
+        guard let slot = slot(at: path, request: request, arguments: arguments, rect: rect, clip: clip, canvas: canvas)
+        else { return }
+        if function.isGraphics {
+            redraw(slot, covering: draw)
+        }
+        if changed {
+            slot.container.needsRender = true
+        }
+    }
+
     /// The slot standing at `path`, rebuilt if its size or source changed,
-    /// created if there is none; placed at `rect` either way.
+    /// created if there is none; placed at `rect` either way. `canvas` is the
+    /// canvas node it samples instead of a layer of its own.
     private func slot(
         at path: [Int],
         request: Request,
         arguments: ShaderArguments,
         rect: Rect,
-        clip: Rect?
+        clip: Rect?,
+        canvas canvasInput: RenderNodeManager.ThorCanvasNode? = nil
     ) -> Slot? {
         let source = request.source
-        let withLayer = request.withLayer
+        // A slot sampling a canvas node has no layer of its own.
+        let withLayer = request.withLayer && canvasInput == nil
         let pixelWidth = max(1, Int((rect.width * scale).rounded()))
         let pixelHeight = max(1, Int((rect.height * scale).rounded()))
 
@@ -308,7 +344,9 @@ final class ShaderSlotRegistry {
                existing.source == source,
                existing.argumentSignature == arguments.signature,
                existing.backend.argumentCapacity >= arguments.packed.count,
-               (existing.layer != nil) == withLayer {
+               (existing.layer != nil) == withLayer,
+               existing.canvas === canvasInput,
+               existing.canvasView == canvasInput?.node.imageView {
                 upload(arguments, to: existing)
                 composite(existing, at: order)
                 return existing
@@ -338,7 +376,7 @@ final class ShaderSlotRegistry {
             arguments: arguments,
             width: pixelWidth,
             height: pixelHeight,
-            layer: withLayer ? .reuse(canvas) : .none
+            layer: canvasInput.map { .canvas($0) } ?? (withLayer ? .reuse(canvas) : .none)
         ) else {
             return nil
         }
@@ -359,6 +397,9 @@ final class ShaderSlotRegistry {
     private func composite(_ slot: Slot, at order: Int) {
         if let layer = slot.layer {
             renderNodes.composite(layer.container, at: order, layer: true)
+        }
+        if let canvas = slot.canvas {
+            renderNodes.composite(canvas.container, at: order, layer: true)
         }
         renderNodes.composite(slot.container, at: order)
     }
@@ -454,7 +495,7 @@ final class ShaderSlotRegistry {
     /// animated slots for redraw.
     ///
     /// A shader that reads the clock or the pointer wants a dispatch every
-    /// frame — unlike the ThorVG canvas, that is the one thing on screen which
+    /// frame — unlike the window canvas, that is the one thing on screen which
     /// is never idle. One that reads neither is left alone: its first dispatch
     /// (the slot starts `needsRender`) produced everything it will ever
     /// produce, until a `.shader` layer's content changes and `useLayer`
@@ -530,6 +571,8 @@ final class ShaderSlotRegistry {
         case none
         /// A canvas to retarget if given, a spare or a fresh one otherwise.
         case reuse(Layer?)
+        /// No layer: sample this canvas node's own image.
+        case canvas(RenderNodeManager.ThorCanvasNode)
     }
 
     private func makeSlot(
@@ -541,16 +584,27 @@ final class ShaderSlotRegistry {
     ) -> Slot? {
         let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
         let layer: Layer?
+        let canvas: RenderNodeManager.ThorCanvasNode?
         let withLayer: Bool
         switch layerRequest {
         case .none:
             layer = nil
+            canvas = nil
             withLayer = false
         case .reuse(let handed):
             guard let made = makeLayer(width: width, height: height, reusing: handed) else { return nil }
             layer = made
+            canvas = nil
             withLayer = true
+        case .canvas(let node):
+            layer = nil
+            canvas = node
+            withLayer = false
         }
+        // The image the shader samples as `uContent`: the layer's, or the
+        // canvas node's own. Borrowed either way — its node owns and frees it.
+        let input: (image: VkImage, view: VkImageView)? = layer.map { ($0.node.image, $0.node.imageView) }
+            ?? canvas.map { ($0.node.image, $0.node.imageView) }
         let canvasReady = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
         defer {
             PerfTrace.trace("shader slot \(width)x\(height)\(withLayer ? " +layer" : ""): "
@@ -574,18 +628,19 @@ final class ShaderSlotRegistry {
                     memory: image.memory,
                     storageCapable: true
                 )
-                if let layer {
-                    // Borrowed, as the node's contract says: the layer's node
-                    // owns the image and frees it.
-                    node.register(image: layer.node.image, imageView: layer.node.imageView)
+                if let input {
+                    // Borrowed, as the node's contract says: the layer's or
+                    // the canvas's node owns the image and frees it.
+                    node.register(image: input.image, imageView: input.view)
                 }
                 let pipeline = try ShaderPipeline(
                     engine: engine,
                     imageView: image.view,
-                    input: layer?.node.imageView,
+                    input: input?.view,
                     source: try ShaderCode.compute(
                         function,
-                        samplesContent: layer != nil,
+                        samplesContent: input != nil,
+                        contentIsTopDown: canvas != nil,
                         arguments: arguments
                     ),
                     argumentCapacity: capacity
@@ -614,10 +669,11 @@ final class ShaderSlotRegistry {
                     pipeline = try VertexShaderPipeline(
                         engine: engine,
                         renderPass: pass.renderPass!,
-                        input: layer?.node.imageView,
+                        input: input?.view,
                         source: try GraphicsShaderCode.graphics(
                             function,
-                            samplesContent: layer != nil,
+                            samplesContent: input != nil,
+                            contentIsTopDown: canvas != nil,
                             arguments: arguments
                         ),
                         argumentCapacity: capacity
@@ -647,6 +703,7 @@ final class ShaderSlotRegistry {
                 backend: backend,
                 container: container,
                 layer: layer,
+                canvas: canvas,
                 width: width,
                 height: height,
                 request: request,
@@ -662,7 +719,7 @@ final class ShaderSlotRegistry {
         }
     }
 
-    /// The canvas half of a `.shader` slot: a ThorVG node the size of the
+    /// The canvas half of a `.shader` slot: a canvas node the size of the
     /// view, in the engine's list so it is drawn each frame its content
     /// changed, but never composited — `compositesToWindow` is what keeps its
     /// image off the swapchain and its size off the window's.
@@ -671,11 +728,7 @@ final class ShaderSlotRegistry {
     /// rather than rebuilt: the canvas keeps its renderer, gets a new image
     /// at the new size, and its slot keeps its identity in the engine.
     private func makeLayer(width: Int, height: Int, reusing handed: Layer?) -> Layer? {
-        #if SKIA_MODE
-        let acquired = renderNodes.skia.acquire(width: width, height: height, reusing: handed)
-        #else
         let acquired = renderNodes.acquire(width: width, height: height, reusing: handed)
-        #endif
         guard let layer = acquired else {
             return nil
         }
@@ -734,11 +787,7 @@ final class ShaderSlotRegistry {
     /// Hand a canvas that is no longer in use back to the shared pool,
     /// emptied of its paints; past the pool's limit it is freed.
     private func recycle(_ layer: Layer) {
-        #if SKIA_MODE
-        renderNodes.skia.recycle(layer)
-        #else
         renderNodes.recycle(layer)
-        #endif
     }
 
     /// The image a slot's shader writes and the composite samples.

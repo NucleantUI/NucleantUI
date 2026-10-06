@@ -46,15 +46,6 @@ extension PreferenceKey where Value: ExpressibleByNilLiteral {
 
 // MARK: - Reading the tree
 
-/// A node that changes what flows up through it for some key — a writer
-/// replacing its subtree's value, a transform editing it.
-@MainActor
-protocol PreferenceContent {
-    /// This node's value for `key`, given the value its children reduced to
-    /// (`nil` when none of them set one). `nil` passes "unset" on up.
-    func preference<K: PreferenceKey>(_ key: K.Type, below: K.Value?) -> K.Value?
-}
-
 extension ViewNode {
 
     /// What this subtree's views set for `key`, combined — `nil` when none
@@ -66,7 +57,7 @@ extension ViewNode {
             return value
         }
         var combined: K.Value?
-        for child in children where child.removal == nil {
+        for child in children where !child.isLeaving {
             guard let next = child.preference(key) else { continue }
             if combined == nil {
                 combined = next
@@ -74,9 +65,9 @@ extension ViewNode {
                 K.reduce(value: &combined!) { next }
             }
         }
-        if let content = content as? PreferenceContent {
-            combined = content.preference(key, below: combined)
-        }
+        // Each node says what flows up through it — see
+        // `NodeContent.preference(_:below:)`.
+        combined = content.preference(key, below: combined)
         preferenceCache[id] = OpaqueValue(combined)
         return combined
     }

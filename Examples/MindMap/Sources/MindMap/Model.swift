@@ -12,6 +12,10 @@
 //  once (under an animation, so the bubbles glide), and a new topic gets
 //  one below its siblings.
 //
+//  Notes are the other thing on the canvas: free text in a box. A note has
+//  no center to hang on — it is as big as it was made and where it was put —
+//  so it keeps a whole `Rect`, and the canvas puts it there with `.framed`.
+//
 
 import NucleantUI
 import Observation
@@ -43,6 +47,14 @@ enum Palette {
     }
 }
 
+/// A sticky note: its text, and the box it sits in.
+struct Note: Identifiable, Hashable {
+    let id: Int
+    var text: String
+    /// Where the note is and how big, in map space — before the canvas's pan.
+    var rect: Rect
+}
+
 /// A line from a parent's center to its child's, for the canvas to draw.
 struct Branch: Identifiable, Hashable {
     /// The child's id: every topic but the center has exactly one branch in.
@@ -59,14 +71,19 @@ final class MindMap: Identifiable {
     static let columnWidth = 220.0
     /// How far apart siblings sit, down.
     static let rowHeight = 54.0
+    /// A new note's size, and the smallest one can be made.
+    static let noteSize = Size(width: 210, height: 120)
+    static let minimumNoteSize = Size(width: 130, height: 80)
 
     let id: Int
     var name: String
     private(set) var topics: [Topic]
+    private(set) var notes: [Note] = []
     private(set) var selection: Topic.ID?
     /// How far the whole map has been dragged across the canvas.
     private(set) var pan = Size.zero
     private var nextID: Int
+    private var nextNoteID = 0
 
     init(id: Int, name: String, center: String) {
         self.id = id
@@ -267,6 +284,46 @@ final class MindMap: Identifiable {
         self.pan = pan
     }
 
+    // MARK: - Notes
+
+    func note(_ id: Note.ID) -> Note? {
+        notes.first { $0.id == id }
+    }
+
+    /// A new note with its top-leading corner at `origin`, in map space.
+    @discardableResult
+    func addNote(_ text: String = "", at origin: Point) -> Note.ID {
+        let note = Note(id: nextNoteID, text: text, rect: Rect(origin: origin, size: Self.noteSize))
+        nextNoteID += 1
+        notes.append(note)
+        return note.id
+    }
+
+    func setNoteText(_ id: Note.ID, _ text: String) {
+        guard let at = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[at].text = text
+    }
+
+    /// Puts the note's top-leading corner at `origin`; its size stays.
+    func moveNote(_ id: Note.ID, to origin: Point) {
+        guard let at = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[at].rect.origin = origin
+    }
+
+    /// Resizes the note from its bottom-trailing corner — the top-leading
+    /// one stays put — never below `minimumNoteSize`.
+    func resizeNote(_ id: Note.ID, to size: Size) {
+        guard let at = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[at].rect.size = Size(
+            width: max(size.width, Self.minimumNoteSize.width),
+            height: max(size.height, Self.minimumNoteSize.height)
+        )
+    }
+
+    func deleteNote(_ id: Note.ID) {
+        notes.removeAll { $0.id == id }
+    }
+
     // MARK: - Tidy Up
 
     /// Lays the branches out in neat columns either side of the center,
@@ -365,13 +422,18 @@ final class Library {
     }
 
     private static func launchPlan(id: Int) -> MindMap {
-        map(id: id, name: "Spring Launch", center: "Spring Launch", [
+        let plan = map(id: id, name: "Spring Launch", center: "Spring Launch", [
             ("Product", ["Feature freeze Mar 3", "Beta to 200 users", "Pricing page"]),
             ("Marketing", ["Launch video", "Press kit", "Newsletter"]),
             ("Support", ["Help center refresh", "On-call rota"]),
             ("Risks", ["Payment provider migration", "Translations late"]),
             ("Metrics", ["Activation rate", "Week-1 retention", "Refund rate"]),
         ])
+        plan.addNote(
+            "Go / no-go on Feb 24: every branch owner signs off, Risks first.",
+            at: Point(x: 235, y: 70)
+        )
+        return plan
     }
 
     private static func trip(id: Int) -> MindMap {

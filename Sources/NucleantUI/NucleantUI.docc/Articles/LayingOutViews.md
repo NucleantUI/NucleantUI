@@ -53,6 +53,20 @@ ZStack {
 }
 ```
 
+`.framed(_:alignment:)` takes a whole ``Rect`` instead: the view is offered
+the rect's size and placed in it, the rect measured in the same parent space
+`.position` uses. It is `.frame(width:height:alignment:)` followed by
+`.position` at the rect's center, as one modifier, for when the model
+already knows where each thing goes and how big it is:
+
+```swift
+ZStack {
+    ForEach(notes) { note in
+        StickyNote(note).framed(note.rect)   // the note's own size and place
+    }
+}
+```
+
 A habit that keeps rows tidy: give the growing text in a row
 `.frame(maxWidth: .infinity, alignment: .leading)` rather than a
 ``Spacer`` after it. The fixed items are sized first and the text gets what

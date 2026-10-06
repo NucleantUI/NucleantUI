@@ -150,8 +150,26 @@ public final class SkiaDisplayRenderer {
                 emit(draw, on: canvas)
             case .image(let draw):
                 emit(draw, on: canvas)
+            case .canvas(let draw):
+                emit(draw, on: canvas)
             }
         }
+    }
+
+    // MARK: - Canvas views
+
+    /// A `Canvas` view: the node's own canvas, handed over at the view's
+    /// origin, cut to its frame, under its clip and transform.
+    private func emit(_ draw: CanvasDraw, on canvas: SkCanvas) {
+        let saved = canvas.save()
+        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        canvas.translate(dx: Float(draw.frame.minX), dy: Float(draw.frame.minY))
+        canvas.clipRect(pos: .zero, size: SIMD2(Float(draw.frame.width), Float(draw.frame.height)), doAntiAlias: true)
+        if draw.opacity < 1 {
+            canvas.saveLayerAlphaf(Float(max(draw.opacity, 0)))
+        }
+        draw.drawing.run(canvas.base)
+        canvas.restoreToCount(saved)
     }
 
     // MARK: - Shapes
@@ -193,33 +211,63 @@ public final class SkiaDisplayRenderer {
             canvas.drawPath(path, paint: paint)
         }
 
+        if let fill {
+            emitEmbedded(draw.path, fill: fill, on: canvas)
+        }
+
         canvas.restore()
+    }
+
+    /// The text and images in a path, painted with its fill: text in the
+    /// fill's color, an image faded by its alpha. Inside the shape's own
+    /// save, so its clip and transform already hold.
+    private func emitEmbedded(_ path: Path, fill: ShapeStyle, on canvas: SkCanvas) {
+        let color = fill.flatColor
+        for element in path.elements {
+            switch element {
+            case .text(let string, let origin, let font):
+                emit(TextDraw(
+                    string: string,
+                    frame: Rect(origin: origin, size: Path.textExtent(string, font: font)),
+                    font: font,
+                    color: color,
+                    wraps: false
+                ), on: canvas)
+            case .image(let image, let rect):
+                emit(ImageDraw(image: image, frame: rect, opacity: color.alpha), on: canvas)
+            default:
+                break
+            }
+        }
     }
 
     private func append(_ path: Path, to skPath: SkPath) {
         for element in path.elements {
             switch element {
             case .move(let point):
-                skPath.moveTo(SIMD2(point.x, point.y))
+                skPath.moveTo(point)
             case .line(let point):
-                skPath.lineTo(SIMD2(point.x, point.y))
+                skPath.lineTo(point)
+            case .quad(let control, let end):
+                skPath.quadTo(control, end)
             case .cubic(let c1, let c2, let end):
-                skPath.cubicTo(SIMD2(c1.x, c1.y), SIMD2(c2.x, c2.y), SIMD2(end.x, end.y))
+                skPath.cubicTo(c1, c2, end)
             case .close:
                 skPath.close()
             case .rect(let rect, let radiusX, let radiusY):
-                let pos = SIMD2(rect.minX, rect.minY)
-                let size = SIMD2(rect.width, rect.height)
+                let pos = rect.origin
+                let size = rect.size
                 if radiusX > 0 || radiusY > 0 {
                     skPath.addRRect(pos: pos, size: size, radius: SIMD2(radiusX, radiusY))
                 } else {
                     skPath.addRect(pos: pos, size: size)
                 }
             case .ellipse(let center, let radiusX, let radiusY):
-                skPath.addOval(
-                    pos: SIMD2(center.x - radiusX, center.y - radiusY),
-                    size: SIMD2(radiusX * 2, radiusY * 2)
-                )
+                let radius = SIMD2(radiusX, radiusY)
+                skPath.addOval(pos: center - radius, size: radius * 2)
+            case .text, .image:
+                // Not geometry: drawn after the path, by `emitEmbedded`.
+                break
             }
         }
     }
@@ -236,8 +284,8 @@ public final class SkiaDisplayRenderer {
             let (colors, positions) = stops(gradient)
             paint.setColor(SIMD4<UInt8>(0, 0, 0, 255))
             if let shader = SkGradientShader.makeLinear(
-                from: SIMD2(Float(start.x), Float(start.y)),
-                to: SIMD2(Float(end.x), Float(end.y)),
+                from: SIMD2<Float>(start),
+                to: SIMD2<Float>(end),
                 colors: colors, positions: positions
             ) {
                 paint.setShader(shader)
@@ -246,7 +294,7 @@ public final class SkiaDisplayRenderer {
             }
         case .radialGradient(let gradient, let center, let startRadius, let endRadius):
             let origin = center.resolved(in: bounds)
-            let point = SIMD2(Float(origin.x), Float(origin.y))
+            let point = SIMD2<Float>(origin)
             let (colors, positions) = stops(gradient)
             paint.setColor(SIMD4<UInt8>(0, 0, 0, 255))
             if let shader = SkGradientShader.makeTwoPointConical(
@@ -383,8 +431,8 @@ public final class SkiaDisplayRenderer {
         begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
         canvas.drawImageRect(
             image,
-            pos: SIMD2(Float(draw.frame.minX), Float(draw.frame.minY)),
-            size: SIMD2(Float(draw.frame.width), Float(draw.frame.height)),
+            pos: SIMD2<Float>(draw.frame.origin),
+            size: SIMD2<Float>(draw.frame.size),
             paint: paint
         )
         canvas.restore()
@@ -414,8 +462,8 @@ public final class SkiaDisplayRenderer {
             // `.clipShape(Capsule())` asks for an unbounded radius, meaning
             // "as round as this box allows" — resolvable only here.
             let radius = min(cornerRadius, min(clip.width, clip.height) / 2)
-            let pos = SIMD2(clip.minX, clip.minY)
-            let size = SIMD2(clip.width, clip.height)
+            let pos = clip.origin
+            let size = clip.size
             if radius > 0 {
                 canvas.clipRRect(pos: pos, size: size, radius: SIMD2(radius, radius), doAntiAlias: true)
             } else {

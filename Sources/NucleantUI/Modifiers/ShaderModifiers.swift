@@ -7,10 +7,9 @@
 //  A `Shader` view *generates* pixels. This is the other direction: the view
 //  it is applied to is drawn into a canvas of its own, and the shader reads
 //  that canvas as a texture and writes the pixels that actually reach the
-//  window — SwiftUI's `layerEffect`, on the engine's own terms. Every
-//  CanvasBase in PyNucleantUI rendered into its own VkImage for exactly this,
-//  and `OGLShaderNode` was given texture inputs for it; this is the view
-//  layer reaching both.
+//  window — SwiftUI's `layerEffect`, on the engine's own terms. A canvas node
+//  renders into its own VkImage, and `OGLShaderNode` takes texture inputs;
+//  this is the view layer reaching both.
 //
 //  One modifier, whichever kind of function it is handed. A function with a
 //  vertex stage gets the same texture at the same binding under the same name
@@ -135,20 +134,90 @@ struct ShaderEffectContent: NodeContent {
         inner.clipCornerRadius = 0
         // The texture is the view: a drawing group inside draws into it.
         inner.flattensRenderNodes = true
+        // A canvas node inside reports itself rather than compositing.
+        let canvasInput = ShaderCanvasInput()
+        inner.shaderCanvasInput = canvasInput
         // The list so far is everything painted beneath this view; the
         // layer's canvas is only the view's rect, so the rest is clipped
         // away by ThorVG.
         var content = backdrop ? list : DisplayList()
         child.place(in: rect, proposal: proposal, context: inner, into: &content)
-        host.useLayer(
-            path: path,
-            function: function,
-            draw: draw,
-            arguments: arguments,
-            rect: rect,
-            clip: context.compositeClip,
-            content: content
-        )
+        if !backdrop, content.commands.isEmpty, let canvas = canvasInput.sole,
+           canvas.covers(rect, scale: host.renderNodes.scale) {
+            // The view is one canvas node and nothing else: its image is
+            // already the view's pixels, and the shader samples it as it is.
+            host.useCanvas(
+                path: path,
+                function: function,
+                draw: draw,
+                arguments: arguments,
+                rect: rect,
+                clip: context.compositeClip,
+                canvas: canvas.node,
+                changed: canvas.changed
+            )
+        } else {
+            // Anything else is drawn into the layer; a canvas node among it
+            // composites by itself, over the effect, as it always has.
+            for canvas in canvasInput.canvases {
+                canvas.composite(host: host)
+            }
+            host.useLayer(
+                path: path,
+                function: function,
+                draw: draw,
+                arguments: arguments,
+                rect: rect,
+                clip: context.compositeClip,
+                content: content
+            )
+        }
         host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
+    }
+}
+
+/// The canvas nodes — `ThorCanvas`, `ThorCanvasRender` — placed under a
+/// `.shader` effect. Such a node's paints are drawn into a VkImage of its
+/// own, never into a display list, so a layer can't hold them; when one is
+/// all the effect's view draws, its image is the effect's input instead.
+@MainActor
+final class ShaderCanvasInput {
+    @MainActor
+    struct Canvas {
+        let node: RenderNodeManager.ThorCanvasNode
+        let rect: Rect
+        let clip: Rect?
+        /// Whether its paints were rasterized again this pass.
+        let changed: Bool
+        /// Its place in the paint order and in the enclosing list, taken
+        /// where it was placed — for compositing it by itself after all.
+        let order: Int
+        let listIndex: Int
+
+        /// Whether it fills `rect` to the pixel — what lets its image stand
+        /// for the effect's view.
+        func covers(_ rect: Rect, scale: Double) -> Bool {
+            abs(self.rect.minX - rect.minX) * scale < 0.5
+                && abs(self.rect.minY - rect.minY) * scale < 0.5
+                && abs(self.rect.width - rect.width) * scale < 0.5
+                && abs(self.rect.height - rect.height) * scale < 0.5
+        }
+
+        /// Composite the node into its frame, as one outside an effect is.
+        func composite(host: ShaderSlotRegistry) {
+            node.container.compositesToWindow = true
+            node.place(rect: rect, clip: clip, scale: host.renderNodes.scale)
+            host.renderNodes.composite(node.container, at: order)
+            host.boundaries.noteNested(at: listIndex, rect: clip.map { rect.intersection($0) } ?? rect)
+        }
+    }
+
+    private(set) var canvases: [Canvas] = []
+
+    /// The one canvas node placed, if exactly one was.
+    var sole: Canvas? { canvases.count == 1 ? canvases[0] : nil }
+
+    func add(_ canvas: Canvas) {
+        canvases.append(canvas)
     }
 }

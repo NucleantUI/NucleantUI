@@ -12,7 +12,7 @@ extension Path {
     /// Whether `point` lies inside the area this path fills: nonzero
     /// winding, or even-odd with `eoFill`. An open subpath counts as closed,
     /// as it does when filled.
-    func contains(_ point: Point, eoFill: Bool = false) -> Bool {
+    public func contains(_ point: Point, eoFill: Bool = false) -> Bool {
         var winding = 0
         var start: Point?
         var current: Point?
@@ -46,6 +46,25 @@ extension Path {
                     start = p
                 }
                 current = p
+            case .quad(let control, let end):
+                guard let from = current else {
+                    start = end
+                    current = end
+                    continue
+                }
+                let steps = 16
+                var previous = from
+                for step in 1...steps {
+                    let t = Double(step) / Double(steps)
+                    let u = 1 - t
+                    let next = Point(
+                        x: u * u * from.x + 2 * u * t * control.x + t * t * end.x,
+                        y: u * u * from.y + 2 * u * t * control.y + t * t * end.y
+                    )
+                    edge(previous, next)
+                    previous = next
+                }
+                current = end
             case .cubic(let c1, let c2, let end):
                 guard let from = current else {
                     start = end
@@ -70,6 +89,10 @@ extension Path {
                 closeSubpath()
             case .rect(let rect, let rx, let ry):
                 if Self.roundedRect(rect, radiusX: rx, radiusY: ry, contains: point) { winding += 1 }
+            case .text:
+                break
+            case .image(_, let rect):
+                if rect.contains(point) { winding += 1 }
             case .ellipse(let center, let rx, let ry):
                 guard rx > 0, ry > 0 else { continue }
                 let dx = (point.x - center.x) / rx

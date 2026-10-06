@@ -32,7 +32,7 @@ extension View {
     ///
     /// A view that reads state gets a node of its own without this (see
     /// `RenderBoundaryContent`); a group is for a subtree that should be
-    /// one image regardless, and owns a ThorVG canvas for it.
+    /// one image regardless, and owns a canvas for it.
     public func drawingGroup() -> some View {
         _ModifierView(content: self, key: ["drawingGroup"] as [AnyHashable]) { context in
             DrawingGroupContent(key: RenderNodeKey(path: context.path, identity: context.viewIdentity))
@@ -82,11 +82,7 @@ struct DrawingGroupContent: NodeContent {
             visible = rect.intersection(clip.map { $0.intersection(window) } ?? window)
             guard visible.width > 0, visible.height > 0 else { return }
         }
-        #if SKIA_MODE
-        guard let node = host.renderNodes.skia.canvasNode(for: key, rect: visible) else { return }
-        #else
         guard let node = host.renderNodes.canvasNode(for: key, rect: visible) else { return }
-        #endif
         node.place(rect: visible, clip: clip, scale: host.renderNodes.scale)
         host.renderNodes.composite(node.container, at: host.renderNodes.nextPaintOrder())
         host.boundaries.noteNested(at: list.commands.count, rect: clip.map { visible.intersection($0) } ?? visible)

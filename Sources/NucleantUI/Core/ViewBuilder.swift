@@ -29,6 +29,16 @@ public struct ViewBuilder {
         return content
     }
 
+    /// A primitive view's `body` is `Never`, and `View.body` carries
+    /// `@ViewBuilder`, so `var body: Never { bodyUnavailable() }` is put
+    /// through the transform like any other body. Without this overload it
+    /// picks the generic one above, whose `#viewID` default argument is
+    /// evaluated *after* the never-returning call it belongs to — code the
+    /// compiler can see is unreachable, and a "will never be executed"
+    /// warning at every primitive in the framework. There is nothing to
+    /// stamp here anyway: the expression never produces a view.
+    public static func buildExpression(_ content: Never) -> Never {}
+
     public static func buildBlock() -> EmptyView {
         EmptyView()
     }

@@ -48,7 +48,13 @@ final class ViewNode {
 
     /// Set on a node removed from the tree while its exit plays: it is
     /// drawn, but neither laid out nor hit.
-    var removal: NodeRemoval?
+    var removal: NodeRemoval? {
+        didSet { isLeaving = removal != nil }
+    }
+
+    /// Whether `removal` is set — what the walks over children ask, kept as
+    /// a flag so asking doesn't copy the removal out.
+    private(set) var isLeaving = false
 
     /// The path of the view whose build made this node — as opposed to one
     /// that only handed a child's node on (an `if`, a view's `body`).
@@ -133,20 +139,45 @@ final class ViewNode {
     /// Children as the layout sees them: transparent nodes (`Group`, a
     /// `TupleView`, `ForEach`) dissolve into their own children, so a stack
     /// treats a group's contents as its own siblings — SwiftUI's rule.
+    ///
+    /// Asked by every layout pass of every container, so the usual case —
+    /// nothing to dissolve, nothing leaving — hands back `children` as it is.
     var layoutChildren: [ViewNode] {
-        guard children.contains(where: { $0.content.isTransparent || $0.removal != nil }) else { return children }
-        return children.flatMap { child -> [ViewNode] in
-            if child.removal != nil { return [] }
-            return child.content.isTransparent ? child.layoutChildren : [child]
+        var isFlat = true
+        for child in children where child.isLeaving || child.content.isTransparent {
+            isFlat = false
+            break
+        }
+        if isFlat { return children }
+        var flattened: [ViewNode] = []
+        flattened.reserveCapacity(children.count)
+        appendLayoutChildren(to: &flattened)
+        return flattened
+    }
+
+    private func appendLayoutChildren(to flattened: inout [ViewNode]) {
+        for child in children where !child.isLeaving {
+            if child.content.isTransparent {
+                child.appendLayoutChildren(to: &flattened)
+            } else {
+                flattened.append(child)
+            }
         }
     }
 
-    /// The single child a modifier node wraps.
+    /// The single child a modifier node wraps — the first of
+    /// `layoutChildren`, found without flattening the rest.
     ///
     /// A modifier applied to a multi-child `Group` takes the first child only;
     /// SwiftUI would distribute the modifier over each. Worth knowing, but not
     /// worth a second layout mode — write the modifier inside the group.
-    var singleChild: ViewNode? { layoutChildren.first }
+    var singleChild: ViewNode? {
+        for child in children where !child.isLeaving {
+            if !child.content.isTransparent { return child }
+            if let inner = child.singleChild { return inner }
+        }
+        return nil
+    }
 
     /// How this node competes for space in a stack — see `NodeContent`.
     func flexibility(along axis: Axis) -> LayoutPriorityClass {
@@ -285,6 +316,12 @@ protocol NodeContent {
     /// container draws its pinned headers last, over the rows, and they
     /// must be hit first too. `nil` for the usual order.
     func hitTestOrder(node: ViewNode) -> [ViewNode]?
+
+    /// This node's value for preference `key`, given the value its children
+    /// reduced to (`nil` when none of them set one); `nil` passes "unset" on
+    /// up. A writer replaces its subtree's value, a transform edits it;
+    /// every other node passes `below` through.
+    func preference<K: PreferenceKey>(_ key: K.Type, below: K.Value?) -> K.Value?
 }
 
 extension NodeContent {
@@ -306,6 +343,7 @@ extension NodeContent {
     var isParked: Bool { false }
     var clipsChildren: Bool { false }
     func hitTestOrder(node: ViewNode) -> [ViewNode]? { nil }
+    func preference<K: PreferenceKey>(_ key: K.Type, below: K.Value?) -> K.Value? { below }
 
     /// Most nodes are as flexible as whatever they wrap — a padded, tinted,
     /// tappable fixed frame is still fixed. Only a `Spacer` (fully flexible),
@@ -387,27 +425,28 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     let lazyKey = lazyCursor?.key
 
     if let candidate = context.records.candidate(at: path) {
-        let standing = candidate.entry
-        let reusable = standing.identity == identity
-            && standing.stackAxis == context.stackAxis
-            && standing.lazyKey == lazyKey
+        // `identity` first: it carries the type, which `isEquivalent` relies on.
+        let reusable = candidate.identity == identity
+            && candidate.stackAxis == context.stackAxis
+            && candidate.lazyKey == lazyKey
             && !context.isDirty(under: path)
-            && standing.environment._isEquivalent(to: context.environment)
-            && standing.isEquivalent(view)
+            && candidate.isBuiltUnder(context.environment)
+            && candidate.isEquivalent(to: view)
         if reusable {
+            let node = candidate.standingNode
+            lazyCursor?.position += candidate.lazyUnits
             context.records.reuse(candidate, at: path)
-            lazyCursor?.position += standing.lazyUnits
             if PerfTrace.isEnabled { PerfTrace.nodesReused += 1 }
             PerfTrace.trace("reuse \(path) \(V.self)")
-            return standing.node
+            return node
         }
         // Which check failed, worked out again only for the verbose trace.
         PerfTrace.trace({
-            let reason = standing.identity != identity ? "identity"
-                : standing.stackAxis != context.stackAxis ? "stack axis"
-                : standing.lazyKey != lazyKey ? "lazy window"
+            let reason = candidate.identity != identity ? "identity"
+                : candidate.stackAxis != context.stackAxis ? "stack axis"
+                : candidate.lazyKey != lazyKey ? "lazy window"
                 : context.isDirty(under: path) ? "dirty"
-                : !standing.environment._isEquivalent(to: context.environment) ? "environment"
+                : !candidate.isBuiltUnder(context.environment) ? "environment"
                 : "inputs"
             return "build \(path) \(V.self) — \(reason)"
         }())
@@ -442,15 +481,15 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
 
     var node: ViewNode
     var isBoundary = false
-    if let builtin = view as? BuiltinView {
+    if let builtin = builtinMaker(for: view) {
         context.viewIdentity = identity
         context.isReplacingStandingView = predecessor != nil
         // Only the views that dissolve into a lazy container's layout build
         // under its cursor; any other builtin is one of its items, and
         // builds what it holds eagerly.
-        let passesCursor = builtin is LazyPassThrough
+        let passesCursor = builtin.passesCursor
         if !passesCursor { context.lazyCursor = nil }
-        node = builtin.makeNode(&context)
+        node = withUnsafePointer(to: view) { builtin.makeNode(UnsafeRawPointer($0), &context) }
         context.lazyCursor = lazyCursor
         if !passesCursor, let lazyCursor {
             lazyCursor.position += node.lazyLayoutCount
@@ -489,7 +528,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     let reads = DependencyTracker.shared.takeReads(for: path)
 
     // Remember how to rebuild exactly this view in exactly this position, and
-    // how to recognise it next time. Both closures capture the concrete view
+    // how to recognise it next time. The record holds the concrete view
     // value: a scoped rebuild re-runs it without walking down from the root,
     // and a parent that re-runs compares its new child against it.
     context.records.record(
@@ -497,11 +536,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             identity: identity,
             environment: context.environment,
             stackAxis: context.stackAxis,
-            rebuild: { sub in buildNode(view, &sub) },
-            isEquivalent: { candidate in
-                guard let candidate = candidate as? V else { return false }
-                return view._isEquivalent(to: candidate)
-            },
+            view: RecordedViewOf(view),
             node: node,
             stateKeys: stateKeys,
             reads: reads,
@@ -512,4 +547,40 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         at: path
     )
     return node
+}
+
+/// How `buildNode` makes the node of a builtin view. Whether a view type is
+/// a `BuiltinView` is a conformance lookup, and asking it with `as?` also
+/// copies the view into an existential box — on every build of every view;
+/// so it is asked once per type, and the answer kept.
+private struct BuiltinMaker {
+    /// The builtin's `makeNode`, given a pointer to a view of its type.
+    let makeNode: @MainActor (UnsafeRawPointer, inout BuildContext) -> ViewNode
+    /// A `LazyPassThrough`: builds under a lazy container's cursor.
+    let passesCursor: Bool
+}
+
+/// By view type; `nil` for a view that builds through its `body`.
+@MainActor
+private var builtinMakers: [ObjectIdentifier: BuiltinMaker?] = [:]
+
+@MainActor
+private func builtinMaker<V: View>(for view: V) -> BuiltinMaker? {
+    let id = ObjectIdentifier(V.self)
+    if let known = builtinMakers[id] { return known }
+    // A view is a value of exactly its static type, so what one says goes
+    // for the type.
+    precondition(type(of: view) == V.self, "a view type is a struct")
+    var maker: BuiltinMaker?
+    if let builtin = view as? BuiltinView { maker = openBuiltinMaker(builtin) }
+    builtinMakers[id] = .some(maker)
+    return maker
+}
+
+@MainActor
+private func openBuiltinMaker<B: BuiltinView>(_ builtin: B) -> BuiltinMaker {
+    BuiltinMaker(
+        makeNode: { view, context in view.assumingMemoryBound(to: B.self).pointee.makeNode(&context) },
+        passesCursor: builtin is LazyPassThrough
+    )
 }
