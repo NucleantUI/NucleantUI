@@ -21,6 +21,9 @@
 //    was made, wherever it was put, so the model keeps its whole rect and
 //    the canvas hands that over (with the pan added). Drag its bar to move
 //    it, its corner to resize it; right-click to delete it.
+//  * Right-click the empty canvas for its own menu: "Add Note Here" puts a
+//    note down at the click, because `.contextMenu { location in … }` hands
+//    its builder the point the menu was opened at.
 //
 
 import Foundation
@@ -66,6 +69,25 @@ struct MapCanvas {
         .overlay(alignment: .bottom) {
             HintBar()
                 .padding(.bottom, 14)
+        }
+        // Right-click the canvas: the menu is built from where the click
+        // landed, so a note can be put down right there. The point comes in
+        // canvas space, so the pan comes back off it to reach map space.
+        .contextMenu { location in
+            let origin = Point(
+                x: location.x - pan.width - MindMap.noteSize.width / 2,
+                y: location.y - pan.height - MindMap.noteSize.height / 2
+            )
+            Button("Add Note Here") {
+                withAnimation(.snappy) { _ = map.addNote(at: origin) }
+            }
+            Divider()
+            Button("Tidy Up") {
+                withAnimation(.smooth(duration: 0.6)) { map.tidy() }
+            }
+            Button("Recenter") {
+                withAnimation(.snappy) { map.setPan(.zero) }
+            }
         }
         // On the empty canvas — the bubbles' own gestures go first.
         .gesture(

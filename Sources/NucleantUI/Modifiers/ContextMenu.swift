@@ -41,17 +41,61 @@ extension View {
             ))
         }
     }
+
+    /// Adds a menu that opens on a right click (a long press on touch), with
+    /// the items built from where the click landed.
+    ///
+    /// ```swift
+    /// Canvas { ... }
+    ///     .contextMenu { location in
+    ///         Button("Add Node Here") { graph.addNode(at: location) }
+    ///         if let node = graph.node(at: location) {
+    ///             Button("Delete") { graph.remove(node) }
+    ///         }
+    ///     }
+    /// ```
+    ///
+    /// `location` is the click in this view's own coordinates — its top-left
+    /// corner is the origin, as for `onTapGesture` and the drag gestures.
+    /// The closure runs each time the menu opens, so the rows can depend on
+    /// what is under the pointer; the menu itself still opens at the click.
+    ///
+    /// Otherwise this behaves exactly as ``contextMenu(menuItems:)``: the
+    /// items are views, `Button`s become rows, `Menu`s rows that open a
+    /// submenu, and `Divider` a rule between them.
+    public func contextMenu<MenuItems: View>(
+        @ViewBuilder menuItems: @escaping @MainActor (Point) -> MenuItems
+    ) -> some View {
+        _ModifierView(content: self) { context in
+            ContextMenuContent(source: ContextMenuSource(
+                isEnabled: context.environment.isEnabled,
+                items: { location in AnyView(menuItems(location)) }
+            ))
+        }
+    }
 }
 
 /// A node with a context menu.
 @MainActor
 final class ContextMenuSource {
     let isEnabled: Bool
-    let items: AnyView
+    private let makeItems: @MainActor (Point) -> AnyView
 
     init(isEnabled: Bool, items: AnyView) {
         self.isEnabled = isEnabled
-        self.items = items
+        self.makeItems = { _ in items }
+    }
+
+    /// The form that builds its items per opening, from the click in the
+    /// node's own coordinates.
+    init(isEnabled: Bool, items: @escaping @MainActor (Point) -> AnyView) {
+        self.isEnabled = isEnabled
+        self.makeItems = items
+    }
+
+    /// The items to open, for a click at `location` in the node's own space.
+    func items(at location: Point) -> AnyView {
+        makeItems(location)
     }
 }
 
