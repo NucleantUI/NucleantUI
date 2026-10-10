@@ -25,6 +25,8 @@ public struct VertexShader: View {
     let vertices: Int
     let instances: Int
     let arguments: [ShaderArgument]
+    /// Named `RenderTexture`s the fragment stage samples — `a(uv)` in the body.
+    let textures: [ShaderTextureInput]
 
     /// - Parameters:
     ///   - vertices: vertices per instance; 6 is a quad as two triangles.
@@ -34,12 +36,14 @@ public struct VertexShader: View {
         vertices: Int = 6,
         instances: Int = 1,
         arguments: [ShaderArgument] = [],
+        textures: [ShaderTextureInput] = [],
         _viewID: ViewID = #viewID
     ) {
         self.function = function
         self.vertices = vertices
         self.instances = instances
         self.arguments = arguments
+        self.textures = textures
         self._viewID = _viewID
     }
 
@@ -52,7 +56,8 @@ extension VertexShader: BuiltinView {
             path: context.path,
             function: function,
             draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
-            arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme)
+            arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
+            textures: ShaderTextures(textures)
         ))
     }
 }
@@ -70,6 +75,7 @@ struct VertexShaderContent: NodeContent {
     let function: VertexShaderFunction
     let draw: ShaderDraw
     let arguments: ShaderArguments
+    let textures: ShaderTextures
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
         proposal.replacingUnspecifiedDimensions()
@@ -82,6 +88,7 @@ struct VertexShaderContent: NodeContent {
             function: function,
             draw: draw,
             arguments: arguments,
+            textures: textures,
             rect: rect,
             clip: context.compositeClip
         )

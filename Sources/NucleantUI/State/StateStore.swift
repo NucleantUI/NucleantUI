@@ -185,7 +185,13 @@ public final class Invalidator {
     private init() {}
 
     /// Invalidate the subtree rooted at the view that owns the written state.
+    ///
+    /// A path inside an offscreen tree is dropped: that tree is a snapshot
+    /// (`OffscreenRender`), so nothing re-runs for the write, and no host has
+    /// a record standing at the path — a window handed one would fall back to
+    /// rebuilding itself from the root for a tree it cannot even see.
     func invalidate(owner path: [Int]) {
+        guard path.first != OffscreenRender.rootIndex else { return }
         dirtyPaths.insert(path)
         noteTransaction()
     }

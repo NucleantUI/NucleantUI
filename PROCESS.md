@@ -2283,3 +2283,138 @@ build could not be tried: `swift build -c release` fails in
 `Views/Navigation.swift:138` ("sending 'path' risks causing data races"),
 which predates this work.
 
+
+## 33. RenderTexture, renderImage, and textures as shader inputs
+
+A view tree rendered into an image a model holds — the thing the concept
+note called an FBO. Three public spellings, all of them the same idea at
+different costs: `renderImage(size:scale:)` draws a tree with no window and
+no GPU at all; `renderTexture(size:scale:)` draws it into a GPU image that
+a `Shader` can sample; and `textures:` on `.shader(_:)`, `Shader` and
+`VertexShader` is how one shader reads several of them by name.
+
+### Our own compute node
+
+The first thing this needed was not a texture at all. `NucleantRenderNode`
+still routed every compute slot through `OGLShaderNode`, NucleantVulkan's
+node, which takes exactly one sampled input and releases its dispatch to
+the fragment stage only. A shader sampling N textures needs N descriptors,
+and a texture written by one shader and read by another in the same frame
+needs the result released to the compute stage too.
+
+`Render/ComputeShaderNode.swift` is that node, written here against
+`VulkanRenderNode` — `Context` is ours, which is the whole reason it is an
+enum of our own types. `ShaderImageInput` carries a name, a view and a
+binding; the tail barrier names `COMPUTE | FRAGMENT`, which
+`engineImageBarrier` could not express because `VkPipelineStageFlagBits` is
+one bit, so the node has a private barrier taking `VkPipelineStageFlags`.
+`case shader(OGLShaderNode)` left `Context` entirely, replaced by
+`case compute(ComputeShaderNode)` and `case renderTexture(RenderTextureNode)`.
+The gate for that swap was that the demo's `Shaders` gallery (eight live
+compute nodes) and `Effects` screen (canvas input, compute effect, vertex +
+fragment effect, eight `.shader(_:)` rows) look exactly as they did; they
+do.
+
+### Two lifetimes meeting
+
+Everything else GPU-side here is keyed to a view and retired when a pass
+does not see it. A texture a data model holds has no view at all, so
+`RenderTextureManager` keeps its canvas against a *weak* reference to the
+texture and sweeps dead ones at the top of a frame — detach now, free later,
+the same rule §8 established for teardown, for the same MoltenVK
+use-after-free reason. A *placement* (`tex.view()`) is the other lifetime
+and is retired by the pass as usual. Several placements and a shader all
+borrow the one image; the texture frees it once.
+
+The ordering falls out rather than being arranged: a texture's canvas is
+deliberately *not* filed in the paint order, and `RenderNodeManager.endPass`
+ranks anything unplaced `-1`, which puts it before every placement and
+before any shader sampling it. Written first, read after, in one frame, with
+no new ordering code.
+
+### One tree at a time
+
+`Invalidator.shared`, `ShaderHost.current` and `AnimationStore.current` are
+process-global, so an offscreen tree cannot simply be built where it stands.
+`OffscreenRender` roots its paths at `Int.min`, swaps the animation store
+around the walk and nils `ShaderHost.current`; `StateStore.invalidate(owner:)`
+drops paths from that root. "An offscreen read never dirties the window" is
+therefore a tested property rather than a hope. A render asked for from
+inside a layout pass is queued and run at `endPass`, never nested.
+
+That queueing is what made the one real design problem. A shader sampling a
+texture needs a `VkImageView` while `place` is running — before the queued
+render has produced one. `RenderTexture.prepareImage()` splits the two:
+taking a canvas and rasterizing the display list the texture already holds
+is a backend draw, exactly what a `.shader` layer does mid-pass, and it
+leaves the image in a layout a sampler can read. The pixels arrive at
+`endPass`, and `ShaderSlotRegistry.endPass` then re-arms every slot whose
+textures' `generation` moved — without that a static composite shows the
+pixels its textures held when it was built and never looks again.
+
+### Rebuild, rebind, re-dispatch
+
+Three different costs, and the slot has to tell them apart:
+
+* the texture *set* (names, order, count) is in the compiled shader, so a
+  change there rebuilds the slot;
+* a texture with a *different image* — resized, re-attached — is
+  `rebindDescriptors` behind a `vkDeviceWaitIdle`, because a descriptor set
+  snapshots the `VkImageView` it was written with and may still be bound in
+  a command buffer in flight;
+* a texture that merely *drew again* is neither: `needsRender`, and the
+  shader re-dispatches against the image it already has.
+
+### PyShader
+
+`ShaderTexture(name:binding:isTopDown:)` in the interface, `.sampledImage`
+handles in `FunctionEmitter`, `OpImageSampleExplicitLod` for `a(uv)` and
+`OpImage` + `OpImageQuerySizeLod` for `a_size` — a sampled image has to be
+unwrapped before it can be queried, unlike the output storage image. Nine
+tests, `spirv-val` on every module. The GLSL wrapper gained the matching
+declarations in the same pass; nothing new is written in GLSL, but the two
+inlets have to keep meaning the same thing.
+
+### What the readback caught
+
+`tex.image()` copies the canvas image out through a host buffer. The first
+version reinterpreted the words straight through on the reasoning that a
+BGRA-ordered target's bytes already *are* a premultiplied ARGB word, which
+is what `RasterImage` is.
+
+The demo's Textures screen compares a texture against `renderImage` of the
+same tree, and a flat `Color(hex: 0x3366CC)` came back with red and blue
+exchanged while the *same texture composited into the window correctly* —
+which is what said the fault was in the readback and not in the canvas. The
+copy hands back each texel's components in R, G, B, A byte order, not the
+image format's own byte order. It is worth noting how nearly this hid: the
+first tree checked was a card of text on a grey panel, where red and blue
+are equal in almost every pixel, and it reported 94% identical — a number
+that looks like antialiasing and is not.
+
+With the swap, a flat colour is identical to the bit, and the card differs
+in 1,238 pixels of 39,000 — every one of them on an antialiased edge, which
+is two rasterizers (ThorVG's GPU target and its software one) deciding how
+much of a pixel a curve covers. The screen reports that split rather than a
+pass/fail, because the split is the information.
+
+### Cost and cycling
+
+A texture's canvas comes from the same pool a `.shader` layer's does, so the
+first one in a process pays its backend's first-target compile (~60 ms, §19)
+and every one after it is a retarget. Cycling the demo's texture-sampling
+nodes in and out of the tree 285 times over 100 seconds — a two-texture
+`Shader`, a `tex.shader(_:)` slot and a `tex.view()` placement, with the
+textures redrawn every tenth step — moved RSS from 101.3 MB to 102.2 MB and
+flattened, so the per-cycle image is being freed. Six window resizes with
+textures live rebuilt the sampling slots at each size without a crash.
+
+### Example
+
+`Examples/Compositor` is the app this was built for: layers, each a view
+tree in a texture of its own; a blend mode and a mix per layer; the stack
+composited by one PyShader module *written out from the stack*, with the
+layer textures as its named inputs; and an export that flattens the same
+trees through `renderImage` at any scale. It is the clearest statement of
+the three costs above — the stack is the source, the mixes are arguments,
+and a layer's pixels are neither.

@@ -23,8 +23,13 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
         case skia(SkiaShaderNode<NucleantRenderNode>)
         /// One `Shader` view's own compute-written image, composited into the
         /// view's rect. A vector canvas can't run a fragment shader, so these
-        /// get their own slot rather than sharing the canvas.
-        case shader(OGLShaderNode<NucleantRenderNode>)
+        /// get their own slot rather than sharing the canvas. Ours
+        /// (`Render/ComputeShaderNode.swift`), because this enum is ours:
+        /// the engine is generic over its container node so each host picks
+        /// its own backends, and what a NucleantUI shader needs — a dispatch
+        /// released to the compute stage as well as the fragment one, several
+        /// sampled images — is ours to decide.
+        case compute(ComputeShaderNode)
         /// One `VertexShader` view's image, drawn by a vertex + fragment
         /// pipeline and composited the same way.
         case vertexShader(VertFragShaderNode<NucleantRenderNode>)
@@ -36,6 +41,10 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
         /// its `TextureSource` (a browser's compositor, a video decoder) and
         /// composited into the view's rect.
         case externalTexture(ExternalTextureNode<NucleantRenderNode>)
+        /// One *placement* of a `RenderTexture`: an image the slot does not
+        /// own, composited into a view's rect. Several of these, and a shader
+        /// sampling it, can point at the same image — the texture owns it.
+        case renderTexture(RenderTextureNode)
     }
 
     public let id: Int
@@ -77,13 +86,15 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
             observe(node)
         case .skia(let node):
             observe(node)
-        case .shader(let node):
+        case .compute(let node):
             observe(node)
         case .vertexShader(let node):
             observe(node)
         case .image(let node):
             observe(node)
         case .externalTexture(let node):
+            observe(node)
+        case .renderTexture(let node):
             observe(node)
         }
     }
@@ -95,13 +106,15 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
             node.update(engine, slot: self, cmd: cmd)
         case .skia(let node):
             node.update(engine, slot: self, cmd: cmd)
-        case .shader(let node):
+        case .compute(let node):
             node.update(engine, slot: self, cmd: cmd)
         case .vertexShader(let node):
             node.update(engine, slot: self, cmd: cmd)
         case .image(let node):
             node.update(engine, slot: self, cmd: cmd)
         case .externalTexture(let node):
+            node.update(engine, slot: self, cmd: cmd)
+        case .renderTexture(let node):
             node.update(engine, slot: self, cmd: cmd)
         }
         // Cleared here, so an idle frame costs nothing: `canvas.draw()` +
@@ -123,13 +136,15 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
             node.destroyResources(engine)
         case .skia(let node):
             node.destroyResources(engine)
-        case .shader(let node):
+        case .compute(let node):
             node.destroyResources(engine)
         case .vertexShader(let node):
             node.destroyResources(engine)
         case .image(let node):
             node.destroyResources(engine)
         case .externalTexture(let node):
+            node.destroyResources(engine)
+        case .renderTexture(let node):
             node.destroyResources(engine)
         }
     }
@@ -141,13 +156,15 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
             return node.imageView
         case .skia(let node):
             return node.imageView
-        case .shader(let node):
+        case .compute(let node):
             return node.imageView
         case .vertexShader(let node):
             return node.imageView
         case .image(let node):
             return node.imageView
         case .externalTexture(let node):
+            return node.imageView
+        case .renderTexture(let node):
             return node.imageView
         }
     }
@@ -164,7 +181,7 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
             engine.resizeSkiaNode(node, id: id, width: width, height: height)
         case .skia:
             break
-        case .thor, .shader, .vertexShader, .image, .externalTexture:
+        case .thor, .compute, .vertexShader, .image, .externalTexture, .renderTexture:
             break
         }
     }

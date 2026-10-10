@@ -40,7 +40,7 @@ final class ShaderSlotRegistry {
     /// What a slot draws with: a compute dispatch or a vertex + fragment pass.
     @MainActor
     enum Backend {
-        case compute(OGLShaderNode<NucleantRenderNode>, ShaderPipeline)
+        case compute(ComputeShaderNode, ShaderPipeline)
         case graphics(VertFragShaderNode<NucleantRenderNode>, VertexShaderPipeline)
 
         var argumentCapacity: Int {
@@ -94,6 +94,7 @@ final class ShaderSlotRegistry {
     }
 
     /// One live shader view's GPU state.
+    @MainActor
     final class Slot {
         let backend: Backend
         let container: NucleantRenderNode
@@ -108,6 +109,15 @@ final class ShaderSlotRegistry {
         /// node that got a new image gets a new slot.
         let canvas: RenderNodeManager.ThorCanvasNode?
         let canvasView: VkImageView?
+        /// For `tex.shader(_:)`: the `RenderTexture` whose image is what the
+        /// shader samples as its content, in place of a layer. Borrowed the
+        /// same way — the texture owns the image and frees it — so a texture
+        /// that got a new one gets a new slot.
+        let contentTexture: RenderTexture?
+        let contentTextureView: VkImageView?
+        /// That texture's `generation` when the shader last ran, so a texture
+        /// that rendered again re-dispatches a static shader over it.
+        var contentGeneration: Int
         /// Pixel size the node was built at — a resize rebuilds it.
         var width: Int
         var height: Int
@@ -118,6 +128,28 @@ final class ShaderSlotRegistry {
         /// re-uploads and re-dispatches.
         var argumentSignature: String
         var packedArguments: [Float] = []
+        /// The named textures compiled in, and every image the descriptor set
+        /// was written with (content first, then the textures in binding
+        /// order).
+        ///
+        /// The names are part of the compiled shader, so a change there
+        /// rebuilds the slot. A texture that merely has a *different image* is
+        /// a descriptor rebind instead (`ShaderPipeline.rebindDescriptors`) —
+        /// which needs the whole list, since a set can only be rewritten with
+        /// the bindings it was built for.
+        var textureSignature: String
+        var boundInputs: [ShaderImageInput]
+        /// The textures themselves, so a render that lands *after* the slot
+        /// was placed can still be noticed — see `endPass`.
+        var textures: ShaderTextures
+        /// Each texture's `generation` when the shader last ran.
+        var textureGenerations: [Int]
+
+        /// The image views bound at binding 4 and up — the named textures,
+        /// without the content.
+        var textureViews: [VkImageView] {
+            boundInputs.filter { $0.binding >= 4 }.map(\.imageView)
+        }
         /// Whether the source reads the clock or the pointer. If not, one
         /// dispatch is all it needs until its input changes.
         let isAnimated: Bool
@@ -142,20 +174,30 @@ final class ShaderSlotRegistry {
             container: NucleantRenderNode,
             layer: Layer?,
             canvas: RenderNodeManager.ThorCanvasNode?,
+            contentTexture: RenderTexture?,
+            inputs: [ShaderImageInput],
             width: Int,
             height: Int,
             request: Request,
-            arguments: ShaderArguments
+            arguments: ShaderArguments,
+            textures: ShaderTextures
         ) {
             self.backend = backend
             self.container = container
             self.layer = layer
             self.canvas = canvas
             self.canvasView = canvas?.node.imageView
+            self.contentTexture = contentTexture
+            self.contentTextureView = contentTexture?.gpuImage?.view
+            self.contentGeneration = contentTexture?.generation ?? 0
             self.width = width
             self.height = height
             self.source = request.source
             self.argumentSignature = arguments.signature
+            self.textureSignature = textures.signature
+            self.boundInputs = inputs
+            self.textures = textures
+            self.textureGenerations = textures.generations
             self.isAnimated = request.isAnimated
         }
     }
@@ -178,6 +220,10 @@ final class ShaderSlotRegistry {
     let boundaries: RenderBoundaries
     /// The `TextureView` nodes, whose pixels their sources write.
     let textures: TextureNodeManager
+    /// The `RenderTexture` canvases, and the containers that show one in the
+    /// tree. Unlike everything else here, a texture's lifetime is its owner's
+    /// Swift reference rather than the pass.
+    let renderTextures: RenderTextureManager
 
     /// Keyed by the view's structural path — the same identity `@State` uses,
     /// so a shader keeps its pipeline across rebuilds and loses it only when
@@ -201,6 +247,9 @@ final class ShaderSlotRegistry {
         self.painter = NodePainter(engine: engine, nodes: renderNodes)
         self.boundaries = RenderBoundaries(nodes: renderNodes, painter: painter)
         self.textures = TextureNodeManager(engine: engine, renderNodes: renderNodes)
+        self.renderTextures = RenderTextureManager(engine: engine, renderNodes: renderNodes)
+        // What a `RenderTexture` made outside any pass reaches for.
+        ShaderHost.attached = self
     }
 
     // MARK: - Layout-pass lifecycle
@@ -212,12 +261,27 @@ final class ShaderSlotRegistry {
         renderNodes.beginPass(windowSize: windowSize)
         boundaries.beginPass()
         textures.beginPass()
+        renderTextures.beginPass()
     }
 
     /// Called from `ShaderContent.place`: make sure a slot exists for this
     /// view, at this size, and put it at this rect.
-    func use(path: [Int], function: ShaderFunction, arguments: ShaderArguments, rect: Rect, clip: Rect?) {
-        _ = slot(at: path, request: .compute(function, withLayer: false), arguments: arguments, rect: rect, clip: clip)
+    func use(
+        path: [Int],
+        function: ShaderFunction,
+        arguments: ShaderArguments,
+        textures: ShaderTextures = .none,
+        rect: Rect,
+        clip: Rect?
+    ) {
+        _ = slot(
+            at: path,
+            request: .compute(function, withLayer: false),
+            arguments: arguments,
+            textures: textures,
+            rect: rect,
+            clip: clip
+        )
     }
 
     /// Called from `VertexShaderContent.place`: the graphics slot for this
@@ -227,11 +291,12 @@ final class ShaderSlotRegistry {
         function: VertexShaderFunction,
         draw: ShaderDraw,
         arguments: ShaderArguments,
+        textures: ShaderTextures = .none,
         rect: Rect,
         clip: Rect?
     ) {
         guard let slot = slot(at: path, request: .graphics(function, draw, withLayer: false),
-                              arguments: arguments, rect: rect, clip: clip)
+                              arguments: arguments, textures: textures, rect: rect, clip: clip)
         else { return }
         redraw(slot, covering: draw)
     }
@@ -256,6 +321,7 @@ final class ShaderSlotRegistry {
         function: ShaderFunction,
         draw: ShaderDraw,
         arguments: ShaderArguments,
+        textures: ShaderTextures = .none,
         rect: Rect,
         clip: Rect?,
         content: DisplayList
@@ -263,7 +329,8 @@ final class ShaderSlotRegistry {
         let request: Request = function.isGraphics
             ? .graphics(function, draw, withLayer: true)
             : .compute(function, withLayer: true)
-        guard let slot = slot(at: path, request: request, arguments: arguments, rect: rect, clip: clip),
+        guard let slot = slot(at: path, request: request, arguments: arguments,
+                              textures: textures, rect: rect, clip: clip),
               let layer = slot.layer
         else { return }
         if function.isGraphics {
@@ -292,6 +359,7 @@ final class ShaderSlotRegistry {
         function: ShaderFunction,
         draw: ShaderDraw,
         arguments: ShaderArguments,
+        textures: ShaderTextures = .none,
         rect: Rect,
         clip: Rect?,
         canvas: RenderNodeManager.ThorCanvasNode,
@@ -300,12 +368,43 @@ final class ShaderSlotRegistry {
         let request: Request = function.isGraphics
             ? .graphics(function, draw, withLayer: true)
             : .compute(function, withLayer: true)
-        guard let slot = slot(at: path, request: request, arguments: arguments, rect: rect, clip: clip, canvas: canvas)
+        guard let slot = slot(at: path, request: request, arguments: arguments,
+                              textures: textures, rect: rect, clip: clip, canvas: canvas)
         else { return }
         if function.isGraphics {
             redraw(slot, covering: draw)
         }
         if changed {
+            slot.container.needsRender = true
+        }
+    }
+
+    /// Called from `RenderTextureShaderContent.place`: the slot for
+    /// `tex.shader(_:)` — the texture's own image is what the shader samples
+    /// as its content, in place of a layer or a canvas node. A texture that
+    /// rendered again re-runs the shader over it, as new content in a layer
+    /// does.
+    func useTexture(
+        path: [Int],
+        function: ShaderFunction,
+        draw: ShaderDraw,
+        arguments: ShaderArguments,
+        textures: ShaderTextures = .none,
+        rect: Rect,
+        clip: Rect?,
+        texture: RenderTexture
+    ) {
+        let request: Request = function.isGraphics
+            ? .graphics(function, draw, withLayer: true)
+            : .compute(function, withLayer: true)
+        guard let slot = slot(at: path, request: request, arguments: arguments,
+                              textures: textures, rect: rect, clip: clip, texture: texture)
+        else { return }
+        if function.isGraphics {
+            redraw(slot, covering: draw)
+        }
+        if slot.contentGeneration != texture.generation {
+            slot.contentGeneration = texture.generation
             slot.container.needsRender = true
         }
     }
@@ -317,15 +416,30 @@ final class ShaderSlotRegistry {
         at path: [Int],
         request: Request,
         arguments: ShaderArguments,
+        textures: ShaderTextures,
         rect: Rect,
         clip: Rect?,
-        canvas canvasInput: RenderNodeManager.ThorCanvasNode? = nil
+        canvas canvasInput: RenderNodeManager.ThorCanvasNode? = nil,
+        texture textureInput: RenderTexture? = nil
     ) -> Slot? {
         let source = request.source
-        // A slot sampling a canvas node has no layer of its own.
-        let withLayer = request.withLayer && canvasInput == nil
+        // A slot sampling a canvas node or a texture has no layer of its own.
+        let withLayer = request.withLayer && canvasInput == nil && textureInput == nil
         let pixelWidth = max(1, Int((rect.width * scale).rounded()))
         let pixelHeight = max(1, Int((rect.height * scale).rounded()))
+
+        // Every image a descriptor is written with has to exist first. A
+        // texture that has never rendered takes its canvas here, inside the
+        // pass, rather than at the end of it — see `RenderTexture.prepareImage`.
+        textures.prepare()
+        textureInput?.prepareImage()
+        guard let textureInputs = textures.imageInputs else {
+            nucleantLogError(
+                "NucleantUI: shader at \(path) samples \(textures.signature) — "
+                + "no image for one of them, so nothing is drawn this frame\n"
+            )
+            return nil
+        }
 
         // This slot's place in the composite order is where the tree placed
         // it, whether the GPU objects are kept or rebuilt below.
@@ -344,9 +458,25 @@ final class ShaderSlotRegistry {
                existing.source == source,
                existing.argumentSignature == arguments.signature,
                existing.backend.argumentCapacity >= arguments.packed.count,
+               existing.textureSignature == textures.signature,
                (existing.layer != nil) == withLayer,
                existing.canvas === canvasInput,
-               existing.canvasView == canvasInput?.node.imageView {
+               existing.canvasView == canvasInput?.node.imageView,
+               existing.contentTexture === textureInput,
+               existing.contentTextureView == textureInput?.gpuImage?.view {
+                // Same shader, same textures by name — but a `RenderTexture`
+                // that was re-attached has a new image, and the descriptor
+                // set snapshots the handle it was written with.
+                if existing.textureViews != textureInputs.map(\.imageView) {
+                    rebind(existing, to: existing.boundInputs.filter { $0.binding < 4 } + textureInputs)
+                }
+                // A texture that rendered again is new input to a shader that
+                // may never dispatch on its own.
+                existing.textures = textures
+                if existing.textureGenerations != textures.generations {
+                    existing.textureGenerations = textures.generations
+                    existing.container.needsRender = true
+                }
                 upload(arguments, to: existing)
                 composite(existing, at: order)
                 return existing
@@ -374,9 +504,13 @@ final class ShaderSlotRegistry {
         guard let slot = makeSlot(
             request: request,
             arguments: arguments,
+            textures: textures,
+            textureInputs: textureInputs,
             width: pixelWidth,
             height: pixelHeight,
-            layer: canvasInput.map { .canvas($0) } ?? (withLayer ? .reuse(canvas) : .none)
+            layer: canvasInput.map { .canvas($0) }
+                ?? textureInput.map { .texture($0) }
+                ?? (withLayer ? .reuse(canvas) : .none)
         ) else {
             return nil
         }
@@ -402,6 +536,27 @@ final class ShaderSlotRegistry {
             renderNodes.composite(canvas.container, at: order, layer: true)
         }
         renderNodes.composite(slot.container, at: order)
+    }
+
+    /// Point a live slot's sampled-image descriptors at new handles.
+    ///
+    /// Same names, same bindings, different images — a `RenderTexture` that
+    /// took its canvas after the slot was built, or was re-attached. The set
+    /// may still be bound in a command buffer in flight, so the device is
+    /// drained first; a set whose *shape* changed is a rebuild instead, which
+    /// is what the texture signature in `slot(at:)` decides.
+    private func rebind(_ slot: Slot, to inputs: [ShaderImageInput]) {
+        vkDeviceWaitIdle(engine.device)
+        switch slot.backend {
+        case .compute(let node, let pipeline):
+            pipeline.rebindDescriptors(inputs)
+            node.inputs = inputs
+            node.descriptorsNeedRebind = false
+        case .graphics(_, let pipeline):
+            pipeline.rebindDescriptors(inputs)
+        }
+        slot.boundInputs = inputs
+        slot.container.needsRender = true
     }
 
     /// Hand the slot its argument values if they changed, and make it draw
@@ -472,6 +627,25 @@ final class ShaderSlotRegistry {
         // new content, then put the engine's list in this pass's paint
         // order — slots included.
         textures.endPass()
+        // Renders a pass asked for run here, before the placements showing
+        // them are retired — a texture rendered mid-walk draws now.
+        renderTextures.endPass()
+        // And a shader reading one of those textures has to be told, now that
+        // they have drawn. `use` compared generations as they stood when the
+        // view was placed, which is *before* a queued render ran: without
+        // this a static composite shows the pixels its textures held when it
+        // was built and never looks again. The texture's canvas is unplaced,
+        // so the engine draws it before any shader samples it this frame.
+        for slot in slots.values where slot.used {
+            if slot.textureGenerations != slot.textures.generations {
+                slot.textureGenerations = slot.textures.generations
+                slot.container.needsRender = true
+            }
+            if let texture = slot.contentTexture, slot.contentGeneration != texture.generation {
+                slot.contentGeneration = texture.generation
+                slot.container.needsRender = true
+            }
+        }
         renderNodes.retireUnused()
         boundaries.endPass()
         painter.paintPending()
@@ -504,6 +678,9 @@ final class ShaderSlotRegistry {
     @discardableResult
     func tick(_ delta: Double, pointer: Point) -> Bool {
         releasePending()
+        // Before the node manager's: a canvas handed back by a texture that
+        // was released reaches the pool in this same frame.
+        renderTextures.releasePending()
         renderNodes.releasePending()
         textures.releasePending()
         painter.frameWillDraw()
@@ -549,7 +726,9 @@ final class ShaderSlotRegistry {
         releasePending()
         painter.destroy()
         textures.destroyAll()
+        renderTextures.destroyAll()
         renderNodes.destroyAll()
+        if ShaderHost.attached === self { ShaderHost.attached = nil }
     }
 
     /// Free everything retired by a previous pass. Called at the top of a
@@ -573,11 +752,15 @@ final class ShaderSlotRegistry {
         case reuse(Layer?)
         /// No layer: sample this canvas node's own image.
         case canvas(RenderNodeManager.ThorCanvasNode)
+        /// No layer: sample this `RenderTexture`'s own image.
+        case texture(RenderTexture)
     }
 
     private func makeSlot(
         request: Request,
         arguments: ShaderArguments,
+        textures: ShaderTextures,
+        textureInputs: [ShaderImageInput],
         width: Int,
         height: Int,
         layer layerRequest: LayerRequest
@@ -585,26 +768,37 @@ final class ShaderSlotRegistry {
         let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
         let layer: Layer?
         let canvas: RenderNodeManager.ThorCanvasNode?
+        let contentTexture: RenderTexture?
         let withLayer: Bool
         switch layerRequest {
         case .none:
             layer = nil
             canvas = nil
+            contentTexture = nil
             withLayer = false
         case .reuse(let handed):
             guard let made = makeLayer(width: width, height: height, reusing: handed) else { return nil }
             layer = made
             canvas = nil
+            contentTexture = nil
             withLayer = true
         case .canvas(let node):
             layer = nil
             canvas = node
+            contentTexture = nil
+            withLayer = false
+        case .texture(let texture):
+            layer = nil
+            canvas = nil
+            contentTexture = texture
             withLayer = false
         }
-        // The image the shader samples as `uContent`: the layer's, or the
-        // canvas node's own. Borrowed either way — its node owns and frees it.
+        // The image the shader samples as `uContent`: the layer's, the canvas
+        // node's own, or the texture's. Borrowed in every case — whoever made
+        // it owns and frees it.
         let input: (image: VkImage, view: VkImageView)? = layer.map { ($0.node.image, $0.node.imageView) }
             ?? canvas.map { ($0.node.image, $0.node.imageView) }
+            ?? contentTexture?.gpuImage.map { ($0.image, $0.view) }
         let canvasReady = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
         defer {
             PerfTrace.trace("shader slot \(width)x\(height)\(withLayer ? " +layer" : ""): "
@@ -620,28 +814,30 @@ final class ShaderSlotRegistry {
             switch request {
             case .compute(let function, _):
                 let image = try makeImage(width: width, height: height, usage: .storage)
-                let node = OGLShaderNode<NucleantRenderNode>(
+                // Borrowed, as the node's contract says: the layer's node, the
+                // canvas's, or the texture's owns the image and frees it. The
+                // content comes first so binding 2 is written before 4 and up.
+                let inputs = (input.map { [ShaderImageInput.content($0.view)] } ?? []) + textureInputs
+                let node = ComputeShaderNode(
                     width: UInt32(width),
                     height: UInt32(height),
                     image: image.image,
                     imageView: image.view,
                     memory: image.memory,
-                    storageCapable: true
+                    inputs: inputs
                 )
-                if let input {
-                    // Borrowed, as the node's contract says: the layer's or
-                    // the canvas's node owns the image and frees it.
-                    node.register(image: input.image, imageView: input.view)
-                }
                 let pipeline = try ShaderPipeline(
                     engine: engine,
                     imageView: image.view,
-                    input: input?.view,
+                    inputs: inputs,
                     source: try ShaderCode.compute(
                         function,
                         samplesContent: input != nil,
-                        contentIsTopDown: canvas != nil,
-                        arguments: arguments
+                        // A canvas node's image and a `RenderTexture`'s are
+                        // both stored top-down, unlike a layer drawn y-up.
+                        contentIsTopDown: canvas != nil || contentTexture != nil,
+                        arguments: arguments,
+                        textures: textures
                     ),
                     argumentCapacity: capacity
                 )
@@ -650,7 +846,7 @@ final class ShaderSlotRegistry {
                 node.computeDescriptorSet = pipeline.descriptorSet
                 node.dirty = true
                 backend = .compute(node, pipeline)
-                context = .shader(node)
+                context = .compute(node)
             case .graphics(let function, let draw, _):
                 let pass = try colorPass()
                 let image = try makeImage(width: width, height: height, usage: .colorAttachment)
@@ -669,12 +865,13 @@ final class ShaderSlotRegistry {
                     pipeline = try VertexShaderPipeline(
                         engine: engine,
                         renderPass: pass.renderPass!,
-                        input: input?.view,
+                        inputs: (input.map { [ShaderImageInput.content($0.view)] } ?? []) + textureInputs,
                         source: try GraphicsShaderCode.graphics(
                             function,
                             samplesContent: input != nil,
-                            contentIsTopDown: canvas != nil,
-                            arguments: arguments
+                            contentIsTopDown: canvas != nil || contentTexture != nil,
+                            arguments: arguments,
+                            textures: textures
                         ),
                         argumentCapacity: capacity
                     )
@@ -704,10 +901,13 @@ final class ShaderSlotRegistry {
                 container: container,
                 layer: layer,
                 canvas: canvas,
+                contentTexture: contentTexture,
+                inputs: (input.map { [ShaderImageInput.content($0.view)] } ?? []) + textureInputs,
                 width: width,
                 height: height,
                 request: request,
-                arguments: arguments
+                arguments: arguments,
+                textures: textures
             )
         } catch {
             nucleantLogError("NucleantUI: shader node build (\(width)x\(height)) failed: \(error)\n")
@@ -811,14 +1011,19 @@ final class ShaderSlotRegistry {
         info.arrayLayers = 1
         info.samples = VK_SAMPLE_COUNT_1_BIT
         info.tiling = VK_IMAGE_TILING_OPTIMAL
+        // `TRANSFER_SRC` on every slot image, not just the ones read back
+        // today: it costs nothing at creation, and without it a
+        // shader-written image cannot be copied out at all — which is what
+        // `tex.image()` and the texture-vs-`renderImage` test do.
+        let readable = VK_IMAGE_USAGE_TRANSFER_SRC_BIT.rawValue
         switch usage {
         case .storage:
             info.usage = VkImageUsageFlags(
-                VK_IMAGE_USAGE_STORAGE_BIT.rawValue | VK_IMAGE_USAGE_SAMPLED_BIT.rawValue
+                VK_IMAGE_USAGE_STORAGE_BIT.rawValue | VK_IMAGE_USAGE_SAMPLED_BIT.rawValue | readable
             )
         case .colorAttachment:
             info.usage = VkImageUsageFlags(
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue | VK_IMAGE_USAGE_SAMPLED_BIT.rawValue
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue | VK_IMAGE_USAGE_SAMPLED_BIT.rawValue | readable
             )
         }
         info.sharingMode = VK_SHARING_MODE_EXCLUSIVE
@@ -869,8 +1074,8 @@ final class ShaderSlotRegistry {
         }
 
         // UNDEFINED → GENERAL once, so the very first dispatch has somewhere
-        // valid to write. `OGLShaderNode.update` starts its barrier from
-        // `currentLayout`, which the node initialises to GENERAL. A colour
+        // valid to write. `ComputeShaderNode.update` starts its barrier from
+        // its tracked layout, which the node initialises to GENERAL. A colour
         // attachment needs no transition: its render pass starts from
         // UNDEFINED and clears.
         guard usage == .storage else { return (image, view, memory) }
