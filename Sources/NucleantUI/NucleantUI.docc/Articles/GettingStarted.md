@@ -39,9 +39,10 @@ import NucleantUI
 @main
 struct MyApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Hello", width: 480, height: 320) {
+        WindowGroup("Hello") {
             Greeting()
         }
+        .defaultSize(width: 480, height: 320)
     }
 }
 

@@ -521,9 +521,10 @@ private struct FlattenedStack {
 @main
 struct CompositorApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Compositor", width: 1000, height: 700) {
+        WindowGroup("Compositor") {
             CompositorView()
         }
+        .defaultSize(width: 1000, height: 700)
         .commands { AppearanceCommands() }
     }
 }

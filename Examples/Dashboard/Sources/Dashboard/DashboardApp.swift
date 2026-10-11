@@ -406,9 +406,10 @@ struct DashboardView {
 @main
 struct DashboardApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Dashboard", width: 1000, height: 700) {
+        WindowGroup("Dashboard") {
             DashboardView()
         }
+        .defaultSize(width: 1000, height: 700)
         .commands { AppearanceCommands() }
     }
 }

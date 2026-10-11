@@ -260,9 +260,10 @@ struct GameView {
 @main
 struct TwentyFortyEightApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("2048", width: 460, height: 660) {
+        WindowGroup("2048") {
             GameView()
         }
+        .defaultSize(width: 460, height: 660)
         .commands { AppearanceCommands() }
     }
 }

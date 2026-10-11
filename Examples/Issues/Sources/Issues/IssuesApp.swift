@@ -85,9 +85,10 @@ struct IssuesView {
 @main
 struct IssuesApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Issues", width: 1280, height: 780) {
+        WindowGroup("Issues") {
             IssuesView()
         }
+        .defaultSize(width: 1280, height: 780)
         .commands { AppearanceCommands() }
     }
 }

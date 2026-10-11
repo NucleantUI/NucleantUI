@@ -336,9 +336,10 @@ struct RootView {
 @main
 struct TasksApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Tasks", width: 520, height: 640) {
+        WindowGroup("Tasks") {
             RootView()
         }
+        .defaultSize(width: 520, height: 640)
         .commands { AppearanceCommands() }
     }
 }

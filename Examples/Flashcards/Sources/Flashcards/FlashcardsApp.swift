@@ -435,9 +435,10 @@ struct FlashcardsView {
 @main
 struct FlashcardsApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Flashcards", width: 640, height: 600) {
+        WindowGroup("Flashcards") {
             FlashcardsView()
         }
+        .defaultSize(width: 640, height: 600)
         .commands { AppearanceCommands() }
     }
 }

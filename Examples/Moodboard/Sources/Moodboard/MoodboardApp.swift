@@ -82,9 +82,10 @@ struct MoodboardView {
 @main
 struct MoodboardApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Moodboard", width: 1380, height: 860) {
+        WindowGroup("Moodboard") {
             MoodboardView()
         }
+        .defaultSize(width: 1380, height: 860)
         .commands { AppearanceCommands() }
     }
 }

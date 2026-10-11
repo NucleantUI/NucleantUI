@@ -732,9 +732,10 @@ struct RootView {
 @main
 struct FinderApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Finder", width: 940, height: 540) {
+        WindowGroup("Finder") {
             RootView()
         }
+        .defaultSize(width: 940, height: 540)
         .commands { AppearanceCommands() }
     }
 }

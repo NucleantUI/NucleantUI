@@ -324,9 +324,10 @@ struct PomodoroView {
 @main
 struct PomodoroApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Pomodoro", width: 760, height: 520) {
+        WindowGroup("Pomodoro") {
             PomodoroView()
         }
+        .defaultSize(width: 760, height: 520)
         .commands { AppearanceCommands() }
     }
 }
