@@ -4,13 +4,11 @@
 //
 //  A decoded bitmap, the pixels an `Image` view draws. Immutable once made,
 //  so one image can sit behind any number of views and display lists.
+//  `init?(contentsOf:)`, the decoding, is per platform: ImageIO on Apple
+//  (RasterImage+Apple.swift), Skia's SkCodec elsewhere (RasterImage+Skia.swift).
 //
 
 import Foundation
-#if canImport(ImageIO)
-import ImageIO
-import CoreGraphics
-#endif
 
 /// `width` × `height` pixels, row-major from the top-left, each an
 /// alpha-premultiplied ARGB `UInt32` — ThorVG's `ARGB8888`, which is also
@@ -51,38 +49,6 @@ public final class RasterImage: Sendable {
         }
         return RasterImage(width: w, height: h, pixels: out)
     }
-
-    #if canImport(ImageIO)
-    /// Decoded from a PNG, JPEG or any other file ImageIO reads. `nil` when
-    /// the file is missing or not an image.
-    public convenience init?(contentsOf url: URL) {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        self.init(image)
-    }
-
-    /// `image` drawn into a premultiplied BGRA buffer, which is ARGB8888
-    /// read as little-endian words.
-    public convenience init?(_ image: CGImage) {
-        let width = image.width, height = image.height
-        guard width > 0, height > 0 else { return nil }
-        var pixels = [UInt32](repeating: 0, count: width * height)
-        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-        let drawn: Bool = pixels.withUnsafeMutableBytes { raw in
-            guard let context = CGContext(
-                data: raw.baseAddress, width: width, height: height,
-                bitsPerComponent: 8, bytesPerRow: width * 4,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info.rawValue
-            ) else { return false }
-            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return true
-        }
-        guard drawn else { return nil }
-        self.init(width: width, height: height, pixels: pixels)
-    }
-    #endif
 }
 
 extension RasterImage: Hashable {

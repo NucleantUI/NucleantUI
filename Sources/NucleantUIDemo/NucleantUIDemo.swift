@@ -628,6 +628,8 @@ struct ContentView {
                 HStack(spacing: 8) {
                     NavigationLink("Effects") { EffectsScreen() }
 
+                    NavigationLink("Textures") { TextureScreen() }
+
                     NavigationLink("Drag & drop") { DragDropScreen() }
 
                     NavigationLink("About") { AboutScreen() }

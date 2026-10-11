@@ -172,6 +172,14 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         // this declaration shadows, so calling it by name from here would
         // resolve back to this function. Both do the same one thing.
         appDelegate?.run()
+        #elseif os(WASI)
+        // Android's shape: this returns. The page owns the event loop, so
+        // `main` hands the app to it — the delegate keeps the runtime alive
+        // for the page and makes the page's main queue Swift concurrency's
+        // executor — presents the windows in `onStart()`, and returns; from
+        // then on the module runs when the page calls in, per display
+        // refresh and per input event.
+        appDelegate?.run()
         #endif
     }
 }

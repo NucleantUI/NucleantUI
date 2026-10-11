@@ -4,15 +4,16 @@
 //
 //  The GPU half of a `Shader` view: a storage image the compute shader writes,
 //  the compute pipeline itself, and a uniform buffer carrying time/resolution/
-//  mouse. The engine's `OGLShaderNode` already knows how to dispatch a compute
-//  pipeline into its own image and barrier the result for the composite pass —
-//  it simply had no factory, so this is that factory.
+//  mouse. `ComputeShaderNode` knows how to dispatch a compute pipeline into
+//  its own image and barrier the result for whoever reads it next — it simply
+//  has no factory, so this is that factory.
 //
-//  Descriptor layout matches `VulkanCore.TexGenComputePipeline`:
+//  Descriptor layout:
 //    binding 0 — storage image (the shader's output)
 //    binding 1 — uniform buffer (`ShaderUniforms`)
 //    binding 2 — sampled image (the view's own pixels), for a `.shader` effect
 //    binding 3 — storage buffer (`ShaderArgument`s), when the shader has any
+//    binding 4+ — one sampled image per named texture the shader declares
 //  A dedicated one-set pool per shader, for the reason the engine gives every
 //  composite node its own: MoltenVK packing several same-layout sets into one
 //  pool misaligns Metal argument-buffer offsets.
@@ -60,14 +61,17 @@ enum ShaderCode {
 
     /// The code for a function under the compute contract. `samplesContent`
     /// adds the view's own pixels at binding 2 (`layer(uv)`); `arguments`
-    /// declares the `ShaderArgument`s at binding 3. `contentIsTopDown` — the
-    /// pixels are a canvas node's own image, stored top-down rather than
-    /// drawn y-up as a layer is — has `layer(uv)` read them upright.
+    /// declares the `ShaderArgument`s at binding 3; `textures` declares one
+    /// named sampler per `RenderTexture` at binding 4 and up.
+    /// `contentIsTopDown` — the pixels are a canvas node's own image, stored
+    /// top-down rather than drawn y-up as a layer is — has `layer(uv)` read
+    /// them upright.
     static func compute(
         _ function: ShaderFunction,
         samplesContent: Bool,
         contentIsTopDown: Bool = false,
-        arguments: ShaderArguments
+        arguments: ShaderArguments,
+        textures: ShaderTextures = .none
     ) throws -> ShaderCode {
         switch function.language {
         case .glsl:
@@ -75,13 +79,15 @@ enum ShaderCode {
                 functions: function.functions,
                 body: function.body,
                 samplesContent: samplesContent,
-                arguments: arguments
+                arguments: arguments,
+                textures: textures
             ))
         case .pyshader:
             let interface = ComputeImageInterface.nucleantUI(
                 samplesContent: samplesContent,
                 contentIsTopDown: contentIsTopDown,
-                arguments: try ShaderArgumentKind.kinds(of: arguments)
+                arguments: try ShaderArgumentKind.kinds(of: arguments),
+                textures: textures.declarations
             )
             do {
                 return .spirv(try PyShader.compile(function.body, target: .computeImage(interface)).spirv)
@@ -89,6 +95,13 @@ enum ShaderCode {
                 // Python line numbers, since that is what was written.
                 throw ShaderError.compileFailed("PyShader: \(error)")
             }
+        case .spirv:
+            // Already compiled, and compiled against this same layout — see
+            // `ShaderFunction.init(spirv:)`. `samplesContent`, `arguments`
+            // and `textures` described what to *generate*, and there is
+            // nothing to generate: the module declares what it reads, and
+            // the bindings it declares are the ones below.
+            return .spirv(function.spirv)
         }
     }
 }
@@ -133,20 +146,25 @@ enum ShaderSource {
     ///
     /// With `samplesContent`, the wrapper also declares the view's own pixels
     /// as `uContent` (and ShaderToy's `iChannel0`), plus `layer(uv)` to read
-    /// them — what a `.shader(_:)` effect is given.
+    /// them — what a `.shader(_:)` effect is given. `textures` adds one named
+    /// sampler per `RenderTexture`, read as `a(uv)` and measured as `a_size`,
+    /// which is the interface PyShader compiles against — declared here too so
+    /// the GLSL inlet does not quietly mean something else.
     ///
     /// Local size 8×8 matches the `(w + 7) / 8` dispatch in
-    /// `OGLShaderNode.update` exactly.
+    /// `ComputeShaderNode.update` exactly.
     static func compute(
         functions: String,
         body: String,
         samplesContent: Bool = false,
-        arguments: ShaderArguments = .none
+        arguments: ShaderArguments = .none,
+        textures: ShaderTextures = .none
     ) -> String {
         if body.trimmingCharactersInWhitespace().hasPrefix("#version") {
             return body
         }
         let (argumentDeclarations, argumentLoads) = argumentSource(arguments)
+        let textureDeclarations = textureSource(textures)
         let content = samplesContent ? """
         // The view this effect is applied to, rendered into its own texture
         // and stored y-up like everything else in shader space — so
@@ -169,6 +187,7 @@ enum ShaderSource {
             vec4 mouseInfo;   // xy: position, zw: position while pressed
         } u;
         \(content)
+        \(textureDeclarations)
         \(argumentDeclarations)
 
         // Constants every ShaderToy-style body reaches for, so each one does
@@ -305,6 +324,45 @@ extension ShaderSource {
     }
 }
 
+extension ShaderSource {
+    /// The GLSL behind named textures, matching what PyShader emits for the
+    /// same `ShaderTexture`s: one `sampler2D` per texture at its own binding,
+    /// a reader function of the texture's own name, and `<name>_size`.
+    ///
+    /// Nothing new is written in GLSL — this is here so a body ported between
+    /// the two inlets reads the same in both. A `RenderTexture` is stored
+    /// top-down, so the read flips y exactly as `isTopDown` does there.
+    static func textureSource(_ textures: ShaderTextures) -> String {
+        guard !textures.isEmpty else { return "" }
+        var source = ""
+        for declaration in textures.declarations {
+            let name = declaration.name
+            let sampler = "uTex_\(name)"
+            let coordinate = declaration.isTopDown ? "vec2(p.x, 1.0 - p.y)" : "p"
+            source += """
+            layout(binding = \(declaration.binding)) uniform sampler2D \(sampler);
+            vec4 \(name)(vec2 p) { return texture(\(sampler), \(coordinate)); }
+            #define \(name)_size textureSize(\(sampler), 0)
+
+            """
+        }
+        return source
+    }
+}
+
+extension ShaderTextures {
+    /// What PyShader declares for these textures. Every `RenderTexture` is
+    /// stored top-down (a canvas image's own orientation), so every one of
+    /// them reads flipped — `contentIsTopDown`'s rule, per texture.
+    /// `ShaderTexture` unqualified: `PyShader` is the module *and* an enum in
+    /// it, so `PyShader.ShaderTexture` looks inside the enum.
+    var declarations: [ShaderTexture] {
+        inputs.enumerated().map { index, input in
+            ShaderTexture(name: input.name, binding: 4 + index, isTopDown: true)
+        }
+    }
+}
+
 private extension String {
     func trimmingCharactersInWhitespace() -> String {
         var result = Substring(self)
@@ -329,18 +387,22 @@ final class ShaderPipeline {
     private var shaderModule: VkShaderModule?
     private var descriptorPool: VkDescriptorPool?
     private var uniforms: BufferAndMemory
-    /// Only with an `input`: how the shader samples the view's pixels.
+    /// How the shader samples its inputs — one sampler for all of them,
+    /// since they are all read the same way. `nil` when it has none.
     private var sampler: VkSampler?
-    private let hasInput: Bool
+    /// The sampled images, at the bindings the shader was compiled against.
+    /// Kept so a rebind can be checked against what the set layout holds.
+    private var inputs: [ShaderImageInput]
     /// The `ShaderArgument` storage buffer, when the shader declares any.
     /// Sized once, with headroom; a list that outgrows it rebuilds the slot.
     private var arguments: BufferAndMemory?
     /// Floats the argument buffer can hold; 0 when there is none.
     let argumentCapacity: Int
 
-    /// `input` is the image the shader may sample at binding 2 — the canvas a
-    /// `.shader` effect's view is drawn into. Left in `SHADER_READ_ONLY_OPTIMAL`
-    /// by its own node's update, which runs before this pipeline's dispatch.
+    /// `inputs` are the images the shader samples: the canvas a `.shader`
+    /// effect's view is drawn into at binding 2, and a named texture at each
+    /// binding from 4 up. Each is left in `SHADER_READ_ONLY_OPTIMAL` by
+    /// whoever wrote it, whose update runs before this pipeline's dispatch.
     ///
     /// `argumentCapacity` is how many floats of `ShaderArgument` data to make
     /// room for — 0 for a shader without arguments, which then has no
@@ -348,12 +410,12 @@ final class ShaderPipeline {
     init(
         engine: NucleantRenderEngine,
         imageView: VkImageView,
-        input: VkImageView? = nil,
+        inputs: [ShaderImageInput] = [],
         source: ShaderCode,
         argumentCapacity: Int = 0
     ) throws {
         self.device = engine.device
-        self.hasInput = input != nil
+        self.inputs = inputs
         self.argumentCapacity = argumentCapacity
         self.uniforms = engine.createBuffer(
             size: MemoryLayout<ShaderUniforms>.stride,
@@ -389,8 +451,8 @@ final class ShaderPipeline {
             try createPipelineLayout()
             shaderModule = try ShaderModuleLoader.load(device: device, spirv: spirv)
             try createPipeline()
-            if input != nil { try createSampler() }
-            try createDescriptorSet(imageView: imageView, input: input)
+            if !inputs.isEmpty { try createSampler() }
+            try createDescriptorSet(imageView: imageView)
         } catch {
             destroy()
             throw error
@@ -423,6 +485,28 @@ final class ShaderPipeline {
         }
     }
 
+    /// Point the sampled-image descriptors at new handles, for inputs whose
+    /// *image* changed but whose names, order and bindings did not — a
+    /// `RenderTexture` that was resized, a layer canvas retargeted.
+    ///
+    /// A descriptor set snapshots the `VkImageView` it was written with, so
+    /// without this the shader keeps sampling the old image however often it
+    /// is dispatched. The caller drains the device first: the set may still be
+    /// bound in a command buffer in flight. A set whose *shape* changed is not
+    /// this — the shader was compiled against those bindings, so the slot is
+    /// rebuilt instead.
+    func rebindDescriptors(_ inputs: [ShaderImageInput]) {
+        guard inputs.map(\.binding) == self.inputs.map(\.binding) else {
+            nucleantLogError(
+                "NucleantUI: shader rebind ignored — \(inputs.count) inputs at "
+                + "\(inputs.map(\.binding)) against a set built for \(self.inputs.map(\.binding))\n"
+            )
+            return
+        }
+        self.inputs = inputs
+        writeInputs(inputs)
+    }
+
     /// Idempotent. The caller drains the GPU first — an in-flight command
     /// buffer may still reference these objects.
     func destroy() {
@@ -442,6 +526,7 @@ final class ShaderPipeline {
         descriptorPool = nil
         descriptorSet = nil
         sampler = nil
+        inputs = []
         uniforms = BufferAndMemory()
     }
 
@@ -461,9 +546,9 @@ final class ShaderPipeline {
         uniform.stageFlags = VkShaderStageFlags(VK_SHADER_STAGE_COMPUTE_BIT.rawValue)
 
         var bindings = [output, uniform]
-        if hasInput {
+        for sampled in inputs {
             var input = VkDescriptorSetLayoutBinding()
-            input.binding = 2
+            input.binding = UInt32(sampled.binding)
             input.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
             input.descriptorCount = 1
             input.stageFlags = VkShaderStageFlags(VK_SHADER_STAGE_COMPUTE_BIT.rawValue)
@@ -531,13 +616,16 @@ final class ShaderPipeline {
         }
     }
 
-    private func createDescriptorSet(imageView: VkImageView, input: VkImageView?) throws {
+    private func createDescriptorSet(imageView: VkImageView) throws {
         var sizes = [
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorCount: 1),
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1),
         ]
-        if input != nil {
-            sizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: 1))
+        if !inputs.isEmpty {
+            sizes.append(VkDescriptorPoolSize(
+                type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                descriptorCount: UInt32(inputs.count)
+            ))
         }
         if arguments != nil {
             sizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount: 1))
@@ -562,8 +650,8 @@ final class ShaderPipeline {
         }
         guard allocResult == VK_SUCCESS else { throw ShaderError.vulkan("descriptor set") }
 
-        // GENERAL is where `OGLShaderNode.update`'s pre-dispatch barrier puts
-        // the image, and what a storage binding requires.
+        // GENERAL is where `ComputeShaderNode.update`'s pre-dispatch barrier
+        // puts the image, and what a storage binding requires.
         var imageInfo = VkDescriptorImageInfo()
         imageInfo.imageView = imageView
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL
@@ -573,12 +661,6 @@ final class ShaderPipeline {
         bufferInfo.offset = 0
         bufferInfo.range = VkDeviceSize(MemoryLayout<ShaderUniforms>.stride)
 
-        // The view's canvas, as its own node leaves it after drawing.
-        var inputInfo = VkDescriptorImageInfo()
-        inputInfo.sampler = sampler
-        inputInfo.imageView = input
-        inputInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-
         var argumentInfo = VkDescriptorBufferInfo()
         argumentInfo.buffer = arguments?.buffer
         argumentInfo.offset = 0
@@ -586,7 +668,6 @@ final class ShaderPipeline {
 
         withUnsafePointer(to: &imageInfo) { imagePtr in
             withUnsafePointer(to: &bufferInfo) { bufferPtr in
-                withUnsafePointer(to: &inputInfo) { inputPtr in
                 withUnsafePointer(to: &argumentInfo) { argumentPtr in
                     var writeImage = VkWriteDescriptorSet()
                     writeImage.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
@@ -605,16 +686,6 @@ final class ShaderPipeline {
                     writeUniform.pBufferInfo = bufferPtr
 
                     var writes = [writeImage, writeUniform]
-                    if input != nil {
-                        var writeInput = VkWriteDescriptorSet()
-                        writeInput.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-                        writeInput.dstSet = descriptorSet
-                        writeInput.dstBinding = 2
-                        writeInput.descriptorCount = 1
-                        writeInput.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-                        writeInput.pImageInfo = inputPtr
-                        writes.append(writeInput)
-                    }
                     if arguments != nil {
                         var writeArguments = VkWriteDescriptorSet()
                         writeArguments.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
@@ -627,8 +698,37 @@ final class ShaderPipeline {
                     }
                     vkUpdateDescriptorSets(device, UInt32(writes.count), &writes, 0, nil)
                 }
-                }
             }
+        }
+        // The sampled images in a pass of their own, so one code path writes
+        // them whether the set is being built or rebound.
+        writeInputs(inputs)
+    }
+
+    /// Write every sampled-image descriptor with `inputs`' current handles.
+    /// Each image is sampled where its writer left it — the layout a canvas
+    /// node, a compute slot and a `RenderTexture` all leave theirs in.
+    private func writeInputs(_ inputs: [ShaderImageInput]) {
+        guard !inputs.isEmpty, let descriptorSet, let sampler else { return }
+        var infos = inputs.map { input -> VkDescriptorImageInfo in
+            var info = VkDescriptorImageInfo()
+            info.sampler = sampler
+            info.imageView = input.imageView
+            info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            return info
+        }
+        infos.withUnsafeMutableBufferPointer { buffer in
+            var writes = inputs.enumerated().map { index, input -> VkWriteDescriptorSet in
+                var write = VkWriteDescriptorSet()
+                write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+                write.dstSet = descriptorSet
+                write.dstBinding = UInt32(input.binding)
+                write.descriptorCount = 1
+                write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                write.pImageInfo = UnsafePointer(buffer.baseAddress! + index)
+                return write
+            }
+            vkUpdateDescriptorSets(device, UInt32(writes.count), &writes, 0, nil)
         }
     }
 }

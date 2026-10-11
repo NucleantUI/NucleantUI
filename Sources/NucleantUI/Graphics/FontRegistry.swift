@@ -236,13 +236,17 @@ public enum FontRegistry {
 
     private static func locate(_ name: String) -> String? {
         if let file = bundledFaces[name] {
-            #if os(Android)
+            #if os(Android) || os(WASI)
             // Not `Bundle.module`: its generated accessor resolves against the
             // executable's directory, which for an Android app is the zygote's
             // (/system/bin), and it `fatalError`s rather than returning nil —
             // so it cannot even be tried and allowed to fail. The Activity
             // unpacks the package's resource bundles next to the app's files
-            // and exports that directory here.
+            // and exports that directory here. In the browser the accessor
+            // names directories on the machine that built the module; the
+            // page mounts the bundles in the module's file system instead and
+            // exports that directory the same way (NucleantApplication's
+            // Web/nucleant-app.js).
             if let root = ProcessInfo.processInfo.environment["NUCLEANT_APP_PATH"] {
                 let path = "\(root)/NucleantUI_NucleantUI.resources/Fonts/\(file).ttf"
                 if FileManager.default.isReadableFile(atPath: path) { return path }

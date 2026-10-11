@@ -38,6 +38,9 @@ public struct ShaderFunction: Hashable, Sendable {
         case glsl
         /// PyShader's Python subset, compiled to SPIR-V by the PyShader package.
         case pyshader
+        /// SPIR-V already, compiled by something else — no source to wrap and
+        /// nothing left to run through a compiler. See `init(spirv:)`.
+        case spirv
     }
 
     public let language: Language
@@ -63,6 +66,33 @@ public struct ShaderFunction: Hashable, Sendable {
     /// to carry beside it.
     public let glslVertexStage: VertexStage?
 
+    /// A module compiled somewhere other than here — `nil` for every source
+    /// language, which is all of them but `.spirv`.
+    private let precompiled: Precompiled?
+
+    /// What there is to know about a module when there is no source to read
+    /// it from: the words, an identity to compare them by, and whether it
+    /// moves. Hashable and Sendable like everything else here, so a
+    /// `ShaderFunction` holding one is still a value.
+    struct Precompiled: Hashable, Sendable {
+        let words: [UInt32]
+        /// The whole module, encoded — so two different modules are two
+        /// different identities rather than two that merely hash apart.
+        /// Worked out once, because `source` is compared every frame and a
+        /// module is far larger than the text a source function is compared
+        /// by.
+        let identity: String
+        let isAnimated: Bool
+    }
+
+    /// The module itself, when `language` is `.spirv`; empty otherwise.
+    ///
+    /// Nothing compiles this — it is handed to `vkCreateShaderModule` as it
+    /// stands — so it has to already meet the compute contract the pipeline
+    /// binds against (see `ShaderCode`), which is the same contract a
+    /// PyShader module compiled for `.computeImage` meets.
+    public var spirv: [UInt32] { precompiled?.words ?? [] }
+
     /// The GLSL vertex half of a pair.
     public struct VertexStage: Hashable, Sendable {
         /// `type name;` pairs the vertex stage writes and the fragment stage
@@ -78,6 +108,7 @@ public struct ShaderFunction: Hashable, Sendable {
         self.functions = functions
         self.body = body
         self.glslVertexStage = nil
+        self.precompiled = nil
     }
 
     /// A vertex + fragment pair in GLSL.
@@ -121,6 +152,7 @@ public struct ShaderFunction: Hashable, Sendable {
         self.functions = functions
         self.body = fragment
         self.glslVertexStage = VertexStage(varyings: varyings, body: vertex)
+        self.precompiled = nil
     }
 
     /// A shader written in Python syntax, compiled by PyShader.
@@ -165,6 +197,7 @@ public struct ShaderFunction: Hashable, Sendable {
         self.functions = ""
         self.body = source
         self.glslVertexStage = nil
+        self.precompiled = nil
     }
 
     /// Wraps an unmodified ShaderToy shader.
@@ -195,6 +228,63 @@ public struct ShaderFunction: Hashable, Sendable {
         self.functions = source
         self.body = "mainImage(fragColor, fragCoord);"
         self.glslVertexStage = nil
+        self.precompiled = nil
+    }
+
+    /// A module that is already SPIR-V, compiled by something other than
+    /// this framework.
+    ///
+    /// The words go to `vkCreateShaderModule` untouched: nothing here wraps
+    /// them, renames an entry point or rewrites a binding. So the module has
+    /// to already be built against the layout the compute pipeline binds —
+    /// the storage image written one pixel per invocation at binding 0, the
+    /// `Uniforms` block with the clock and the pointer at binding 1, the
+    /// view's own pixels at binding 2, the arguments at binding 3, and a
+    /// `sampler2D` per named texture from binding 4 up — with `main` as its
+    /// entry point. That is `ComputeImageInterface.nucleantUI`'s layout, so
+    /// anything emitting against *it* drops in here, which is what this
+    /// initializer is for: a shader built out of something that is not text,
+    /// such as a node graph, rather than written as a source language.
+    ///
+    /// It is a compute function. A vertex + fragment pair is two modules and
+    /// two entry points, which this does not carry, so `isGraphics` is always
+    /// `false` — pass a graphics shader as PyShader or GLSL.
+    ///
+    /// - Parameter isAnimated: whether the module reads the clock or the
+    ///   pointer. There is no source to tell from, so the caller says; the
+    ///   default errs towards redispatching, which only costs dispatches,
+    ///   where the other way round would freeze a shader that does move.
+    public init(spirv words: [UInt32], isAnimated: Bool = true) {
+        self.language = .spirv
+        self.functions = ""
+        // There is no body: a module is not text. What the cache compares
+        // is built once, below.
+        self.body = ""
+        self.glslVertexStage = nil
+        self.precompiled = Precompiled(
+            words: words,
+            identity: Self.identity(of: words),
+            isAnimated: isAnimated
+        )
+    }
+
+    /// Every word, in hex, under the language's own prefix — what `source`
+    /// answers for a precompiled module. No Foundation and no digest: this
+    /// is an identity the pipeline cache tests for equality, so a module
+    /// that differs anywhere has to differ here.
+    private static func identity(of words: [UInt32]) -> String {
+        var text = "#spirv\n"
+        text.reserveCapacity(words.count * 8 + 8)
+        let digits: [Character] = ["0", "1", "2", "3", "4", "5", "6", "7",
+                                   "8", "9", "a", "b", "c", "d", "e", "f"]
+        for word in words {
+            var shift = 28
+            while shift >= 0 {
+                text.append(digits[Int((word >> UInt32(shift)) & 0xF)])
+                shift -= 4
+            }
+        }
+        return text
     }
 
     /// Whether this function places its own geometry — a `glslVertexStage`,
@@ -203,8 +293,15 @@ public struct ShaderFunction: Hashable, Sendable {
     /// and it is the same `ShaderFunction` either way, so `.shader(_:)` takes
     /// it as it takes any other.
     public var isGraphics: Bool {
-        if language == .glsl { return glslVertexStage != nil }
-        return Self.definesStage("vertex", in: body) && Self.definesStage("fragment", in: body)
+        switch language {
+        case .glsl:
+            return glslVertexStage != nil
+        case .pyshader:
+            return Self.definesStage("vertex", in: body) && Self.definesStage("fragment", in: body)
+        case .spirv:
+            // One module, one entry point — see `init(spirv:)`.
+            return false
+        }
     }
 
     /// `def <name>(` at the start of a line of PyShader source.
@@ -226,7 +323,15 @@ public struct ShaderFunction: Hashable, Sendable {
     var source: String {
         let stage = glslVertexStage.map { [$0.varyings, $0.body] } ?? []
         let text = ([functions] + stage + [body]).filter { !$0.isEmpty }.joined(separator: "\n")
-        return language == .pyshader ? "#pyshader\n" + text : text
+        switch language {
+        case .glsl:     return text
+        case .pyshader: return "#pyshader\n" + text
+        // `body` is the module, encoded — the whole of it, so two different
+        // modules are two different identities rather than two that merely
+        // hash apart.
+        // Already carries its own prefix, and nothing else to join it to.
+        case .spirv:    return precompiled?.identity ?? "#spirv\n"
+        }
     }
 
     /// Whether the shader reads anything that changes between frames.
@@ -237,7 +342,7 @@ public struct ShaderFunction: Hashable, Sendable {
     /// textual test, so a helper that takes `time` as a parameter counts too;
     /// erring towards "animated" only costs dispatches.
     var isAnimated: Bool {
-        Self.mentionsClock(source)
+        precompiled?.isAnimated ?? Self.mentionsClock(source)
     }
 
     /// Whether `source` names any per-frame input, as an identifier.
@@ -465,6 +570,95 @@ struct ShaderArguments: Equatable {
     }
 }
 
+/// One `RenderTexture` handed to a shader under a name.
+///
+/// ```swift
+/// Shader(mix, arguments: [.float("blend", t)],
+///                textures: [.init("a", layerA), .init("b", layerB)])
+/// ```
+///
+/// In the shader body the texture is a callable: `a(uv)` samples it and
+/// `a_size` is its pixel size. `layer(uv)` keeps meaning "the view this
+/// effect is applied to", so nothing written against it changes meaning.
+///
+/// Not a `ShaderArgument`: an argument is a value packed into one float
+/// buffer, and a texture is an image that belongs in a descriptor of its own.
+public struct ShaderTextureInput: Hashable, @unchecked Sendable {
+    /// The name the shader knows it by.
+    public let name: String
+    public let texture: RenderTexture
+
+    public init(_ name: String, _ texture: RenderTexture) {
+        self.name = name
+        self.texture = texture
+    }
+
+    /// By name and by texture identity — what the pixels are is not part of
+    /// it, the same way a `RenderTexture` compares as a view input.
+    public static func == (lhs: ShaderTextureInput, rhs: ShaderTextureInput) -> Bool {
+        lhs.name == rhs.name && lhs.texture === rhs.texture
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(ObjectIdentifier(texture))
+    }
+}
+
+/// The textures a shader samples by name, in binding order — the companion to
+/// `ShaderArguments`.
+///
+/// Bindings start at 4: 0 is the output image, 1 the uniforms, 2 the content
+/// (`layer(uv)`), 3 the argument buffer. A changed *set* — names, order,
+/// count — changes the compiled shader, so it is in the slot's identity; a
+/// texture that merely has a different image is a descriptor rebind.
+struct ShaderTextures: Equatable {
+    let inputs: [ShaderTextureInput]
+    /// The names in binding order: what the shader was compiled against.
+    let signature: String
+
+    init(_ inputs: [ShaderTextureInput] = []) {
+        self.inputs = inputs
+        self.signature = inputs.map(\.name).joined(separator: ",")
+    }
+
+    static let none = ShaderTextures()
+
+    var isEmpty: Bool { inputs.isEmpty }
+
+    /// Every texture has an image to bind: one that has never rendered takes
+    /// its canvas here. Called from inside a layout pass, which is why it
+    /// rasterizes the list the texture already holds rather than walking the
+    /// tree again — one tree at a time, as `OffscreenRender` says.
+    @MainActor
+    func prepare() {
+        for input in inputs { input.texture.prepareImage() }
+    }
+
+    /// What each texture's `generation` is now. A texture that rendered again
+    /// re-dispatches the shader reading it, the way new content in a
+    /// `.shader` layer re-arms one.
+    @MainActor
+    var generations: [Int] { inputs.map(\.texture.generation) }
+
+    /// The image views to bind, in binding order, or `nil` while any of the
+    /// textures has no image yet — a slot cannot be built against a texture
+    /// that has not rendered.
+    @MainActor
+    var imageInputs: [ShaderImageInput]? {
+        var bound: [ShaderImageInput] = []
+        for (index, input) in inputs.enumerated() {
+            guard let image = input.texture.gpuImage else { return nil }
+            bound.append(.texture(input.name, image.view, at: index))
+        }
+        return bound
+    }
+
+    static func == (lhs: ShaderTextures, rhs: ShaderTextures) -> Bool {
+        lhs.inputs == rhs.inputs
+    }
+}
+
 /// A view whose pixels are produced by a compute shader on the GPU.
 ///
 /// It takes whatever space it is offered, so give it a `.frame`. Unlike every
@@ -475,16 +669,30 @@ struct ShaderArguments: Equatable {
 public struct Shader: View {
     let function: ShaderFunction
     let arguments: [ShaderArgument]
+    /// Named `RenderTexture`s the shader samples — `a(uv)` in the body.
+    let textures: [ShaderTextureInput]
 
-    public init(_ function: ShaderFunction, arguments: [ShaderArgument] = [], _viewID: ViewID = #viewID) {
+    public init(
+        _ function: ShaderFunction,
+        arguments: [ShaderArgument] = [],
+        textures: [ShaderTextureInput] = [],
+        _viewID: ViewID = #viewID
+    ) {
         self.function = function
         self.arguments = arguments
+        self.textures = textures
         self._viewID = _viewID
     }
 
-    public init(source: String, arguments: [ShaderArgument] = [], _viewID: ViewID = #viewID) {
+    public init(
+        source: String,
+        arguments: [ShaderArgument] = [],
+        textures: [ShaderTextureInput] = [],
+        _viewID: ViewID = #viewID
+    ) {
         self.function = ShaderFunction(source)
         self.arguments = arguments
+        self.textures = textures
         self._viewID = _viewID
     }
 
@@ -499,7 +707,8 @@ extension Shader: BuiltinView {
             // actually leaves the tree.
             path: context.path,
             function: function,
-            arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme)
+            arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
+            textures: ShaderTextures(textures)
         ))
     }
 }
@@ -510,6 +719,7 @@ struct ShaderContent: NodeContent {
     let path: [Int]
     let function: ShaderFunction
     let arguments: ShaderArguments
+    let textures: ShaderTextures
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
         proposal.replacingUnspecifiedDimensions()
@@ -521,6 +731,7 @@ struct ShaderContent: NodeContent {
             path: path,
             function: function,
             arguments: arguments,
+            textures: textures,
             rect: rect,
             clip: context.compositeClip
         )
@@ -536,5 +747,21 @@ struct ShaderContent: NodeContent {
 /// pass by `ViewHost`, keeps it out of the layout types entirely.
 @MainActor
 enum ShaderHost {
+    /// The registry of the pass being laid out — `nil` outside a pass, which
+    /// is also how anything offscreen knows it is not in one.
     static var current: ShaderSlotRegistry?
+
+    /// The registry of the window that is up, pass or no pass.
+    ///
+    /// `current` is scoped to a layout walk, and a `RenderTexture` is made and
+    /// re-rendered from wherever a model happens to live — outside any pass,
+    /// before the first one, after the last. This is what it reaches for, set
+    /// when the window attaches its canvas and cleared when the registry is
+    /// torn down. One window's, as with every other global here
+    /// (`Invalidator.shared`, `AnimationStore.current`): a second window's
+    /// textures would need a registry threaded to them instead.
+    ///
+    /// Weak: the window owns its registry, and a window that has gone leaves
+    /// this nil rather than a registry whose engine is dead.
+    static weak var attached: ShaderSlotRegistry?
 }

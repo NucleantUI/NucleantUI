@@ -118,6 +118,12 @@
 - [ ] Canvas / GraphicsContext
 - [x] .drawingGroup
 - [x] Shader / ShaderLibrary / .shader
+- [x] RenderTexture / renderTexture / .texture — SwiftUI has no equivalent:
+      a view tree rendered into a GPU image a model holds, shown with
+      `tex.view()`, shaded with `tex.shader(_:)`, and handed to another
+      shader by name (`textures:`)
+- [x] ImageRenderer — as `renderImage(size:scale:)` / `.image(size:scale:)`,
+      a `RasterImage` drawn with no window and no GPU
 
 ## Layout modifiers
 - [x] .frame

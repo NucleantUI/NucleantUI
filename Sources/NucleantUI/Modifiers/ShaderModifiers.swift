@@ -8,8 +8,8 @@
 //  it is applied to is drawn into a canvas of its own, and the shader reads
 //  that canvas as a texture and writes the pixels that actually reach the
 //  window — SwiftUI's `layerEffect`, on the engine's own terms. A canvas node
-//  renders into its own VkImage, and `OGLShaderNode` takes texture inputs;
-//  this is the view layer reaching both.
+//  renders into its own VkImage, and `ComputeShaderNode` takes sampled
+//  inputs; this is the view layer reaching both.
 //
 //  One modifier, whichever kind of function it is handed. A function with a
 //  vertex stage gets the same texture at the same binding under the same name
@@ -67,6 +67,11 @@ extension View {
     ///
     /// `arguments` are the shader's named inputs — see `ShaderArgument`.
     ///
+    /// `textures` are `RenderTexture`s the body samples by name — `a(uv)`,
+    /// `a_size` — beside `layer(uv)`, which still means this view. That is
+    /// what makes an effect a *composite*: the view it is applied to mixed
+    /// with images rendered elsewhere.
+    ///
     /// - Parameters:
     ///   - vertices: with a vertex stage, vertices per instance; 6 is a quad
     ///     as two triangles.
@@ -74,6 +79,7 @@ extension View {
     public func shader(
         _ function: ShaderFunction,
         arguments: [ShaderArgument] = [],
+        textures: [ShaderTextureInput] = [],
         vertices: Int = 6,
         instances: Int = 1,
         backdrop: Bool = false,
@@ -82,13 +88,14 @@ extension View {
         let draw = ShaderDraw(vertices: max(0, vertices), instances: max(0, instances))
         return _ModifierView(
             content: self,
-            key: ["shader", function, draw, arguments, backdrop, isEnabled] as [AnyHashable]
+            key: ["shader", function, draw, arguments, textures, backdrop, isEnabled] as [AnyHashable]
         ) { context in
             ShaderEffectContent(
                 path: context.path,
                 function: isEnabled ? function : nil,
                 draw: draw,
                 arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
+                textures: ShaderTextures(textures),
                 backdrop: backdrop
             )
         }
@@ -116,6 +123,8 @@ struct ShaderEffectContent: NodeContent {
     /// What one draw covers, when `function` has a vertex stage.
     let draw: ShaderDraw
     let arguments: ShaderArguments
+    /// `RenderTexture`s the body samples by name, beside `layer(uv)`.
+    let textures: ShaderTextures
     /// Seed the layer with what is already painted under the view.
     let backdrop: Bool
 
@@ -151,6 +160,7 @@ struct ShaderEffectContent: NodeContent {
                 function: function,
                 draw: draw,
                 arguments: arguments,
+                textures: textures,
                 rect: rect,
                 clip: context.compositeClip,
                 canvas: canvas.node,
@@ -167,6 +177,7 @@ struct ShaderEffectContent: NodeContent {
                 function: function,
                 draw: draw,
                 arguments: arguments,
+                textures: textures,
                 rect: rect,
                 clip: context.compositeClip,
                 content: content

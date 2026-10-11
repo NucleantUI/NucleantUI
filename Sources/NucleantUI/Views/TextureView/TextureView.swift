@@ -15,7 +15,8 @@
 ///
 /// The view gets a texture of its own, the size of its frame in pixels, and
 /// tells `source` about it (`textureDidChange`) — again whenever the frame
-/// or the display scale changes, and `textureDidDisappear` when the view
+/// or the display scale changes, `textureDidMove` when the view only moves
+/// or is clipped differently, and `textureDidDisappear` when the view
 /// leaves the tree. The source writes frames into the texture whenever it has
 /// them; nothing in the view tree has to rebuild for a new frame to show.
 ///
@@ -54,6 +55,7 @@ extension TextureView: BuiltinView {
             key: RenderNodeKey(path: context.path, identity: context.viewIdentity, id: nodeID),
             sourceID: ObjectIdentifier(source),
             didChange: { source.textureDidChange($0) },
+            didMove: { source.textureDidMove($0) },
             didDisappear: { source.textureDidDisappear($0) },
             input: TextureInputTarget(path: context.path, send: send),
             focus: FocusTarget(
@@ -98,6 +100,7 @@ struct TextureContent: NodeContent {
     let key: RenderNodeKey
     let sourceID: ObjectIdentifier
     let didChange: @MainActor (ViewTexture) -> Void
+    let didMove: @MainActor (ViewTexture) -> Void
     let didDisappear: @MainActor (ViewTexture) -> Void
     let input: TextureInputTarget
     let focus: FocusTarget
@@ -119,6 +122,7 @@ struct TextureContent: NodeContent {
             clip: clip,
             sourceID: sourceID,
             didChange: didChange,
+            didMove: didMove,
             didDisappear: didDisappear
         )
         host.boundaries.noteNested(at: list.commands.count, rect: clip.map { rect.intersection($0) } ?? rect)

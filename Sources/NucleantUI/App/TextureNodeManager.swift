@@ -28,6 +28,7 @@ final class TextureNodeManager {
         /// source, which gets the texture while the old one is told it lost it.
         var sourceID: ObjectIdentifier
         var didChange: @MainActor (ViewTexture) -> Void
+        var didMove: @MainActor (ViewTexture) -> Void
         var didDisappear: @MainActor (ViewTexture) -> Void
         /// Seen during the current pass. Anything not seen has left the tree.
         var used = true
@@ -36,14 +37,20 @@ final class TextureNodeManager {
             texture: ViewTexture,
             sourceID: ObjectIdentifier,
             didChange: @escaping @MainActor (ViewTexture) -> Void,
+            didMove: @escaping @MainActor (ViewTexture) -> Void,
             didDisappear: @escaping @MainActor (ViewTexture) -> Void
         ) {
             self.texture = texture
             self.sourceID = sourceID
             self.didChange = didChange
+            self.didMove = didMove
             self.didDisappear = didDisappear
         }
     }
+
+    /// The window the textures are in, which each texture names to its
+    /// source — `nil` for a tree laid out without one.
+    weak var window: HostingWindow?
 
     private unowned let engine: NucleantRenderEngine
     /// For the pass's paint order, the scale and the image-size rule — the
@@ -81,12 +88,15 @@ final class TextureNodeManager {
         clip: Rect?,
         sourceID: ObjectIdentifier,
         didChange: @escaping @MainActor (ViewTexture) -> Void,
+        didMove: @escaping @MainActor (ViewTexture) -> Void,
         didDisappear: @escaping @MainActor (ViewTexture) -> Void
     ) -> Entry? {
         let scale = renderNodes.scale
         let image = renderNodes.imageSize(for: rect)
+        let visible = clip.map { rect.intersection($0) } ?? rect
         let entry: Entry
         var changed = false
+        var moved = false
 
         if let existing = entries[key] {
             entry = existing
@@ -99,6 +109,7 @@ final class TextureNodeManager {
                 changed = true
             }
             entry.didChange = didChange
+            entry.didMove = didMove
             entry.didDisappear = didDisappear
             let node = entry.texture.node
             if Int(node.width) != image.width || Int(node.height) != image.height {
@@ -114,6 +125,11 @@ final class TextureNodeManager {
                 entry.texture.size = rect.size
                 entry.texture.scale = scale
                 changed = true
+            }
+            if entry.texture.origin != rect.origin || entry.texture.visibleFrame != visible {
+                entry.texture.origin = rect.origin
+                entry.texture.visibleFrame = visible
+                moved = true
             }
         } else {
             let node: ExternalTextureNode<NucleantRenderNode>
@@ -131,22 +147,29 @@ final class TextureNodeManager {
             container.observeContext()
             engine.append(container)
             entry = Entry(
-                texture: ViewTexture(node: node, container: container, engine: engine, size: rect.size, scale: scale),
+                texture: ViewTexture(
+                    node: node, container: container, engine: engine,
+                    frame: rect, visibleFrame: visible, scale: scale
+                ),
                 sourceID: sourceID,
                 didChange: didChange,
+                didMove: didMove,
                 didDisappear: didDisappear
             )
             entries[key] = entry
             changed = true
         }
+        entry.texture.window = window
 
         position(entry.texture, rect: rect, clip: clip, scale: scale)
         renderNodes.composite(entry.texture.container, at: renderNodes.nextPaintOrder())
 
+        // The entry's closure at the time of the call, not this one: a later
+        // pass in the same frame may have replaced it.
         if changed {
-            // The entry's closure at the time of the call, not this one: a
-            // later pass in the same frame may have replaced it.
             notifications.append { [entry] in entry.didChange(entry.texture) }
+        } else if moved {
+            notifications.append { [entry] in entry.didMove(entry.texture) }
         }
         return entry
     }

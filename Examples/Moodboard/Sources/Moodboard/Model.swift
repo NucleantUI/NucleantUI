@@ -437,7 +437,8 @@ struct SeededRandom: RandomNumberGenerator {
     }
 
     mutating func nextDouble() -> Double {
-        Double(next() >> 11) / Double(1 << 53)
+        // UInt64, not Int: in the browser Int is 32 bits, where `1 << 53` is 0.
+        Double(next() >> 11) / Double(UInt64(1) << 53)
     }
 
     mutating func nextDouble(in range: ClosedRange<Double>) -> Double {

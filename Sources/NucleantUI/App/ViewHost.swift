@@ -709,7 +709,7 @@ public final class ViewHost {
         if let menu = contextMenuHit {
             releasePrimaryGesture()
             dragSourceHit = nil
-            presentContextMenu(menu.value, at: touchStart)
+            presentContextMenu(menu.value, at: touchStart, location: menu.localPoint)
         } else if let source = dragSourceHit {
             beginDrag(from: source)
         }
@@ -1013,11 +1013,14 @@ public final class ViewHost {
             InputTrace.log("right click \(point) — no menu")
             return
         }
-        presentContextMenu(hit.value, at: point)
+        presentContextMenu(hit.value, at: point, location: hit.localPoint)
     }
 
-    private func presentContextMenu(_ source: ContextMenuSource, at anchor: Point) {
-        presentMenu(source.items, at: anchor)
+    /// `anchor` is where the panel goes (window coordinates); `location` is
+    /// the same click in the menu's own node space, which is what
+    /// `.contextMenu { location in … }` is handed.
+    private func presentContextMenu(_ source: ContextMenuSource, at anchor: Point, location: Point) {
+        presentMenu(source.items(at: location), at: anchor)
     }
 
     /// A `Menu` pressed as a button: its items open under the control that

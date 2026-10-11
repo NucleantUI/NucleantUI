@@ -4,6 +4,14 @@ import PackageDescription
 import CompilerPluginSupport
 import Foundation
 
+// MARK: - Target platform
+
+/// WebAssembly (`swift build --swift-sdk <version>_wasm`) is a cross-compile
+/// from any host, so — like Android below — an explicit opt-in, the one every
+/// Nucleant package reads: NucleantApplication declares `Platform_Wasm` and
+/// its `Dispatch` stand-in only under it.
+let isWasm = ProcessInfo.processInfo.environment["WASM_BUILD"] == "1"
+
 // MARK: - Primary renderer
 
 /// Which backend's canvases the views' display list is drawn into — the
@@ -66,7 +74,7 @@ let isAndroid = ProcessInfo.processInfo.environment["SWIFT_ANDROID_HOME"] != nil
 /// there is no cross-compile into Linux, so a host check is the target check.
 /// `&& !isAndroid` because the Android host *is* Linux.
 #if os(Linux)
-let isLinux = !isAndroid
+let isLinux = !isAndroid && !isWasm
 #else
 let isLinux = false
 #endif
@@ -88,6 +96,12 @@ func platformProviders() -> [Target.Dependency] {
         // names NucleantUI and nothing else — the same way it does not
         // name Platform_Android.
         deps.append(.product(name: "NucleantBridge", package: "NucleantApplication", condition: .when(platforms: [.android])))
+    }
+    if isWasm {
+        deps.append(.product(name: "Platform_Wasm", package: "NucleantApplication", condition: .when(platforms: [.wasi])))
+        // libdispatch's API in the browser — the wasm Swift SDK has none —
+        // for the framework's `import Dispatch`.
+        deps.append(.product(name: "Dispatch", package: "NucleantApplication", condition: .when(platforms: [.wasi])))
     }
     return deps
 }
