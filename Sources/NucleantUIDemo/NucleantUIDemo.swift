@@ -734,8 +734,9 @@ struct RootView {
 @main
 struct DemoApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Nucleant SwiftUI Demo", width: 900, height: 620) {
+        WindowGroup("Nucleant SwiftUI Demo") {
             RootView()
         }
+        .defaultSize(width: 900, height: 620)
     }
 }

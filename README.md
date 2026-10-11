@@ -25,9 +25,10 @@ struct Counter {
 @main
 struct DemoApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Counter", width: 400, height: 200) {
+        WindowGroup("Counter") {
             Counter()
         }
+        .defaultSize(width: 400, height: 200)
     }
 }
 ```

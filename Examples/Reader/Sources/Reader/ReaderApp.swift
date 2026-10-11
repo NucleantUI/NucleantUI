@@ -104,9 +104,10 @@ struct RootView {
 @main
 struct ReaderApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Reader", width: 560, height: 760) {
+        WindowGroup("Reader") {
             RootView()
         }
+        .defaultSize(width: 560, height: 760)
         .commands { AppearanceCommands() }
     }
 }

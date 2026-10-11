@@ -250,9 +250,17 @@ struct CalculatorView {
 @main
 struct CalculatorApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Calculator", width: 360, height: 600) {
+        WindowGroup("Calculator") {
+            // The keypad has a range of sizes it works at, and the window is
+            // held to it: on a desktop by its edges, in a browser by the page,
+            // past which the keypad stops growing and sits centred. Zooming
+            // takes it to the largest.
             CalculatorView()
+                .frame(minWidth: 300, maxWidth: 440, minHeight: 480, maxHeight: 680)
         }
+        .defaultSize(width: 360, height: 600)
+        .windowResizability(.contentSize)
+        .windowIdealSize(.maximum)
         .commands { AppearanceCommands() }
     }
 }

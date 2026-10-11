@@ -160,9 +160,10 @@ struct WindowBar {
 @main
 struct BookmarksApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Bookmarks", width: 1320, height: 840) {
+        WindowGroup("Bookmarks") {
             BookmarksView()
         }
+        .defaultSize(width: 1320, height: 840)
         .commands { AppearanceCommands() }
     }
 }

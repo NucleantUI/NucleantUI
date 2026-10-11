@@ -205,9 +205,10 @@ struct SketchView {
 @main
 struct SketchApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Sketch", width: 900, height: 640) {
+        WindowGroup("Sketch") {
             SketchView()
         }
+        .defaultSize(width: 900, height: 640)
         .commands { AppearanceCommands() }
     }
 }

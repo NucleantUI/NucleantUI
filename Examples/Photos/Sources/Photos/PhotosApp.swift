@@ -90,9 +90,10 @@ struct PhotosView {
 @main
 struct PhotosApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Photos", width: 1320, height: 840) {
+        WindowGroup("Photos") {
             PhotosView()
         }
+        .defaultSize(width: 1320, height: 840)
         .commands { AppearanceCommands() }
     }
 }

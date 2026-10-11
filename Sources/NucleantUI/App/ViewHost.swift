@@ -60,6 +60,19 @@ public final class ViewHost {
     /// Forces the next `update()` to rebuild from the root.
     private var needsFullRebuild = true
 
+    /// Which of the content's own sizes each pass that builds measures — set
+    /// by the window from its scene's sizing. Nothing is measured that no
+    /// limit is made of.
+    var measuredContentSizes: ContentSizeLimits.Measurements = [] {
+        didSet { needsFullRebuild = true }
+    }
+
+    /// The content's sizes as last measured.
+    public private(set) var contentSizeLimits = ContentSizeLimits()
+
+    /// Told after a pass whose measurement changed `contentSizeLimits`.
+    var onContentSizeLimitsChange: ((ContentSizeLimits) -> Void)?
+
     /// A press in flight, from its pointer going down to its release. Held
     /// rather than re-hit-tested on release, so dragging off a button reaches
     /// the button that was actually pressed — and so a drag keeps reporting
@@ -298,8 +311,31 @@ public final class ViewHost {
             for action in effects.preferenceObservers.changes() {
                 action()
             }
+            measureContentSizeLimits()
         }
         return windowRedrawn
+    }
+
+    /// The root's size offered zero, infinity and nothing in particular —
+    /// whichever the window asked for. Only the views decide these, never the
+    /// window's size, so only a pass that built can change them.
+    private func measureContentSizeLimits() {
+        // Slot `[0]` of the host root, which itself takes whatever the window
+        // is: the app's own root view.
+        guard !measuredContentSizes.isEmpty, let content = rootNode?.children.first else { return }
+        let limits = ContentSizeLimits(
+            minimum: measuredContentSizes.contains(.minimum) ? content.sizeThatFits(.zero) : nil,
+            maximum: measuredContentSizes.contains(.maximum) ? content.sizeThatFits(.infinity) : nil,
+            ideal: measuredContentSizes.contains(.ideal) ? content.sizeThatFits(.unspecified) : nil
+        )
+        guard limits != contentSizeLimits else { return }
+        contentSizeLimits = limits
+        if LayoutTrace.isEnabled {
+            nucleantLogError("[layout] content size limits: min=\(limits.minimum.map { "\($0.width)×\($0.height)" } ?? "-") "
+                + "max=\(limits.maximum.map { "\($0.width)×\($0.height)" } ?? "-") "
+                + "ideal=\(limits.ideal.map { "\($0.width)×\($0.height)" } ?? "-")\n")
+        }
+        onContentSizeLimitsChange?(limits)
     }
 
     /// Force a full rebuild on the next `update()`, and a repaint of the

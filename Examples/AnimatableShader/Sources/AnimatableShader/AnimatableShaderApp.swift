@@ -357,9 +357,10 @@ struct AnimatableShaderView {
 @main
 struct AnimatableShaderApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Animatable Shader", width: 720, height: 520) {
+        WindowGroup("Animatable Shader") {
             AnimatableShaderView()
         }
+        .defaultSize(width: 720, height: 520)
         .commands { AppearanceCommands() }
     }
 }

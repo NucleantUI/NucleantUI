@@ -201,9 +201,10 @@ struct MetronomeView {
 @main
 struct MetronomeApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Metronome", width: 900, height: 760) {
+        WindowGroup("Metronome") {
             MetronomeView()
         }
+        .defaultSize(width: 900, height: 760)
         .commands { AppearanceCommands() }
     }
 }

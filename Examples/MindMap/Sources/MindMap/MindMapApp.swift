@@ -77,9 +77,10 @@ struct MindMapView {
 @main
 struct MindMapApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("MindMap", width: 1320, height: 820) {
+        WindowGroup("MindMap") {
             MindMapView()
         }
+        .defaultSize(width: 1320, height: 820)
         .commands { AppearanceCommands() }
     }
 }

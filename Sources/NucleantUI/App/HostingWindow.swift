@@ -99,17 +99,45 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     #endif
 
 
+    /// The scene's say in this window's size — `defaultSize`,
+    /// `windowResizability`, `windowIdealSize` — filled in by the scene's
+    /// modifiers before the window is presented.
+    var sizing = WindowSizing()
+
+    /// Held at the size it was created with rather than sized by the
+    /// platform, where the platform would otherwise decide: a browser page,
+    /// which a window fills by default.
+    private let holdsCreatedSize: Bool
+
+    /// A window whose size its scene decides, through `sizing`.
+    @MainActor
+    public init<Root: View>(title: String, root: Root) {
+        self.title = title
+        self.win_rect = SIMD4(0, 0, 0, 0)
+        self.host = ViewHost(root: root)
+        self.holdsCreatedSize = false
+    }
+
+    /// A window of a set size: its default size on a desktop, and in a
+    /// browser the size the canvas keeps instead of filling the page.
     @MainActor
     public init<Root: View>(title: String, width: Double, height: Double, root: Root) {
         self.title = title
         self.win_rect = SIMD4(0, 0, Int(width), Int(height))
         self.host = ViewHost(root: root)
+        self.holdsCreatedSize = true
+        self.sizing.defaultSize = Size(width: width, height: height)
     }
 
     // MARK: - Bring-up
 
     public func present() throws {
         try MainActor.assumeIsolated {
+            // The size the window opens at, before its content has said
+            // anything about limits; the platforms that size the window
+            // themselves replace it.
+            let size = sizing.defaultSize ?? WindowSizing.fallbackSize
+            win_rect = SIMD4(0, 0, Int(size.width), Int(size.height))
             #if os(macOS)
             try presentMacOS()
             #elseif os(iOS)
@@ -222,6 +250,55 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         //    resizes, so without this the tree never learns how big it is.
         if let size = platformWindow.contentView?.bounds.size {
             on_size(w: Double(size.width), h: Double(size.height))
+        }
+
+        // 7. The window's limits, from its content, once it has been built.
+        followContentSizeLimits()
+    }
+
+    /// Hold the window to its content's size limits — the minimum and
+    /// maximum `windowResizability` asks for, the zoom size
+    /// `windowIdealSize` does — and bring it into them when it is outside.
+    @MainActor
+    private func applyContentSizeLimits(_ limits: ContentSizeLimits) {
+        guard let platformWindow else { return }
+        let unlimited = CGFloat.greatestFiniteMagnitude
+        let minimum = limits.minimum ?? .zero
+        let maximum = limits.maximum ?? Size(width: .infinity, height: .infinity)
+        platformWindow.contentMinSize = NSSize(width: minimum.width, height: minimum.height)
+        platformWindow.contentMaxSize = NSSize(
+            width: maximum.width.isFinite ? max(maximum.width, minimum.width) : unlimited,
+            height: maximum.height.isFinite ? max(maximum.height, minimum.height) : unlimited
+        )
+        // Nothing to drag between: no resize handles, and no zoom button.
+        if limits.isFixed {
+            platformWindow.styleMask.remove(.resizable)
+        } else {
+            platformWindow.styleMask.insert(.resizable)
+        }
+        platformWindow.zoomContentSize = sizing.zoomSize(for: limits).map {
+            NSSize(width: $0.width, height: $0.height)
+        }
+
+        // A window opened smaller than its content allows — the default size
+        // under the minimum — grows to it, keeping its title bar in place.
+        guard let current = platformWindow.contentView?.bounds.size else { return }
+        let clamped = WindowSizing.clamp(Size(width: Double(current.width), height: Double(current.height)), to: limits)
+        guard clamped.width != Double(current.width) || clamped.height != Double(current.height) else { return }
+        var frame = platformWindow.frameRect(forContentRect: NSRect(x: 0, y: 0, width: clamped.width, height: clamped.height))
+        frame.origin = NSPoint(x: platformWindow.frame.minX, y: platformWindow.frame.maxY - frame.height)
+        platformWindow.setFrame(frame, display: true)
+    }
+    #endif
+
+    #if os(macOS) || os(WASI)
+    /// Measure the content's size limits from here on, as the scene's sizing
+    /// asks, and hold the window to them each time they change.
+    @MainActor
+    private func followContentSizeLimits() {
+        host.measuredContentSizes = sizing.measurements
+        host.onContentSizeLimitsChange = { [weak self] limits in
+            self?.applyContentSizeLimits(limits)
         }
     }
     #endif
@@ -383,6 +460,28 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         //    and reports it only when it changes. Points, which `on_size`
         //    scales itself.
         on_size(w: platformWindow.width, h: platformWindow.height)
+
+        // 7. The page is the window's screen: the canvas fills it and follows
+        //    the browser window, within the limits its content sets once it
+        //    has been built. The default size was only where it started.
+        if !holdsCreatedSize {
+            platformWindow.setLayout(fillsContainer: true)
+            followContentSizeLimits()
+        }
+    }
+
+    /// Hold the canvas to its content's size limits: below the minimum the
+    /// page scrolls, past the maximum the canvas stops growing. Zooming is
+    /// not something a page does, so the ideal size has no say.
+    @MainActor
+    private func applyContentSizeLimits(_ limits: ContentSizeLimits) {
+        let minimum = limits.minimum ?? .zero
+        let maximum = limits.maximum ?? Size(width: .infinity, height: .infinity)
+        platformWindow?.setLayout(
+            fillsContainer: true,
+            minSize: SIMD2(minimum.width, minimum.height),
+            maxSize: SIMD2(max(maximum.width, minimum.width), max(maximum.height, minimum.height))
+        )
     }
     #endif
 

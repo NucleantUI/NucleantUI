@@ -306,9 +306,10 @@ struct SamplerView {
 @main
 struct SamplerApp: NucleantApp {
     var body: some Scene {
-        WindowGroup("Sampler", width: 860, height: 640) {
+        WindowGroup("Sampler") {
             SamplerView(bank: SampleBank(), player: Player())
         }
+        .defaultSize(width: 860, height: 640)
         .commands { AppearanceCommands() }
     }
 }
