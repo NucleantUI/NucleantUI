@@ -35,6 +35,9 @@ import Platform_Linux
 // read, so the swapchain size is supplied as a callback instead.
 import CVulkan
 #endif
+#if os(WASI)
+import Platform_Wasm
+#endif
 
 public final class HostingWindow: NucleantWindow, @unchecked Sendable {
 
@@ -51,7 +54,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     /// through `assumeIsolated`.
     let host: ViewHost
 
-    #if os(macOS) || os(iOS) || os(Android) || os(Linux)
+    #if os(macOS) || os(iOS) || os(Android) || os(Linux) || os(WASI)
     /// Strongly held: `PlatformWindow` keeps only a weak `win_delegate` back
     /// here, so the window's lifetime is this object's to own.
     var platformWindow: PlatformWindow<HostingWindow>?
@@ -85,6 +88,16 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     private var appearanceObservation: NSKeyValueObservation?
     #endif
 
+    #if os(WASI)
+    /// Follows the page's `prefers-color-scheme` for as long as the window
+    /// lives; the id `BrowserAppearance` handed out for it.
+    private var appearanceObserver: Int?
+
+    deinit {
+        if let appearanceObserver { BrowserAppearance.removeObserver(appearanceObserver) }
+    }
+    #endif
+
 
     @MainActor
     public init<Root: View>(title: String, width: Double, height: Double, root: Root) {
@@ -105,6 +118,8 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
             presentAndroid()
             #elseif os(Linux)
             try presentLinux()
+            #elseif os(WASI)
+            try presentBrowser()
             #else
             throw HostingWindowError.unsupportedPlatform
             #endif
@@ -126,6 +141,9 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         // DesktopAppearance. A desktop with no preference gets light, the same
         // answer as a platform with nothing to ask.
         return DesktopAppearance.colorScheme() == .dark ? .dark : .light
+        #elseif os(WASI)
+        // The page's `prefers-color-scheme` — see BrowserAppearance.
+        return BrowserAppearance.colorScheme() == .dark ? .dark : .light
         #else
         return .light
         #endif
@@ -318,6 +336,56 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     }
     #endif
 
+    #if os(WASI)
+    @MainActor
+    private func presentBrowser() throws {
+        // 1. A <canvas> on the page, sized in CSS pixels — the browser's
+        //    points. Its requestAnimationFrame ticks start in init and no-op
+        //    until `win_delegate` and the engine below are in place, as the
+        //    display link does on macOS.
+        let platformWindow = try PlatformWindow<HostingWindow>(
+            width: win_rect.z,
+            height: win_rect.w,
+            title: title
+        )
+
+        // 2. The engine renders onto that canvas through
+        //    VK_NUCLEANT_webgpu_surface — Vulkan on the page's WebGPU. Like
+        //    Linux there is no layer to read a drawable size from, so the
+        //    swapchain asks for the canvas's drawing buffer, in device
+        //    pixels, whenever it recreates itself.
+        let engine = try NucleantRenderEngine(canvasSelector: platformWindow.canvasSelector) { [weak platformWindow] in
+            (Int(platformWindow?.bufferWidth ?? 0), Int(platformWindow?.bufferHeight ?? 0))
+        }
+        self.renderEngine = engine
+        self.platformWindow = platformWindow
+        platformWindow.win_delegate = self
+
+        displayScale = platformWindow.scale
+
+        // 3. One window-filling canvas for the whole tree.
+        attachCanvas(engine: engine, width: win_rect.z, height: win_rect.w)
+
+        // 4. Light or dark, now and whenever the page's preference changes —
+        //    the OS setting, or the browser's own theme where that overrides it.
+        applyColorScheme(Self.systemColorScheme())
+        appearanceObserver = BrowserAppearance.addObserver { [weak self] _ in
+            // The page calls in on the main thread; there is no other.
+            MainActor.assumeIsolated {
+                self?.applyColorScheme(Self.systemColorScheme())
+            }
+        }
+
+        // 5. Keys go to the canvas.
+        platformWindow.show()
+
+        // 6. Seed the size: the page's layout decides the canvas's real size,
+        //    and reports it only when it changes. Points, which `on_size`
+        //    scales itself.
+        on_size(w: platformWindow.width, h: platformWindow.height)
+    }
+    #endif
+
     #if os(Android)
     /// Attach to the Activity's surface.
     ///
@@ -379,6 +447,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         // window's included, and holds what they share.
         let shaderSlots = ShaderSlotRegistry(engine: engine)
         shaderSlots.scale = displayScale
+        shaderSlots.textures.window = self
         guard let canvas = shaderSlots.renderNodes.makeWindowCanvas(width: width, height: height) else { return }
         windowCanvas = canvas
         host.renderer = canvas.renderer
@@ -434,6 +503,14 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         // that nothing ever drains, which is a window that stays black.
         MainActor.assumeIsolated {
             pumpMainRunLoop()
+            renderFrame(dt)
+        }
+        #elseif os(WASI)
+        // The page's requestAnimationFrame, on its one thread. There is no
+        // run loop to pump: work queued on the main queue is given turns of
+        // its own by the page (Dispatch's MainQueue), so the frame just
+        // draws.
+        MainActor.assumeIsolated {
             renderFrame(dt)
         }
         #else
@@ -512,6 +589,10 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
             // The same re-read, from the backend's own scale: a window dragged
             // to a display with a different scale factor gets told through a
             // resize and nothing else.
+            displayScale = platformWindow?.scale ?? 1
+            #elseif os(WASI)
+            // devicePixelRatio, which changes with the browser's zoom and
+            // when the window moves to another display.
             displayScale = platformWindow?.scale ?? 1
             #endif
             let pixelWidth = Int(w * displayScale)
@@ -677,4 +758,11 @@ extension HostingWindow: WindowTouchDelegate {}
 // the union of the two Apple protocols above. Its default implementations
 // (Platform_Linux) forward to the same `on_*` methods.
 extension HostingWindow: WaylandWindowDelegate {}
+#endif
+
+#if os(WASI)
+// A page reports mouse, keyboard and touch at once, as pointer events, so
+// like Wayland's this is the union of the Apple protocols; its default
+// implementations (Platform_Wasm) forward to the same `on_*` methods.
+extension HostingWindow: BrowserWindowDelegate {}
 #endif

@@ -281,7 +281,6 @@ final class Library {
 
     private static let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "LLLL yyyy"
         return formatter
@@ -289,7 +288,6 @@ final class Library {
 
     private static let weekdayFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "EEEE"
         return formatter
@@ -297,7 +295,6 @@ final class Library {
 
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "d MMM yyyy"
         return formatter
@@ -305,7 +302,6 @@ final class Library {
 
     static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "d MMMM yyyy 'at' HH:mm"
         return formatter
@@ -398,7 +394,8 @@ struct SeededRandom {
     }
 
     mutating func nextDouble() -> Double {
-        Double(next() >> 11) / Double(1 << 53)
+        // UInt64, not Int: in the browser Int is 32 bits, where `1 << 53` is 0.
+        Double(next() >> 11) / Double(UInt64(1) << 53)
     }
 
     mutating func nextDouble(in range: ClosedRange<Double>) -> Double {

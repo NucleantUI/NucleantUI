@@ -43,11 +43,19 @@ public protocol TextureSource: AnyObject {
     /// accepts no more writes.
     func textureDidDisappear(_ texture: ViewTexture)
 
+    /// The view moved in its window, or what clips it changed, while its
+    /// size and scale stayed the same — `texture.frame` and
+    /// `texture.visibleFrame` say where it is now. (A move together with a
+    /// resize is a `textureDidChange`.) Ignored by default: a source that
+    /// only fills the texture has no use for where it is shown.
+    func textureDidMove(_ texture: ViewTexture)
+
     /// Input over the view — see `TextureInputEvent`. Ignored by default.
     func textureInput(_ event: TextureInputEvent)
 }
 
 extension TextureSource {
+    public func textureDidMove(_ texture: ViewTexture) {}
     public func textureInput(_ event: TextureInputEvent) {}
 }
 
@@ -90,6 +98,20 @@ public final class ViewTexture {
     /// Backing-store pixels per point.
     public internal(set) var scale: Double
 
+    /// Where the view is in its window: points from the window's top-left.
+    public internal(set) var origin: Point
+
+    /// The view's frame in its window, in points.
+    public var frame: Rect { Rect(origin: origin, size: size) }
+
+    /// The part of `frame` that shows — `frame` cut to whatever clips the
+    /// view (a scroll view, `.clipped()`), in the same space. Zero-sized
+    /// when none of it does.
+    public internal(set) var visibleFrame: Rect
+
+    /// The window the view is in — `nil` for a tree laid out without one.
+    weak var window: HostingWindow?
+
     /// The size to render frames at: the frame in pixels, rounded up.
     public var pixelWidth: Int { max(1, Int((size.width * scale).rounded(.up))) }
     public var pixelHeight: Int { max(1, Int((size.height * scale).rounded(.up))) }
@@ -105,13 +127,16 @@ public final class ViewTexture {
         node: ExternalTextureNode<NucleantRenderNode>,
         container: NucleantRenderNode,
         engine: NucleantRenderEngine,
-        size: Size,
+        frame: Rect,
+        visibleFrame: Rect,
         scale: Double
     ) {
         self.node = node
         self.container = container
         self.engine = engine
-        self.size = size
+        self.size = frame.size
+        self.origin = frame.origin
+        self.visibleFrame = visibleFrame
         self.scale = scale
     }
 

@@ -8,6 +8,7 @@
 //  arrow keys do to it.
 //
 
+import Dispatch
 import Foundation
 
 /// The selection a list or a table edits.

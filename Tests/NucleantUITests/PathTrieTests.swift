@@ -41,8 +41,11 @@ struct PathTrieTests {
             let parent = Trie.Node()
             var model: [Int: Trie.Node] = [:]
             // Small key ranges for collisions; hash-sized keys as a `List`
-            // or `OutlineGroup` path component would be.
-            let keyRange = round % 2 == 0 ? Array(0..<48) : (0..<48).map { $0 &* 0x1E37_79B9_7F4A_7C15 &- 0x3000_0000_0000_0000 }
+            // or `OutlineGroup` path component would be (a word wide: the
+            // constants are narrowed where `Int` is 32 bits).
+            let spread = Int(truncatingIfNeeded: 0x1E37_79B9_7F4A_7C15 as UInt64)
+            let offset = Int(truncatingIfNeeded: 0x3000_0000_0000_0000 as UInt64)
+            let keyRange = round % 2 == 0 ? Array(0..<48) : (0..<48).map { $0 &* spread &- offset }
             for _ in 0..<400 {
                 let key = keyRange.randomElement(using: &generator)!
                 switch Int.random(in: 0..<10, using: &generator) {

@@ -92,7 +92,7 @@ final class FileNode: Identifiable {
     var kind: FileKind
     var modified: String
     /// Bytes; `nil` for a folder, which Finder shows as "--".
-    var size: Int?
+    var size: Int64?
     /// `nil` for a file. An empty folder is `[]` and still discloses.
     private(set) var children: [FileNode]?
     /// Whether this folder is open in the list.
@@ -111,7 +111,7 @@ final class FileNode: Identifiable {
         name: String,
         kind: FileKind,
         modified: String,
-        size: Int? = nil,
+        size: Int64? = nil,
         children: [FileNode]? = nil,
         isLocked: Bool = false
     ) {
@@ -190,7 +190,7 @@ func folder(_ name: String, _ modified: String, locked: Bool = false, _ children
 }
 
 @MainActor
-func file(_ name: String, _ kind: FileKind, _ size: Int, _ modified: String) -> FileNode {
+func file(_ name: String, _ kind: FileKind, _ size: Int64, _ modified: String) -> FileNode {
     FileNode(name: name, kind: kind, modified: modified, size: size)
 }
 
@@ -219,7 +219,7 @@ final class FileSystem {
     let shared: FileNode
 
     /// Free space, shown in the status bar; the download eats into it.
-    var available = 341_060_000_000
+    var available: Int64 = 341_060_000_000
 
     init() {
         applications = folder("Applications", "Today at 7:03 AM", locked: true, [
@@ -339,7 +339,7 @@ final class FileSystem {
         node.removeFromParent()
     }
 
-    private func totalSize(_ node: FileNode) -> Int {
+    private func totalSize(_ node: FileNode) -> Int64 {
         (node.size ?? 0) + (node.children ?? []).reduce(0) { $0 + totalSize($1) }
     }
 
@@ -348,7 +348,7 @@ final class FileSystem {
     /// A file that fills in over a minute — written from a timer, not a
     /// view, to show that any change to a node reaches the rows showing it.
     @ObservationIgnored private var download: FileNode?
-    private let downloadTotal = 3_120_000_000
+    private let downloadTotal: Int64 = 3_120_000_000
 
     func startDownload() {
         guard download == nil else { return }
@@ -362,7 +362,7 @@ final class FileSystem {
     private func stepDownload() {
         guard let node = download, let progress = node.progress else { return }
         let next = min(1, progress + 0.25 / 60)
-        let step = Int(Double(downloadTotal) * (next - progress))
+        let step = Int64(Double(downloadTotal) * (next - progress))
         node.progress = next < 1 ? next : nil
         node.size = (node.size ?? 0) + step
         available -= step
@@ -373,32 +373,36 @@ final class FileSystem {
     }
 }
 
-/// One main-run-loop timer, the way Pomodoro ticks.
+/// One repeating tick on the main actor: a task that sleeps between ticks.
+/// Plain Swift concurrency, so it runs the same everywhere — the browser
+/// included, whose Foundation has no run loop to schedule a `Timer` on.
 @MainActor
 final class Ticker {
     static let shared = Ticker()
-    private var timer: Timer?
+    private var task: Task<Void, Never>?
     private var onTick: @MainActor () -> Void = {}
 
     func start(every interval: TimeInterval, _ tick: @escaping @MainActor () -> Void) {
         onTick = tick
-        guard timer == nil else { return }
-        let timer = Timer(timeInterval: interval, repeats: true) { _ in
-            // The main run loop fires this on the main thread.
-            MainActor.assumeIsolated { Ticker.shared.onTick() }
+        guard task == nil else { return }
+        task = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                // A tick may stop the ticker, and so may anyone during the sleep.
+                guard !Task.isCancelled else { return }
+                Ticker.shared.onTick()
+            }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        task?.cancel()
+        task = nil
     }
 }
 
 /// Finder's size column: decimal units, "--" for a folder.
-func formattedSize(_ bytes: Int?) -> String {
+func formattedSize(_ bytes: Int64?) -> String {
     guard let bytes else { return "--" }
     if bytes < 1_000 { return "\(bytes) bytes" }
     if bytes < 1_000_000 { return "\((bytes + 500) / 1_000) KB" }

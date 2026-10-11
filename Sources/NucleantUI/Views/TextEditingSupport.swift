@@ -7,6 +7,7 @@
 //  begin and end.
 //
 
+import Dispatch
 import Foundation
 #if os(macOS)
 import AppKit

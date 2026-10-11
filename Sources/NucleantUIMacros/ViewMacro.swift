@@ -37,23 +37,27 @@ public struct ViewIDMacro: ExpressionMacro {
 }
 
 /// `ViewID(hash: <literal>)` for a source location the compiler reported.
+///
+/// The macro runs on the build machine and cannot know the target's `Int`
+/// width, so the 64-bit literal is narrowed in the expansion: unchanged
+/// where `Int` is 64 bits, its low 32 bits on a 32-bit target (wasm32).
 func viewIDLiteral(_ location: AbstractSourceLocation) -> ExprSyntax {
     let file = location.file.as(StringLiteralExprSyntax.self)?.representedLiteralValue
         ?? location.file.trimmedDescription
     let line = location.line.trimmedDescription
     let column = location.column.trimmedDescription
-    return "ViewID(hash: \(raw: sourceHash("\(file):\(line):\(column)")))"
+    return "ViewID(hash: Int(truncatingIfNeeded: \(raw: sourceHash("\(file):\(line):\(column)")) as Int64))"
 }
 
 /// FNV-1a, 64 bit: fixed, not seeded, so a call site hashes the same in
-/// every build and every run. Rendered as a signed literal that fits `Int`.
-func sourceHash(_ text: String) -> Int {
+/// every build and every run. Rendered as a signed 64-bit literal.
+func sourceHash(_ text: String) -> Int64 {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     for byte in text.utf8 {
         hash ^= UInt64(byte)
         hash &*= 0x0000_0100_0000_01b3
     }
-    return Int(bitPattern: UInt(hash))
+    return Int64(bitPattern: hash)
 }
 
 /// `@View` — turns a struct into an identified, comparable view.
