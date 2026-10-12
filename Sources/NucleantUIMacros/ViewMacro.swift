@@ -115,8 +115,13 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
         let attributes: AttributeListSyntax
         var added: [AttributeSyntax] = []
         if let variable = member.as(VariableDeclSyntax.self) {
-            // Stored properties can't carry an actor; computed ones must.
-            guard variable.bindings.contains(where: { $0.accessorBlock != nil }) else { return [] }
+            // Stored properties can't carry an actor; computed ones must —
+            // and so must an `@State` property, which its macro turns into
+            // one reading main-actor storage.
+            let isState = variable.attributes.contains { attribute in
+                attribute.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "State"
+            }
+            guard isState || variable.bindings.contains(where: { $0.accessorBlock != nil }) else { return [] }
             modifiers = variable.modifiers
             attributes = variable.attributes
             // `body` gets the builder spelled out. The compiler infers
@@ -267,9 +272,13 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
     ///
     /// Follows the memberwise rules where the syntax allows: a `let` with a
     /// value is fixed, a `var` with a value becomes a defaulted parameter, a
-    /// `@State` takes its wrapped value, a `@Binding` takes the binding. A
-    /// property whose type is only inferred from its initializer is left at
-    /// that value rather than guessed at — the macro sees syntax, not types.
+    /// `@State` takes its value, a `@Binding` takes the binding. A `@State`
+    /// with an initial value — or an optional one, which starts at `nil` —
+    /// takes it as an autoclosure defaulting to that value, so neither the
+    /// default nor a value passed in is evaluated unless the state is being
+    /// created. A property whose type is only inferred from its initializer
+    /// is left at that value rather than guessed at — the macro sees syntax,
+    /// not types.
     /// For the same reason a parameter whose *type* is less visible than
     /// the struct is not caught here: the compiler reports it on the
     /// generated init, and the author writes the init by hand.
@@ -285,9 +294,13 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
             let escaping = property.isFunctionTyped && !property.isOptional ? "@escaping " : ""
             switch property.wrapper {
             case "State":
-                let defaultValue = property.initializer.map { " = \($0)" } ?? ""
-                parameters.append("\(property.name): \(escaping)\(type)\(defaultValue)")
-                assignments.append("self._\(property.name) = State(wrappedValue: \(property.name))")
+                if let initial = property.initializer ?? (property.isOptional ? "nil" : nil) {
+                    parameters.append("\(property.name): @autoclosure @escaping @MainActor () -> \(type) = \(initial)")
+                    assignments.append("self._\(property.name) = State._makeStorage(\(property.name))")
+                } else {
+                    parameters.append("\(property.name): \(escaping)\(type)")
+                    assignments.append("self._\(property.name) = State(initialValue: \(property.name))")
+                }
             case "Binding":
                 parameters.append("\(property.name): Binding<\(type)>")
                 assignments.append("self._\(property.name) = \(property.name)")
@@ -511,5 +524,7 @@ struct NucleantUIPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         ViewMacro.self,
         ViewIDMacro.self,
+        StateMacro.self,
+        StateProjectedValueMacro.self,
     ]
 }

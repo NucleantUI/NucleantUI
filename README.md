@@ -141,6 +141,10 @@ struct Mixer {
 ```
 
 * `@State` lives across rebuilds, keyed by the view's position in the tree.
+  It is a macro, as in SwiftUI from Xcode 27: its initial value is made once,
+  when the state is created, not each time the view's struct is — so
+  `@State private var model = Model()` in a view whose parent rebuilds
+  every frame still runs `Model()` once.
 * `$tracks[index].level` is a `Binding`; `Binding` supports key-path
   projection (`$model.name`) and `.constant(_:)`.
 * A write invalidates the view that owns the state **and every view that

@@ -196,6 +196,15 @@ let package = Package(
             dependencies: ["NucleantUI", .product(name: "NucleantSkia", package: "NucleantSkia")],
             swiftSettings: skiaModeSettings
         ),
+        // What `@State` expands to, and what it refuses, checked on the
+        // syntax — no framework involved.
+        .testTarget(
+            name: "NucleantUIMacrosTests",
+            dependencies: [
+                "NucleantUIMacros",
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+            ]
+        ),
         .executableTarget(
             name: "ExperimentalUITests",
             dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]

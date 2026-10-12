@@ -228,6 +228,7 @@ struct PomodoroView {
             HStack(spacing: 28) {
                 timerPanel
                 clockPanel
+                PlanPanel(tint: session.phase.color)
             }
         }
         .padding(horizontal: 28, vertical: 18)
@@ -327,7 +328,7 @@ struct PomodoroApp: NucleantApp {
         WindowGroup("Pomodoro") {
             PomodoroView()
         }
-        .defaultSize(width: 760, height: 520)
+        .defaultSize(width: 1060, height: 520)
         .commands { AppearanceCommands() }
     }
 }
