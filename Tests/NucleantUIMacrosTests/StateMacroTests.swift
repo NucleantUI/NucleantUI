@@ -36,7 +36,7 @@ final class StateMacroTests: XCTestCase {
                     }
                 }
 
-                private var _model = State._makeStorage({
+                private var _model = _StateProperty({
                         Model()
                     })
 
@@ -69,7 +69,7 @@ final class StateMacroTests: XCTestCase {
                     }
                 }
 
-                private var _count = State<Int>._makeStorage({
+                private var _count = _StateProperty<Int>({
                         0
                     })
 
@@ -94,7 +94,7 @@ final class StateMacroTests: XCTestCase {
                 var label: String {
                     @storageRestrictions(initializes: _label)
                     init(initialValue) {
-                        _label = State(initialValue: initialValue)
+                        _label = _StateProperty(initialValue: initialValue)
                     }
                     get {
                         _label.wrappedValue
@@ -104,7 +104,7 @@ final class StateMacroTests: XCTestCase {
                     }
                 }
 
-                private var _label: State<String>
+                private var _label: _StateProperty<String>
 
                 @MainActor var $label: Binding<String> {
                     _label.projectedValue
@@ -133,7 +133,7 @@ final class StateMacroTests: XCTestCase {
                     }
                 }
 
-                private var _picked = State<String?>._makeStorage({
+                private var _picked = _StateProperty<String?>({
                         nil
                     })
 
@@ -181,7 +181,7 @@ final class StateMacroTests: XCTestCase {
                     }
                 }
 
-                private var _count = State._makeStorage({
+                private var _count = _StateProperty({
                         0
                     })
 

@@ -88,7 +88,7 @@ private struct Parent {
 }
 
 /// `self.value = start` in an initializer, for a property with an initial
-/// value and for one without; `_other = State(initialValue:)` the old way.
+/// value and for one without.
 @View
 private struct Assigned {
     let start: Int
@@ -101,7 +101,7 @@ private struct Assigned {
         self.start = start
         self.log = log
         self.label = "start \(start)"
-        self._other = State(initialValue: start * 10)
+        self.other = start * 10
         self.value = start
         self._viewID = _viewID
     }

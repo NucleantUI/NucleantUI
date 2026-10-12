@@ -23,7 +23,7 @@
 ///
 /// `@State` is a macro. `@State var count = 0` becomes:
 ///
-/// * `private var _count = State<Int>._makeStorage({ 0 })` — the storage,
+/// * `private var _count = _StateProperty<Int>({ 0 })` — the storage,
 ///   holding the initial value as a closure;
 /// * `get`/`nonmutating set` on `count` that go through `_count`, with any
 ///   `willSet`/`didSet` folded into the setter;
@@ -33,8 +33,7 @@
 /// `init` accessor, so an initializer can assign it: `self.count = start`.
 /// For one *with* an initial value, `self.count = start` in an initializer
 /// replaces that value — the first time; like the initial value itself, it
-/// only counts when the state is created. `_count = State(initialValue:)`
-/// does the same.
+/// only counts when the state is created.
 @attached(accessor, names: named(init), named(get), named(set))
 @attached(peer, names: prefixed(_), prefixed(`$`))
 public macro State() = #externalMacro(module: "NucleantUIMacros", type: "StateMacro")
@@ -46,12 +45,14 @@ public macro State() = #externalMacro(module: "NucleantUIMacros", type: "StateMa
 @attached(accessor, names: named(get))
 public macro _StateProjectedValue() = #externalMacro(module: "NucleantUIMacros", type: "StateProjectedValueMacro")
 
-/// The storage behind an `@State` property.
+/// The storage behind an `@State` property — what the macro generates `_name`
+/// as. Public only because that code is compiled in the module declaring the
+/// view; written by hand, state is `@State`.
 ///
 /// Not isolated itself, so a stored property's default value — written in a
 /// nonisolated context — can make one; reading and writing it is main-actor
 /// work, and the members that do are.
-public struct State<Value> {
+public struct _StateProperty<Value> {
 
     /// The one reference every copy of the storage shares. Binding fills in
     /// `storage`; `wrappedValue` reads through it.
@@ -72,22 +73,16 @@ public struct State<Value> {
     private let holder = Holder()
     private let initial: Initial
 
+    /// Storage whose initial value is made when the state is first created,
+    /// not now — for a property declared with one.
+    public init(_ makeInitialValue: @escaping @MainActor () -> Value) {
+        self.initial = .make(makeInitialValue)
+    }
+
+    /// Storage for a value the caller already has — a property declared
+    /// without one, assigned in an initializer.
     public init(initialValue: Value) {
         self.initial = .value(initialValue)
-    }
-
-    public init(wrappedValue: Value) {
-        self.init(initialValue: wrappedValue)
-    }
-
-    private init(initial: Initial) {
-        self.initial = initial
-    }
-
-    /// Storage whose initial value is made when the state is first created,
-    /// not now. What `@State` and `@View`'s initializer use.
-    public static func _makeStorage(_ makeInitialValue: @escaping @MainActor () -> Value) -> State<Value> {
-        State(initial: .make(makeInitialValue))
     }
 
     @MainActor
@@ -135,7 +130,7 @@ public struct State<Value> {
     }
 }
 
-extension State: DynamicProperty {
+extension _StateProperty: DynamicProperty {
     public func _bind(to context: BindingContext) {
         let holder = self.holder
         let initial = self.initial
@@ -150,11 +145,5 @@ extension State: DynamicProperty {
                 return make()
             }
         }
-    }
-}
-
-extension State where Value: ExpressibleByNilLiteral {
-    public init() {
-        self.init(initialValue: nil)
     }
 }

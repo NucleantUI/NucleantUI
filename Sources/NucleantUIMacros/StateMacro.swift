@@ -14,9 +14,9 @@ import SwiftSyntaxMacros
 /// `@State` — a property whose value lives in the state store, with its
 /// initial value made once, when that state is created.
 ///
-/// * **peer**: `_name`, the `State` storage — given the initial value as a
-///   closure, so constructing the view never evaluates it — and `$name`, the
-///   binding, as visible as the property.
+/// * **peer**: `_name`, the `_StateProperty` storage — given the initial
+///   value as a closure, so constructing the view never evaluates it — and
+///   `$name`, the binding, as visible as the property.
 /// * **accessor**: `get`/`nonmutating set` through `_name`, with the
 ///   property's own `willSet`/`didSet` run inside the setter; and, when
 ///   there is no initial value, an `init` accessor so an initializer can
@@ -39,8 +39,8 @@ public struct StateMacro: AccessorMacro, PeerMacro {
 
         var peers: [DeclSyntax] = []
         if let initial = property.initialValue {
-            let storage = property.type.map { "State<\($0)>" } ?? "State"
-            peers.append("private var _\(raw: name) = \(raw: storage)._makeStorage({ \(raw: initial) })")
+            let storage = property.type.map { "_StateProperty<\($0)>" } ?? "_StateProperty"
+            peers.append("private var _\(raw: name) = \(raw: storage)({ \(raw: initial) })")
             if let type = property.type {
                 peers.append(projection(access: access, name: name, type: type))
             } else {
@@ -48,11 +48,11 @@ public struct StateMacro: AccessorMacro, PeerMacro {
                 // one, and `@_StateProjectedValue` replaces it with a getter,
                 // so it is only ever type-checked.
                 peers.append("""
-                    @MainActor @_StateProjectedValue \(raw: access)var $\(raw: name) = State._makeStorage({ \(raw: initial) }).projectedValue
+                    @MainActor @_StateProjectedValue \(raw: access)var $\(raw: name) = _StateProperty({ \(raw: initial) }).projectedValue
                     """)
             }
         } else if let type = property.type {
-            peers.append("private var _\(raw: name): State<\(raw: type)>")
+            peers.append("private var _\(raw: name): _StateProperty<\(raw: type)>")
             peers.append(projection(access: access, name: name, type: type))
         }
         return peers
@@ -82,7 +82,7 @@ public struct StateMacro: AccessorMacro, PeerMacro {
             accessors.append("""
                 @storageRestrictions(initializes: \(raw: storage))
                 init(initialValue) {
-                    \(raw: storage) = State(initialValue: initialValue)
+                    \(raw: storage) = _StateProperty(initialValue: initialValue)
                 }
                 """)
         }

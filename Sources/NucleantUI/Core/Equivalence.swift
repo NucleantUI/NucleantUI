@@ -112,10 +112,10 @@ private func equatableComparator<T: Equatable>(_: T) -> @MainActor (Any, Any) ->
 
 // MARK: - Property wrappers
 
-extension State: ViewInput {
+extension _StateProperty: ViewInput {
     /// Owned, not received: the value lives in the store and a write to it
     /// dirties this view directly. As an *input* it never changes.
-    public func _isEquivalent(to other: State<Value>) -> Bool { true }
+    public func _isEquivalent(to other: _StateProperty<Value>) -> Bool { true }
 }
 
 extension Environment: ViewInput {

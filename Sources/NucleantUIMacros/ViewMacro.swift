@@ -296,10 +296,10 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
             case "State":
                 if let initial = property.initializer ?? (property.isOptional ? "nil" : nil) {
                     parameters.append("\(property.name): @autoclosure @escaping @MainActor () -> \(type) = \(initial)")
-                    assignments.append("self._\(property.name) = State._makeStorage(\(property.name))")
+                    assignments.append("self._\(property.name) = _StateProperty(\(property.name))")
                 } else {
                     parameters.append("\(property.name): \(escaping)\(type)")
-                    assignments.append("self._\(property.name) = State(initialValue: \(property.name))")
+                    assignments.append("self._\(property.name) = _StateProperty(initialValue: \(property.name))")
                 }
             case "Binding":
                 parameters.append("\(property.name): Binding<\(type)>")
