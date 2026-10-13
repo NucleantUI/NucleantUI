@@ -14,6 +14,7 @@
 
 import Foundation
 import NucleantUI
+import Observation
 
 /// Every layer is this size, in points, at one pixel per point. A texture is
 /// the size it was made at and is never resized, which is why this is one

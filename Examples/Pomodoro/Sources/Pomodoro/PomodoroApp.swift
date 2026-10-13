@@ -3,9 +3,10 @@
 //  Pomodoro
 //
 //  A focus timer with an analog clock. The one thing this app needs that
-//  no pointer event provides is a tick: a Foundation `Timer` on the main
-//  run loop writes `@State` once a second, and the framework rebuilds
-//  what read it on the next frame, the same as it would after a click.
+//  no pointer event provides is a tick: a main-actor task that sleeps a
+//  second at a time writes `@State` once a second, and the framework
+//  rebuilds what read it on the next frame, the same as it would after a
+//  click.
 //
 //  The clock face and the progress ring are `PathShape`s; the hands are
 //  lines from the centre, so no rotation anchor arithmetic is needed.
@@ -16,24 +17,28 @@ import NucleantUI
 
 // MARK: - Ticking
 
-/// One process-wide one-second timer. Started once from `onAppear`; the
+/// One process-wide one-second tick. Started once from `onAppear`; the
 /// callback is replaced rather than added to, so a rebuilt view that calls
 /// `start` again simply updates what a tick does.
+///
+/// A task rather than a Foundation `Timer`: a timer needs a run loop to
+/// fire it, and in the browser the page owns the event loop. `Task.sleep`
+/// resumes on the main actor on every platform.
 @MainActor
 final class Ticker {
     static let shared = Ticker()
-    private var timer: Timer?
+    private var task: Task<Void, Never>?
     private var onTick: @MainActor () -> Void = {}
 
     func start(_ tick: @escaping @MainActor () -> Void) {
         onTick = tick
-        guard timer == nil else { return }
-        let timer = Timer(timeInterval: 1, repeats: true) { _ in
-            // The main run loop fires this on the main thread.
-            MainActor.assumeIsolated { Ticker.shared.onTick() }
+        guard task == nil else { return }
+        task = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                Ticker.shared.onTick()
+            }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
     }
 }
 
@@ -197,6 +202,15 @@ struct ClockFace {
     }
 }
 
+@Preview("Clock face")
+@MainActor
+func clockFacePreview() -> some View {
+    ClockFace(now: Date())
+        .frame(width: 240, height: 240)
+        .padding(24)
+        .background(Theme.panel)
+}
+
 @View
 struct ProgressRing {
     let progress: Double
@@ -213,6 +227,19 @@ struct ProgressRing {
             .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
         }
     }
+}
+
+@Preview("Progress ring")
+@MainActor
+func progressRingPreview() -> some View {
+    HStack(spacing: 24) {
+        ProgressRing(progress: 0.25, color: Phase.focus.color)
+        ProgressRing(progress: 0.5, color: Phase.shortBreak.color)
+        ProgressRing(progress: 0.9, color: Phase.longBreak.color)
+    }
+    .frame(width: 600, height: 180)
+    .padding(24)
+    .background(Theme.panel)
 }
 
 // MARK: - Screen
@@ -320,6 +347,12 @@ struct PomodoroView {
         f.dateFormat = "EEEE, d MMMM"
         return f.string(from: now)
     }
+}
+
+@Preview("Pomodoro")
+@MainActor
+func pomodoroPreview() -> some View {
+    PomodoroView()
 }
 
 @main
