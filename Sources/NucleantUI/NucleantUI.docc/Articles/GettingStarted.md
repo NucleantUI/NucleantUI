@@ -25,8 +25,8 @@ let package = Package(
 )
 ```
 
-The packages NucleantUI is built on — NucleantVulkan, NucleantThorVG,
-NucleantApplication and PyShader — come along with it.
+The packages NucleantUI is built on — NucleantVulkan, NucleantSkia,
+NucleantThorVG, NucleantApplication and PyShader — come along with it.
 
 ## Write an app
 
@@ -51,7 +51,7 @@ struct Greeting {
     var body: some View {
         VStack(spacing: 12) {
             Text("Hello, NucleantUI").font(.title)
-            Text("Drawn by ThorVG, on Vulkan.")
+            Text("Drawn by Skia, on Vulkan.")
                 .foregroundColor(.secondary)
         }
     }

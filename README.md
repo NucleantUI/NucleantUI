@@ -1,8 +1,10 @@
 # NucleantUI
 
-SwiftUI-shaped declarative views, drawn by [ThorVG](https://github.com/NucleantUI/NucleantThorVG)
+SwiftUI-shaped declarative views, drawn by [Skia](https://github.com/NucleantUI/NucleantSkia)
 on [Vulkan](https://github.com/NucleantUI/NucleantVulkan) and hosted by
 [NucleantApplication](https://github.com/NucleantUI/NucleantApplication).
+[ThorVG](https://github.com/NucleantUI/NucleantThorVG) is there for
+`ThorCanvas`, a view you draw into with ThorVG paints of your own.
 Pure Swift, no AppKit/UIKit view hierarchy, runs the same code on macOS and
 iOS. If you know SwiftUI, you already know most of the surface.
 
@@ -580,9 +582,9 @@ one place — a panel whose body reads a value for one label — repaints
 that place, not the panel. Whatever a view draws *after* a
 nested node and over it — a `ZStack` stroke over a hot meter — is put in
 an image ordered after that node, so paint order holds. Popovers, context
-menus and the drag preview are a node over everything. Nodes share one
-ThorVG canvas: an image costs microseconds, and one change is one small
-ThorVG pass however big the window.
+menus and the drag preview are a node over everything. Nodes are painted
+through one shared Skia canvas: an image costs microseconds, and one change
+is one small Skia pass however big the window.
 
 `.drawingGroup()` still exists for the explicit case — a subtree that
 should be one image whether or not anything in it reads state:
@@ -593,11 +595,11 @@ VStack { ForEach(tracks) { TrackRow($0) } }
     .drawingGroup()       // one image for the list, repainted only when its list changes
 ```
 
-A group owns a ThorVG canvas of its own (~60ms the first time one appears;
-pooled after that), so it is for a few large subtrees, not for every row.
+A group owns a Skia canvas of its own (pooled once released), so it is
+for a few large subtrees, not for every row.
 
-`ThorCanvas` is a node the author draws into directly, with ThorVG paints
-that persist between frames:
+`ThorCanvas` is the one view drawn by ThorVG rather than Skia: a node the
+author draws into directly, with ThorVG paints that persist between frames:
 
 ```swift
 ThorCanvas(

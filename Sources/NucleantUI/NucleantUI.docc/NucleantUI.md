@@ -1,6 +1,6 @@
 # ``NucleantUI``
 
-SwiftUI-shaped declarative views, drawn by ThorVG on Vulkan.
+SwiftUI-shaped declarative views, drawn by Skia on Vulkan.
 
 @Metadata {
     @DisplayName("NucleantUI")
@@ -14,9 +14,11 @@ already know most of it: views are structs with a `body`, state lives in
 stacks, frames and padding.
 
 Underneath it is a different machine. There is no AppKit or UIKit view
-hierarchy: every view is drawn by [ThorVG](https://github.com/NucleantUI/NucleantThorVG)
+hierarchy: every view is drawn by [Skia](https://github.com/NucleantUI/NucleantSkia)
 into Vulkan images, composited by [NucleantVulkan](https://github.com/NucleantUI/NucleantVulkan)
 and presented in a window from [NucleantApplication](https://github.com/NucleantUI/NucleantApplication).
+[ThorVG](https://github.com/NucleantUI/NucleantThorVG) draws `ThorCanvas`, the
+view you fill with ThorVG paints of your own.
 That is what lets a view be a GPU texture: any view can be handed to a
 shader as its input, and a ``Shader`` can sit in a layout like any other view.
 
