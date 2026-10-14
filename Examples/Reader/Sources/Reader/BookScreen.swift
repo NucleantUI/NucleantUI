@@ -95,6 +95,7 @@ struct BookScreen {
                             number: index + 1,
                             name: book.name(ofChapter: index),
                             minutes: book.chapters[index].minutes,
+                            secondsRead: library.secondsRead(book, chapter: index),
                             isOpen: library.status(of: book) == .reading(chapter: index),
                             isLast: index == book.chapters.count - 1
                         )
@@ -121,6 +122,8 @@ struct ChapterRow {
     let number: Int
     let name: String
     let minutes: Int
+    /// How long the chapter has been open on the reading screen.
+    let secondsRead: Int
     /// The chapter the book was left at.
     let isOpen: Bool
     let isLast: Bool
@@ -141,7 +144,7 @@ struct ChapterRow {
                     .font(.caption)
                     .foregroundColor(Theme.accent)
             }
-            Text("\(minutes) min")
+            Text(secondsRead > 0 ? "\(clockTime(secondsRead)) of \(minutes) min" : "\(minutes) min")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

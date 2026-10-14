@@ -9,6 +9,15 @@
 //  another — that is this screen's own state; where the book was left is
 //  the library's.
 //
+//  The screen keeps the library up to date as the reader goes: an
+//  `.onChange(of: chapter, initial: true)` records the place on opening and
+//  on every turn, and a `.task(id: chapter)` counts the seconds the chapter
+//  is open — restarted for each new chapter, so the seconds go to the one on
+//  screen, and cancelled when the screen is popped. A change of text size
+//  shows the size over the page until the buttons have been left alone for
+//  a moment: `.onChange` brings it up, and a `.task(id:)` on the size, which
+//  starts over with every press, takes it down.
+//
 
 import NucleantUI
 
@@ -22,6 +31,8 @@ struct ReadingScreen {
     @State private var turnedTo: Int? = nil
     /// The page alone: no bar above it, no controls below.
     @State private var isImmersive = false
+    /// The text size over the page, just after it changed.
+    @State private var isShowingTextSize = false
     @Environment(\.navigationRouter) private var router
 
     var chapter: Int { turnedTo ?? opened }
@@ -40,6 +51,18 @@ struct ReadingScreen {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .top) {
+                if isShowingTextSize {
+                    Text("\(Int(library.textSize)) pt")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.ink)
+                        .padding(horizontal: 14, vertical: 6)
+                        .background(Color.secondaryBackground)
+                        .cornerRadius(13)
+                        .padding(.top, 12)
+                        .transition(.opacity)
+                }
+            }
 
             if isImmersive {
                 Text("\(book.title) · \(chapter + 1) of \(book.chapters.count)")
@@ -54,7 +77,24 @@ struct ReadingScreen {
         .background(Theme.page)
         .navigationTitle(book.name(ofChapter: chapter))
         .toolbarVisibility(isImmersive ? .hidden : .visible, for: .navigationBar)
-        .onAppear { library.read(book, at: chapter) }
+        .onChange(of: chapter, initial: true) {
+            library.read(book, at: chapter)
+        }
+        .task(id: chapter) { [chapter] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                library.recordSecond(of: book, chapter: chapter)
+            }
+        }
+        .onChange(of: library.textSize) {
+            withAnimation(.easeOut) { isShowingTextSize = true }
+        }
+        .task(id: library.textSize) {
+            try? await Task.sleep(for: .seconds(1.2))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut) { isShowingTextSize = false }
+        }
     }
 
     /// Under the page: the previous and next chapter, the text size.
@@ -68,9 +108,12 @@ struct ReadingScreen {
                 Text("Chapter \(chapter + 1) of \(book.chapters.count)")
                     .font(.footnote)
                     .foregroundColor(.secondary)
-                Text("Tap the page to hide")
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.faint)
+                HStack(spacing: 4) {
+                    ReadingClock(library: library, book: book, chapter: chapter)
+                    Text("· tap the page to hide")
+                }
+                .font(.system(size: 10))
+                .foregroundColor(Theme.faint)
             }
             .frame(maxWidth: .infinity)
 
@@ -118,13 +161,25 @@ struct ReadingScreen {
 
     func turn(to index: Int) {
         turnedTo = index
-        library.read(book, at: index)
     }
 
     /// Done with the book: back to the library, where it shows as finished.
     func finish() {
         library.finish(book)
         router?.popToRoot()
+    }
+}
+
+/// How long the chapter has been open. Its own view, so the second the
+/// screen's task records each time rebuilds this text and nothing else.
+@View
+struct ReadingClock {
+    let library: Library
+    let book: Book
+    let chapter: Int
+
+    var body: some View {
+        Text("\(clockTime(library.secondsRead(book, chapter: chapter))) in this chapter")
     }
 }
 
