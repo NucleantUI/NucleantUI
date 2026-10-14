@@ -694,8 +694,17 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
             // when the window moves to another display.
             displayScale = platformWindow?.scale ?? 1
             #endif
+            #if os(WASI)
+            // The page sizes the drawing buffer, which the swapchain follows,
+            // from a CSS size that need not be whole pixels — 657.33 × 1.5 is
+            // 986 there but truncates to 985 here, and a window canvas a pixel
+            // off the swapchain's extent is never shown. So the page's numbers.
+            let pixelWidth = Int(platformWindow?.bufferWidth ?? UInt32(w * displayScale))
+            let pixelHeight = Int(platformWindow?.bufferHeight ?? UInt32(h * displayScale))
+            #else
             let pixelWidth = Int(w * displayScale)
             let pixelHeight = Int(h * displayScale)
+            #endif
             win_rect.z = pixelWidth
             win_rect.w = pixelHeight
 
@@ -863,5 +872,26 @@ extension HostingWindow: WaylandWindowDelegate {}
 // A page reports mouse, keyboard and touch at once, as pointer events, so
 // like Wayland's this is the union of the Apple protocols; its default
 // implementations (Platform_Wasm) forward to the same `on_*` methods.
-extension HostingWindow: BrowserWindowDelegate {}
+extension HostingWindow: BrowserWindowDelegate {
+    // Which of them the page has can't be known up front — a laptop with a
+    // touch screen has both — so the press decides: a finger scrolls what it
+    // drags and holds for a context menu, as on iOS; a mouse scrolls with
+    // its wheel and has a right button.
+
+    public func touchDown(id: Int, location: SIMD2<Double>) {
+        MainActor.assumeIsolated {
+            host.scrollsOnDrag = true
+            host.opensContextMenuOnLongPress = true
+        }
+        on_touch_down(id: id, x: location.x, y: location.y)
+    }
+
+    public func mouseDown(location: SIMD2<Double>) {
+        MainActor.assumeIsolated {
+            host.scrollsOnDrag = false
+            host.opensContextMenuOnLongPress = false
+        }
+        on_mouse_down(x: location.x, y: location.y)
+    }
+}
 #endif
