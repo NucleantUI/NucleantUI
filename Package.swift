@@ -164,10 +164,14 @@ let package = Package(
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             ]
         ),
+        // The bounds of the linker section `@Preview` records live in,
+        // which only C can name (Preview/PreviewRuntime.swift).
+        .target(name: "CNucleantPreview"),
         .target(
             name: "NucleantUI",
             dependencies: [
                 "NucleantUIMacros",
+                "CNucleantPreview",
                 .product(name: "NucleantVulkan", package: "NucleantVulkan"),
                 .product(name: "NucleantShader", package: "NucleantVulkan"),
                 .product(name: "PyShader", package: "PyShader"),
@@ -194,7 +198,9 @@ let package = Package(
         .testTarget(
             name: "NucleantUITests",
             dependencies: ["NucleantUI", .product(name: "NucleantSkia", package: "NucleantSkia")],
-            swiftSettings: skiaModeSettings
+            // NUCLEANT_PREVIEW: the tests' `@Preview` functions leave their
+            // records, as an app's do in a preview build (PreviewTests).
+            swiftSettings: skiaModeSettings + [.define("NUCLEANT_PREVIEW")]
         ),
         // What `@State` expands to, and what it refuses, checked on the
         // syntax — no framework involved.

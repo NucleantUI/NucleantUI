@@ -37,8 +37,8 @@
 - [x] DynamicProperty
 - [ ] @FocusState
 - [ ] @AppStorage / @SceneStorage
-- [ ] .onChange
-- [ ] .task
+- [x] .onChange
+- [x] .task
 
 ## Layout containers
 - [x] HStack

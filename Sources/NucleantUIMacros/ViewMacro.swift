@@ -526,5 +526,6 @@ struct NucleantUIPlugin: CompilerPlugin {
         ViewIDMacro.self,
         StateMacro.self,
         StateProjectedValueMacro.self,
+        PreviewMacro.self,
     ]
 }

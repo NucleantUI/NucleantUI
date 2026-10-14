@@ -3,9 +3,9 @@
 //  Reader
 //
 //  The library: books of chapters, where each one was left, which are
-//  finished, and the reading text size. `Library` is the `@Observable`
-//  model, changed only through its methods; a `Book` and its `Chapter`s
-//  are the records inside it. The screens are pushed by value, as a
+//  finished, how long each chapter has been read for, and the reading text
+//  size. `Library` is the `@Observable` model, changed only through its
+//  methods; a `Book` and its `Chapter`s are the records inside it. The screens are pushed by value, as a
 //  `BookRoute` or a `ReadingRoute`.
 //
 
@@ -52,6 +52,12 @@ struct Book: Identifiable, Equatable {
     var minutes: Int { chapters.reduce(0) { $0 + $1.minutes } }
 }
 
+/// "4:07" — minutes and seconds.
+func clockTime(_ seconds: Int) -> String {
+    let remainder = seconds % 60
+    return "\(seconds / 60):\(remainder < 10 ? "0" : "")\(remainder)"
+}
+
 /// How far into a book the reader is.
 enum ReadingStatus: Equatable {
     case new
@@ -80,6 +86,10 @@ final class Library {
     private(set) var finished: Set<Book.ID> = []
     /// The book read last, for Continue Reading.
     private(set) var lastRead: Book.ID?
+
+    /// Seconds each chapter has been open on the reading screen, by book and
+    /// chapter.
+    private(set) var secondsRead: [Book.ID: [Int: Int]] = [:]
 
     /// The reading text, in points.
     private(set) var textSize: Double = 19
@@ -119,6 +129,15 @@ final class Library {
         positions[book.id] = chapter
         finished.remove(book.id)
         lastRead = book.id
+    }
+
+    func secondsRead(_ book: Book, chapter: Int) -> Int {
+        secondsRead[book.id]?[chapter] ?? 0
+    }
+
+    /// Another second with `chapter` of `book` open.
+    func recordSecond(of book: Book, chapter: Int) {
+        secondsRead[book.id, default: [:]][chapter, default: 0] += 1
     }
 
     func finish(_ book: Book) {

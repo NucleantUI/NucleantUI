@@ -117,8 +117,8 @@ public struct BuildContext {
     }
 }
 
-/// Deferred work a build pass produced — `onAppear` and `onDisappear`
-/// bodies.
+/// Deferred work a build pass produced — `onAppear`, `onDisappear` and
+/// `onChange` bodies.
 @MainActor
 final class EffectQueue {
     /// Identities that have already run their `onAppear`, so it fires once per
@@ -129,6 +129,10 @@ final class EffectQueue {
     /// The `onDisappear` action of every view standing — the latest build's,
     /// so it runs with what that build captured.
     private var disappearing: [StateKey: () -> Void] = [:]
+
+    /// The value each `.onChange` standing last saw, to compare the next
+    /// build's against.
+    private var observed: [StateKey: OpaqueValue] = [:]
 
     /// Every `.onPreferenceChange` standing — checked after each pass that
     /// built, and forgotten with the views that attached them.
@@ -144,6 +148,25 @@ final class EffectQueue {
         disappearing[key] = action
     }
 
+    /// Queue `action` with the value last seen here and `value`, if they
+    /// differ — or with `value` twice, the first time, when `initial`. The
+    /// action is this build's, so it sees what this build captured.
+    func onChange<V: Equatable>(
+        _ key: StateKey,
+        of value: V,
+        initial: Bool,
+        _ action: @escaping (V, V) -> Void
+    ) {
+        guard let previous = observed[key]?.value(as: V.self) else {
+            observed[key] = OpaqueValue(value)
+            if initial { pending.append { action(value, value) } }
+            return
+        }
+        guard previous != value else { return }
+        observed[key] = OpaqueValue(value)
+        pending.append { action(previous, value) }
+    }
+
     /// Hand back the actions queued this pass.
     func endPass() -> [() -> Void] {
         defer { pending.removeAll(keepingCapacity: true) }
@@ -156,6 +179,9 @@ final class EffectQueue {
         preferenceObservers.forget(paths: paths)
         if !appeared.isEmpty {
             appeared = appeared.filter { !paths.contains($0.path) }
+        }
+        if !observed.isEmpty {
+            observed = observed.filter { !paths.contains($0.key.path) }
         }
         guard !disappearing.isEmpty else { return }
         for (key, action) in disappearing where paths.contains(key.path) {

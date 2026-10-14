@@ -14,6 +14,7 @@
 
 import Foundation
 import NucleantUI
+import Observation
 
 // MARK: - Model
 
@@ -66,7 +67,7 @@ final class FocusPlan {
         try? FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true
         )
-        try? data.write(to: file, options: .atomic)
+        try? data.write(to: file)
     }
 }
 
@@ -135,4 +136,12 @@ struct PlanPanel {
         plan.add(draft)
         draft = ""
     }
+}
+
+@Preview("Plan")
+@MainActor
+func planPanelPreview() -> some View {
+    PlanPanel(tint: .green)
+        .frame(width: 320, height: 420)
+        .background(Theme.panel)
 }

@@ -36,6 +36,15 @@ public protocol NucleantApp {
 }
 
 extension NucleantApp {
+    #if NUCLEANT_PREVIEW
+    /// What `@main` calls in a preview build: the app's `@Preview`
+    /// functions, one tab each, instead of its scenes (`PreviewRuntime`).
+    public static func main() {
+        let runtime = PreviewRuntime()
+        runtime.setup()
+        runtime.run()
+    }
+    #else
     /// What `@main` calls. Builds the platform application, presents the
     /// scene's windows on launch, and runs the event loop.
     public static func main() {
@@ -43,6 +52,7 @@ extension NucleantApp {
         runtime.setup()
         runtime.run()
     }
+    #endif
 }
 
 /// Knobs the runtime reads at launch. A namespace rather than statics on
