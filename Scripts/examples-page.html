@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{EXAMPLE}} — NucleantUI example</title>
+  <!-- Scripts/build_examples_wasm.py fills in {{EXAMPLE}}: the example's own
+       module is next to this page, the shared module and the page runtime
+       under ../shared/, the resource bundles under ../resources/. -->
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin: 0; height: 100%; background: light-dark(#e2e2e8, #16161a); color: light-dark(#222, #ddd); font: 14px/1.4 system-ui, sans-serif; }
+    #app { display: flex; flex-wrap: wrap; height: 100dvh; overflow: auto; }
+    .nucleant-window { margin: auto; }
+    .nucleant-window:not(.nucleant-window-fills), .nucleant-window-bounded { box-shadow: 0 6px 30px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.45)); }
+    .nucleant-window:focus-visible { outline: 2px solid #6aa0ff; outline-offset: -2px; }
+    #status { position: fixed; inset: auto 0 0 0; padding: 0 16px 16px; text-align: center; white-space: pre-wrap; }
+    #status:empty { display: none; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="status">Loading {{EXAMPLE}}…</div>
+  <script type="module">
+    import { runNucleantApp } from '../shared/nucleant-app.js';
+    const status = document.getElementById('status');
+    runNucleantApp({
+      wasm: '../shared/{{SHARED}}.wasm.gz',
+      app: './{{EXAMPLE}}.wasm.gz',
+      resources: './resources.json',
+      zoneinfo: '../shared/zoneinfo.bin',
+      container: document.getElementById('app'),
+    }).then(() => { status.textContent = ''; }, (error) => {
+      status.textContent = `Could not start {{EXAMPLE}}: ${error.message}`;
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

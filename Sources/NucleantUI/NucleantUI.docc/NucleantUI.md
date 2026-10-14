@@ -75,6 +75,10 @@ The same code runs on macOS and iOS today; Linux and Android are in progress.
 - <doc:GlassPanel>
 - <doc:TouchSparks>
 
+### Example apps
+
+- <doc:ExampleApps>
+
 ### Tutorials
 
 - <doc:tutorials/NucleantUI>
