@@ -16,11 +16,55 @@
     .nucleant-window:focus-visible { outline: 2px solid #6aa0ff; outline-offset: -2px; }
     #status { position: fixed; inset: auto 0 0 0; padding: 0 16px 16px; text-align: center; white-space: pre-wrap; }
     #status:empty { display: none; }
+    #log { position: fixed; inset: 0 0 auto 0; max-height: 45dvh; overflow: auto; margin: 0; padding: 8px; background: rgb(0 0 0 / 0.75); color: #cfc; font: 11px/1.35 ui-monospace, monospace; white-space: pre-wrap; z-index: 1; pointer-events: none; }
   </style>
 </head>
 <body>
   <div id="app"></div>
   <div id="status">Loading {{EXAMPLE}}…</div>
+  <script>
+    // ?log: the console on the page, for a browser without one at hand (a
+    // phone). Kept in localStorage as it goes, so after the page was killed
+    // and reloaded, the previous run's last lines are shown above this one's.
+    if (new URLSearchParams(location.search).has('log')) {
+      const key = 'nucleant-log-{{EXAMPLE}}';
+      const panel = Object.assign(document.createElement('pre'), { id: 'log' });
+      const lines = [];
+      let previous = [];
+      try { previous = JSON.parse(localStorage.getItem(key) ?? '[]'); } catch {}
+      const render = () => {
+        panel.textContent = (previous.length ? `— previous run —\n${previous.join('\n')}\n— this run —\n` : '') + lines.join('\n');
+        panel.scrollTop = panel.scrollHeight;
+      };
+      const text = (value) => value instanceof Error ? (value.stack || value.message)
+        : typeof value === 'object' && value !== null ? (() => { try { return JSON.stringify(value); } catch { return String(value); } })()
+        : String(value);
+      const log = (kind, values) => {
+        const time = (performance.now() / 1000).toFixed(1);
+        lines.push(`${time} ${kind} ${values.map(text).join(' ')}`.slice(0, 2000));
+        if (lines.length > 300) lines.splice(0, lines.length - 300);
+        try { localStorage.setItem(key, JSON.stringify(lines.slice(-80))); } catch {}
+        render();
+      };
+      for (const kind of ['log', 'info', 'warn', 'error', 'debug']) {
+        const original = console[kind];
+        console[kind] = (...values) => { log(kind, values); original.apply(console, values); };
+      }
+      addEventListener('error', (event) => log('onerror', [event.message, `${event.filename}:${event.lineno}`]));
+      addEventListener('unhandledrejection', (event) => log('rejection', [event.reason]));
+      addEventListener('pagehide', () => log('pagehide', []));
+      addEventListener('visibilitychange', () => log('visibility', [document.visibilityState]));
+      log('start', [navigator.userAgent, `jspi=${typeof WebAssembly.promising}`, `dpr=${devicePixelRatio}`]);
+      let frames = 0;
+      const count = () => { frames++; requestAnimationFrame(count); };
+      requestAnimationFrame(count);
+      setInterval(() => {
+        const canvas = document.querySelector('#app canvas');
+        log('beat', [`frames=${frames}`, canvas ? `${canvas.width}x${canvas.height}` : 'no canvas']);
+      }, 5000);
+      document.addEventListener('DOMContentLoaded', () => document.body.append(panel));
+    }
+  </script>
   <script type="module">
     import { runNucleantApp } from '../shared/nucleant-app.js';
     const status = document.getElementById('status');
