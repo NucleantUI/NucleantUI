@@ -111,9 +111,7 @@ func nucleantDependencies() -> [Package.Dependency] {
     let repos = [
         ("NucleantVulkan", "master"), ("NucleantThorVG", "master"),
         ("NucleantApplication", "master"), ("PyShader", "main"),
-        // The Skia display renderer's API is on NucleantSkia's `android`
-        // branch, not yet on its `master`.
-        ("NucleantSkia", "android"),
+        ("NucleantSkia", "master"),
     ]
     return repos.map { name, branch in
         localDev
