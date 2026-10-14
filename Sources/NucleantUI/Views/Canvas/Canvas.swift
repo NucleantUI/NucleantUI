@@ -102,6 +102,7 @@ struct CanvasContent: NodeContent {
             transform: context.transform,
             clip: context.clip,
             clipCornerRadius: context.clipCornerRadius,
+            transformedClips: context.transformedClips,
             generation: generation,
             drawing: CanvasDrawing { pointer in
                 var graphics = GraphicsContext(canvas: SkCanvas(base: pointer), size: size, colorScheme: scheme)

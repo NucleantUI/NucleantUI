@@ -60,7 +60,8 @@ struct TextContent: NodeContent {
             wraps: !fitsOneLine && !wrapsAsMeasured,
             transform: context.transform,
             clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius
+            clipCornerRadius: context.clipCornerRadius,
+            transformedClips: context.transformedClips
         )))
     }
 }
@@ -96,7 +97,8 @@ struct ShapeContent: NodeContent {
             strokeStyle: strokeStyle,
             transform: context.transform,
             clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius
+            clipCornerRadius: context.clipCornerRadius,
+            transformedClips: context.transformedClips
         )))
     }
 }

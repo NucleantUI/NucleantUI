@@ -98,6 +98,21 @@ public struct Path: Hashable, Sendable {
     }
 }
 
+/// A clip that turned with the view it cuts: `rect`, rounded by
+/// `cornerRadius`, under `transform` — `.clipped()` inside a
+/// `.rotationEffect`.
+public struct TransformedClip: Equatable, Sendable {
+    public var rect: Rect
+    public var cornerRadius: Double
+    public var transform: Transform
+
+    public init(rect: Rect, cornerRadius: Double = 0, transform: Transform) {
+        self.rect = rect
+        self.cornerRadius = cornerRadius
+        self.transform = transform
+    }
+}
+
 /// One paint operation. `bounds` is the shape's own rect — gradients resolve
 /// their `UnitPoint`s against it, so it travels with the command rather than
 /// being recomputed from the path.
@@ -110,6 +125,8 @@ public struct ShapeDraw: Equatable, Sendable {
     public var transform: Transform
     public var clip: Rect?
     public var clipCornerRadius: Double
+    /// Clips turned with the view they cut, on top of `clip`.
+    public var transformedClips: [TransformedClip]
 
     public init(
         path: Path,
@@ -119,7 +136,8 @@ public struct ShapeDraw: Equatable, Sendable {
         strokeStyle: StrokeStyle = StrokeStyle(),
         transform: Transform = .identity,
         clip: Rect? = nil,
-        clipCornerRadius: Double = 0
+        clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = []
     ) {
         self.path = path
         self.bounds = bounds
@@ -129,6 +147,7 @@ public struct ShapeDraw: Equatable, Sendable {
         self.transform = transform
         self.clip = clip
         self.clipCornerRadius = clipCornerRadius
+        self.transformedClips = transformedClips
     }
 }
 
@@ -153,6 +172,8 @@ public struct TextDraw: Equatable, Sendable {
     public var transform: Transform
     public var clip: Rect?
     public var clipCornerRadius: Double
+    /// Clips turned with the view they cut, on top of `clip`.
+    public var transformedClips: [TransformedClip]
 
     public init(
         string: String,
@@ -165,7 +186,8 @@ public struct TextDraw: Equatable, Sendable {
         wraps: Bool = true,
         transform: Transform = .identity,
         clip: Rect? = nil,
-        clipCornerRadius: Double = 0
+        clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = []
     ) {
         self.string = string
         self.frame = frame
@@ -178,6 +200,7 @@ public struct TextDraw: Equatable, Sendable {
         self.transform = transform
         self.clip = clip
         self.clipCornerRadius = clipCornerRadius
+        self.transformedClips = transformedClips
     }
 }
 
@@ -191,6 +214,8 @@ public struct ImageDraw: Equatable, Sendable {
     public var transform: Transform
     public var clip: Rect?
     public var clipCornerRadius: Double
+    /// Clips turned with the view they cut, on top of `clip`.
+    public var transformedClips: [TransformedClip]
 
     public init(
         image: RasterImage,
@@ -198,7 +223,8 @@ public struct ImageDraw: Equatable, Sendable {
         opacity: Double = 1,
         transform: Transform = .identity,
         clip: Rect? = nil,
-        clipCornerRadius: Double = 0
+        clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = []
     ) {
         self.image = image
         self.frame = frame
@@ -206,6 +232,7 @@ public struct ImageDraw: Equatable, Sendable {
         self.transform = transform
         self.clip = clip
         self.clipCornerRadius = clipCornerRadius
+        self.transformedClips = transformedClips
     }
 }
 
@@ -231,6 +258,8 @@ public struct CanvasDraw: Equatable, Sendable {
     public var transform: Transform
     public var clip: Rect?
     public var clipCornerRadius: Double
+    /// Clips turned with the view they cut, on top of `clip`.
+    public var transformedClips: [TransformedClip]
     let generation: Int
     let drawing: CanvasDrawing
 
@@ -240,6 +269,7 @@ public struct CanvasDraw: Equatable, Sendable {
         transform: Transform = .identity,
         clip: Rect? = nil,
         clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = [],
         generation: Int,
         drawing: CanvasDrawing
     ) {
@@ -248,6 +278,7 @@ public struct CanvasDraw: Equatable, Sendable {
         self.transform = transform
         self.clip = clip
         self.clipCornerRadius = clipCornerRadius
+        self.transformedClips = transformedClips
         self.generation = generation
         self.drawing = drawing
     }
@@ -259,6 +290,7 @@ public struct CanvasDraw: Equatable, Sendable {
             && lhs.transform == rhs.transform
             && lhs.clip == rhs.clip
             && lhs.clipCornerRadius == rhs.clipCornerRadius
+            && lhs.transformedClips == rhs.transformedClips
     }
 }
 
@@ -311,6 +343,9 @@ public struct DrawContext: Sendable {
     public var transform: Transform = .identity
     public var clip: Rect?
     public var clipCornerRadius: Double = 0
+    /// Clips set under a rotation, which no rect on screen can stand for —
+    /// `clip` holds the box around them.
+    public var transformedClips: [TransformedClip] = []
     /// The appearance dynamic colors resolve against here.
     public var colorScheme: ColorScheme = .light
 
@@ -384,9 +419,26 @@ public struct DrawContext: Sendable {
         })
     }
 
-    /// Narrow the clip to `rect` — intersecting, so an inner clip can never
-    /// widen an outer one.
+    /// Narrow the clip to `rect`, a frame in layout space, as `transform`
+    /// shows it — intersecting, so an inner clip can never widen an outer
+    /// one. Under a scale or a move the frame is still a rect on screen;
+    /// under a rotation it is not, and rides along as a transformed clip.
     func clipped(to rect: Rect, cornerRadius: Double = 0) -> DrawContext {
+        guard !transform.isIdentity else { return clipped(onScreen: rect, cornerRadius: cornerRadius) }
+        let sx = abs(transform.e11), sy = abs(transform.e22)
+        let axisAligned = transform.e12 == 0 && transform.e21 == 0
+        if axisAligned && (cornerRadius == 0 || sx == sy) {
+            let radius = cornerRadius.isInfinite || cornerRadius == 0 ? cornerRadius : cornerRadius * sx
+            return clipped(onScreen: rect.applying(transform), cornerRadius: radius)
+        }
+        // The box around it still bounds what can show, for culling and
+        // for the scissor a render node composites under.
+        var copy = clipped(onScreen: rect.applying(transform))
+        copy.transformedClips.append(TransformedClip(rect: rect, cornerRadius: cornerRadius, transform: transform))
+        return copy
+    }
+
+    private func clipped(onScreen rect: Rect, cornerRadius: Double = 0) -> DrawContext {
         var copy = self
         copy.clip = clip.map { $0.intersection(rect) } ?? rect
         // Only one rounded clip is tracked; an inner rounding replaces an

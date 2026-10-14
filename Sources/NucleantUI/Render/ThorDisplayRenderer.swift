@@ -140,7 +140,7 @@ public final class ThorDisplayRenderer {
             apply(stroke, to: shape, bounds: draw.bounds, stroke: true)
         }
 
-        finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
     }
 
     private func appendPath(_ path: Path, to shape: Tvg_Paint) {
@@ -281,7 +281,7 @@ public final class ThorDisplayRenderer {
         _ = tvg_text_align(text, Float(alignFactor(draw.alignment)), 0)
         _ = tvg_paint_translate(text, f(draw.frame.minX), f(draw.frame.minY))
 
-        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
     }
 
     private func alignFactor(_ alignment: TextAlignment) -> Double {
@@ -312,13 +312,13 @@ public final class ThorDisplayRenderer {
         if draw.opacity < 1 {
             _ = tvg_paint_set_opacity(picture, UInt8(max(0, min(1, draw.opacity)) * 255))
         }
-        finish(paint: picture, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        finish(paint: picture, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
     }
 
     // MARK: - Shared tail
 
     /// Apply the ambient transform and clip, then hand the paint to the canvas.
-    private func finish(paint: Tvg_Paint, transform: Transform, clip: Rect?, cornerRadius: Double) {
+    private func finish(paint: Tvg_Paint, transform: Transform, clip: Rect?, cornerRadius: Double, transformedClips: [TransformedClip]) {
         if !transform.isIdentity {
             // The paint's own translation (text) is already in its matrix, so
             // the ambient transform is composed on top of what is there rather
@@ -346,10 +346,31 @@ public final class ThorDisplayRenderer {
             _ = tvg_paint_set_clip(paint, clipper)
         }
 
+        // A paint takes one clipper, so each transformed clip wraps what is
+        // there in a scene of its own, cut by the clip's rect under its
+        // transform.
+        var clipped = paint
+        for turned in transformedClips {
+            guard let wrapper = tvg_scene_new(), let clipper = tvg_shape_new() else { break }
+            _ = tvg_scene_add(wrapper, clipped)
+            let rect = turned.rect
+            let radius = min(turned.cornerRadius, min(rect.width, rect.height) / 2)
+            _ = tvg_shape_append_rect(
+                clipper,
+                f(rect.minX), f(rect.minY), f(rect.width), f(rect.height),
+                f(radius), f(radius),
+                true
+            )
+            var clipMatrix = matrix(scaled(turned.transform))
+            _ = tvg_paint_set_transform(clipper, &clipMatrix)
+            _ = tvg_paint_set_clip(wrapper, clipper)
+            clipped = wrapper
+        }
+
         if let scene {
-            _ = tvg_scene_add(scene, paint)
+            _ = tvg_scene_add(scene, clipped)
         } else {
-            _ = tvg_canvas_add(canvas, paint)
+            _ = tvg_canvas_add(canvas, clipped)
         }
     }
 

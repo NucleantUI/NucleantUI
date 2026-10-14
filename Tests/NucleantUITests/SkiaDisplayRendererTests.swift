@@ -110,6 +110,24 @@ struct SkiaDisplayRendererTests {
         #expect(pixel(70, 20).w == 0)
     }
 
+    @Test func transformedClipTurnsWithItsTransform() {
+        // A 40-point square turned 45° about its centre: a diamond.
+        var path = Path()
+        path.addRect(Rect(x: 0, y: 0, width: 100, height: 100))
+        renderer().render(list(.shape(ShapeDraw(
+            path: path,
+            bounds: Rect(x: 0, y: 0, width: 100, height: 100),
+            fill: .color(.init(red: 1, green: 0, blue: 0)),
+            transformedClips: [TransformedClip(
+                rect: Rect(x: 30, y: 30, width: 40, height: 40),
+                transform: .around(Point(x: 50, y: 50), .rotation(.degrees(45)))
+            )]
+        ))))
+        #expect(pixel(50, 50).w == 255)
+        #expect(pixel(50, 25).w == 255)   // a tip, above the square unturned
+        #expect(pixel(33, 33).w == 0)     // a corner of the square unturned
+    }
+
     @Test func appliesTheTransform() {
         renderer().render(list(rect(Rect(x: 0, y: 0, width: 10, height: 10), transform: .translation(x: 50, y: 50))))
         #expect(pixel(55, 55).w == 255)

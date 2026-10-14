@@ -162,7 +162,7 @@ public final class SkiaDisplayRenderer {
     /// origin, cut to its frame, under its clip and transform.
     private func emit(_ draw: CanvasDraw, on canvas: SkCanvas) {
         let saved = canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         canvas.translate(dx: Float(draw.frame.minX), dy: Float(draw.frame.minY))
         canvas.clipRect(pos: .zero, size: SIMD2(Float(draw.frame.width), Float(draw.frame.height)), doAntiAlias: true)
         if draw.opacity < 1 {
@@ -183,7 +183,7 @@ public final class SkiaDisplayRenderer {
         append(draw.path, to: path)
 
         canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
 
         if let fill {
             apply(fill, to: fillPaint, bounds: draw.bounds)
@@ -361,7 +361,7 @@ public final class SkiaDisplayRenderer {
         paint.setColor(SIMD4(r, g, b, a))
 
         canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         // The first baseline an ascent below the box's top, the rest a line
         // height apart — the metrics layout sized the box with.
         let metrics = TextMeasurer.lineMetrics(for: draw.font)
@@ -428,7 +428,7 @@ public final class SkiaDisplayRenderer {
         let paint = imagePaint
         paint.setAlphaf(max(0, min(1, draw.opacity)))
         canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius)
+        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         canvas.drawImageRect(
             image,
             pos: SIMD2<Float>(draw.frame.origin),
@@ -455,27 +455,43 @@ public final class SkiaDisplayRenderer {
     // MARK: - Shared head
 
     /// Clip first, in the canvas's space, then the command's own transform —
-    /// the clip does not move with what it clips. The caller saves and
-    /// restores around it.
-    private func begin(on canvas: SkCanvas, transform: Transform, clip: Rect?, cornerRadius: Double) {
+    /// the clip does not move with what it clips. A transformed clip is cut
+    /// under its own transform. The caller saves and restores around it.
+    private func begin(on canvas: SkCanvas, transform: Transform, clip: Rect?, cornerRadius: Double, transformedClips: [TransformedClip]) {
         if let clip {
-            // `.clipShape(Capsule())` asks for an unbounded radius, meaning
-            // "as round as this box allows" — resolvable only here.
-            let radius = min(cornerRadius, min(clip.width, clip.height) / 2)
-            let pos = clip.origin
-            let size = clip.size
-            if radius > 0 {
-                canvas.clipRRect(pos: pos, size: size, radius: SIMD2(radius, radius), doAntiAlias: true)
-            } else {
-                canvas.clipRect(pos: pos, size: size, doAntiAlias: true)
+            clipRect(clip, cornerRadius: cornerRadius, on: canvas)
+        }
+        if !transformedClips.isEmpty {
+            let base = canvas.getTotalMatrix()
+            for turned in transformedClips {
+                canvas.concat(matrix(turned.transform))
+                clipRect(turned.rect, cornerRadius: turned.cornerRadius, on: canvas)
+                canvas.setMatrix(base)
             }
         }
         if !transform.isIdentity {
-            canvas.concat(SkMatrix(
-                scaleX: Float(transform.e11), skewX: Float(transform.e12), transX: Float(transform.e13),
-                skewY: Float(transform.e21), scaleY: Float(transform.e22), transY: Float(transform.e23)
-            ))
+            canvas.concat(matrix(transform))
         }
+    }
+
+    private func clipRect(_ clip: Rect, cornerRadius: Double, on canvas: SkCanvas) {
+        // `.clipShape(Capsule())` asks for an unbounded radius, meaning
+        // "as round as this box allows" — resolvable only here.
+        let radius = min(cornerRadius, min(clip.width, clip.height) / 2)
+        let pos = clip.origin
+        let size = clip.size
+        if radius > 0 {
+            canvas.clipRRect(pos: pos, size: size, radius: SIMD2(radius, radius), doAntiAlias: true)
+        } else {
+            canvas.clipRect(pos: pos, size: size, doAntiAlias: true)
+        }
+    }
+
+    private func matrix(_ transform: Transform) -> SkMatrix {
+        SkMatrix(
+            scaleX: Float(transform.e11), skewX: Float(transform.e12), transX: Float(transform.e13),
+            skewY: Float(transform.e21), scaleY: Float(transform.e22), transY: Float(transform.e23)
+        )
     }
 
     private func skiaCap(_ cap: LineCap) -> SkStrokeCap {

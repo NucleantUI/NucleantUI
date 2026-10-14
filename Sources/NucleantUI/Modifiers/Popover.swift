@@ -349,7 +349,8 @@ struct PopoverPlacementContent: NodeContent {
             fill: .color(context.resolve(Color.secondaryBackground)),
             transform: context.transform,
             clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius
+            clipCornerRadius: context.clipCornerRadius,
+            transformedClips: context.transformedClips
         )))
         list.append(.shape(ShapeDraw(
             path: Path {
@@ -362,7 +363,8 @@ struct PopoverPlacementContent: NodeContent {
             strokeStyle: StrokeStyle(lineWidth: 1, lineJoin: .round),
             transform: context.transform,
             clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius
+            clipCornerRadius: context.clipCornerRadius,
+            transformedClips: context.transformedClips
         )))
     }
 }

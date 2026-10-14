@@ -66,6 +66,7 @@ final class DragSession {
             var context = source.value.context
             context.clip = nil
             context.clipCornerRadius = 0
+            context.transformedClips = []
             // The snapshot wants the pixels of a drawing group inside, not a
             // node that would keep compositing at the view's old place.
             context.flattensRenderNodes = true
@@ -151,27 +152,36 @@ extension DrawCommand {
                 .concatenating(transform)
                 .concatenating(Transform.translation(x: -dx, y: -dy))
         }
+        func moved(_ clips: [TransformedClip]) -> [TransformedClip] {
+            clips.map {
+                TransformedClip(rect: $0.rect.offsetBy(dx: dx, dy: dy), cornerRadius: $0.cornerRadius, transform: moved($0.transform))
+            }
+        }
         switch self {
         case .shape(var draw):
             draw.path = draw.path.offsetBy(dx: dx, dy: dy)
             draw.bounds = draw.bounds.offsetBy(dx: dx, dy: dy)
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
             draw.transform = moved(draw.transform)
+            draw.transformedClips = moved(draw.transformedClips)
             return .shape(draw)
         case .text(var draw):
             draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
             draw.transform = moved(draw.transform)
+            draw.transformedClips = moved(draw.transformedClips)
             return .text(draw)
         case .image(var draw):
             draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
             draw.transform = moved(draw.transform)
+            draw.transformedClips = moved(draw.transformedClips)
             return .image(draw)
         case .canvas(var draw):
             draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
             draw.transform = moved(draw.transform)
+            draw.transformedClips = moved(draw.transformedClips)
             return .canvas(draw)
         }
     }

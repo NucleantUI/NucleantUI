@@ -63,7 +63,8 @@ struct ImageContent: NodeContent {
             opacity: context.opacity,
             transform: context.transform,
             clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius
+            clipCornerRadius: context.clipCornerRadius,
+            transformedClips: context.transformedClips
         )))
     }
 }
