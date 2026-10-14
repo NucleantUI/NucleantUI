@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds the documentation site for GitHub Pages: the DocC catalog in
-# Sources/NucleantUI/NucleantUI.docc with NucleantUI's symbols, and the
-# Kivy → NucleantUI playground next to it.
+# Sources/NucleantUI/NucleantUI.docc with NucleantUI's symbols, the
+# Kivy → NucleantUI playground next to it, and the examples, each a page
+# running the app.
 #
 #   Scripts/build-docs.sh [output-dir]
 #
@@ -16,7 +17,9 @@
 # HOSTING_BASE_PATH (default NucleantUI) is that path. The playground link in
 # Articles/KivyToNucleantUI.md is written against it, so change both together.
 # SKIP_PLAYGROUND=1 leaves the playground out (it needs a wasm Swift SDK; see
-# Scripts/build-playground.sh).
+# Scripts/build-playground.sh). SKIP_EXAMPLES=1 leaves the examples out (the
+# same SDK; see Scripts/build_examples_wasm.py); the links to them in
+# Examples/*Example.md are written against /$BASE_PATH/examples/ too.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,6 +67,11 @@ touch "$OUTPUT/.nojekyll"
 # 3. The playground, served at /$BASE_PATH/kivy-to-nucleantui/.
 if [ "${SKIP_PLAYGROUND:-0}" != "1" ]; then
     "$ROOT/Scripts/build-playground.sh" "$OUTPUT/kivy-to-nucleantui"
+fi
+
+# 4. The examples, served at /$BASE_PATH/examples/<Example>/.
+if [ "${SKIP_EXAMPLES:-0}" != "1" ]; then
+    python3 "$ROOT/Scripts/build_examples_wasm.py" "$OUTPUT/examples"
 fi
 
 echo "Documentation site: $OUTPUT"

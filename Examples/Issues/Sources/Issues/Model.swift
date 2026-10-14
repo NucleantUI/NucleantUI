@@ -165,9 +165,7 @@ final class Preferences {
     func format(_ date: Date) -> String {
         switch dateStyle {
         case .relative:
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            return formatter.localizedString(for: date, relativeTo: Date())
+            return date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated))
         case .short:
             return date.formatted(date: .numeric, time: .omitted)
         case .long:
