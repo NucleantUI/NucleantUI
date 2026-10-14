@@ -31,6 +31,7 @@ built for WebAssembly and drawn with WebGPU. You need a browser with WebGPU
     - <doc:MindMapExample>
     - <doc:ReaderExample>
     - <doc:CompositorExample>
+    - <doc:IssuesExample>
 }
 
 ### One download for every example
@@ -67,6 +68,7 @@ code.
 - <doc:FinderExample>
 - <doc:PhotosExample>
 - <doc:BookmarksExample>
+- <doc:IssuesExample>
 
 ### Input, navigation and canvases
 

@@ -15,9 +15,11 @@ components else each wasm example will take up too much space in total..
   example (`<Name>Example.md`, named apart from the tutorials): what it
   shows, a screenshot of it running in the browser, and a "Run in your
   browser" call to action to `/NucleantUI/examples/<Name>/`.
-* 15 of the 18 examples run in the browser. Left out: Issues
-  (`RelativeDateTimeFormatter` is not in Foundation on wasm), Metronome and
-  Sampler (NucleantAudio has a macOS backend only).
+* 16 of the 18 examples run in the browser; Metronome and Sampler wait on
+  a browser backend for NucleantAudio (macOS only today). Issues formatted
+  its relative dates with `RelativeDateTimeFormatter`, which Foundation on
+  wasm lacks; it now uses `Date.RelativeFormatStyle`
+  (`.formatted(.relative(…))`), the same on every platform.
 * `Scripts/build_examples_wasm.py` builds them; `build-docs.sh` calls it
   (`SKIP_EXAMPLES=1` to leave out). `--check` opens every page in headless
   Chrome and fails unless each starts and draws; `--serve` serves the site.
@@ -25,14 +27,14 @@ components else each wasm example will take up too much space in total..
 ### Shared: dynamic linking (verified)
 
 Each example on its own is ~70 MB of wasm, of which its own code is
-86–524 KB. Now:
+86–524 KB (Issues 522 KB). Now:
 
 * `shared/nucleant-shared.wasm` — the *main* module: the Swift runtime,
   Foundation, NucleantUI and everything under it, at fixed addresses,
-  exporting the 838 symbols the examples use from it. 75 MB, 23.6 MB gzipped.
+  exporting the 923 symbols the examples use from it. 75 MB, 23.6 MB gzipped.
 * `<Example>/<Example>.wasm` — a *side* module (`wasm-ld -shared
   --experimental-pic`): only the example's own objects. 29–150 KB gzipped.
-* The whole site is 29 MB, instead of ~330 MB for 15 standalone builds; the
+* The whole site is 29 MB, instead of ~350 MB for 16 standalone builds; the
   browser caches the shared module across examples.
 
 Why this shape, and the catches:
@@ -63,10 +65,13 @@ Why this shape, and the catches:
   (`loadSideModule`: dylink.0, GOT.mem/GOT.func, table growth, relocations,
   constructors), and any `.gz` URL is inflated in the browser.
 
-### Seen along the way (not fixed here, same in standalone builds)
+### Fixed along the way: a canvas resized mid-frame
 
-* In a page smaller than an example's default window size (Dashboard,
-  Reader), the first frame's scissor rect is the window size, not the
-  canvas's, and WebGPU rejects it.
-* Dashboard's trend arrows and 2048's ←/→ buttons render as missing glyphs
-  on wasm (↑/↓ render).
+In a page smaller than an example's window (Dashboard, Reader), WebGPU
+rejected the first frames: the page fits the canvas while a frame is
+suspended under JSPI, so that frame's canvas texture came back at the new
+size after its swapchain image was acquired at the old one (the scissor no
+longer fit the render area). `nucleant-app.js` now applies a canvas's new
+drawing-buffer size between calls into the module — as the `before` step
+of the `nucleant_window_resized` call — the way a native window's drawable
+changes between frames. `--check` runs at 1024×768 to cover it.

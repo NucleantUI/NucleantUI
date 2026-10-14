@@ -78,12 +78,11 @@ GENERATED = WORK / "package"
 SCRATCH = WORK / "build"
 VERSION_RE = re.compile(r"(\d+\.\d+(?:\.\d+)?)")
 
-# The examples that run in a browser today. Left out: Issues
-# (RelativeDateTimeFormatter is not in Foundation on wasm), Metronome and
-# Sampler (NucleantAudio has a macOS backend only).
+# The examples that run in a browser today. Left out: Metronome and Sampler
+# (NucleantAudio has a macOS backend only).
 EXAMPLES = [
     "Calculator", "Tasks", "Sketch", "Dashboard", "TwentyFortyEight", "Pomodoro", "Flashcards",
-    "AnimatableShader", "Finder", "Photos", "Bookmarks", "Moodboard", "MindMap", "Reader", "Compositor",
+    "AnimatableShader", "Finder", "Photos", "Bookmarks", "Moodboard", "MindMap", "Reader", "Compositor", "Issues",
 ]
 SHARED = "nucleant-shared"
 # A WASI reactor, as NucleantApplication's build_wasm_app.py builds an app:
@@ -458,11 +457,9 @@ CHROME_CANDIDATES = [
     "/usr/bin/google-chrome",
     "/usr/bin/chromium",
 ]
-# A desktop browser's viewport. In a window smaller than an example's default
-# size, the first frame's scissor rect is the window's size, not the
-# canvas's, and WebGPU rejects it — a failure of the app's page, the same in
-# a standalone build, that --check is not here to catch.
-CHECK_WINDOW = "1440,1000"
+# A laptop's browser window: smaller than some examples' default size, so
+# their canvases are fitted to the page while the first frames run.
+CHECK_WINDOW = "1024,768"
 # Added to each example's page under --check: reports the app starting (a
 # window canvas appearing), a failure to start, every error, and whether a
 # frame had content. A WebGPU canvas can only be copied in the frame that
