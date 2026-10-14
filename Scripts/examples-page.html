@@ -36,7 +36,7 @@
         panel.textContent = (previous.length ? `— previous run —\n${previous.join('\n')}\n— this run —\n` : '') + lines.join('\n');
         panel.scrollTop = panel.scrollHeight;
       };
-      const text = (value) => value instanceof Error ? (value.stack || value.message)
+      const text = (value) => value instanceof Error ? `${value.name}: ${value.message}\n${value.stack ?? ''}`
         : typeof value === 'object' && value !== null ? (() => { try { return JSON.stringify(value); } catch { return String(value); } })()
         : String(value);
       const log = (kind, values) => {
