@@ -3,6 +3,7 @@
 //  NucleantUI
 //
 
+import NucleantVulkan
 import NucleantWindow
 
 /// Several scenes produced by one `@SceneBuilder` block.
@@ -13,8 +14,8 @@ public struct TupleScene<each Content: Scene>: Scene {
         self.value = (repeat each value)
     }
 
-    public func _makeWindows() -> [HostingWindow] {
-        var windows: [HostingWindow] = []
+    public func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>] {
+        var windows: [HostingWindow<Node>] = []
         for scene in repeat (each value) {
             windows += scene._makeWindows()
         }

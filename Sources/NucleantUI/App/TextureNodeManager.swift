@@ -18,27 +18,27 @@
 import NucleantVulkan
 
 @MainActor
-final class TextureNodeManager {
+final class TextureNodeManager<N: NucleantContainerNode> {
 
     /// One `TextureView`'s node, and what it knows of the view's source.
     @MainActor
     final class Entry {
-        let texture: ViewTexture
+        let texture: ViewTexture<N>
         /// The source's identity — a view handed another object has a new
         /// source, which gets the texture while the old one is told it lost it.
         var sourceID: ObjectIdentifier
-        var didChange: @MainActor (ViewTexture) -> Void
-        var didMove: @MainActor (ViewTexture) -> Void
-        var didDisappear: @MainActor (ViewTexture) -> Void
+        var didChange: @MainActor (ViewTexture<N>) -> Void
+        var didMove: @MainActor (ViewTexture<N>) -> Void
+        var didDisappear: @MainActor (ViewTexture<N>) -> Void
         /// Seen during the current pass. Anything not seen has left the tree.
         var used = true
 
         init(
-            texture: ViewTexture,
+            texture: ViewTexture<N>,
             sourceID: ObjectIdentifier,
-            didChange: @escaping @MainActor (ViewTexture) -> Void,
-            didMove: @escaping @MainActor (ViewTexture) -> Void,
-            didDisappear: @escaping @MainActor (ViewTexture) -> Void
+            didChange: @escaping @MainActor (ViewTexture<N>) -> Void,
+            didMove: @escaping @MainActor (ViewTexture<N>) -> Void,
+            didDisappear: @escaping @MainActor (ViewTexture<N>) -> Void
         ) {
             self.texture = texture
             self.sourceID = sourceID
@@ -50,12 +50,12 @@ final class TextureNodeManager {
 
     /// The window the textures are in, which each texture names to its
     /// source — `nil` for a tree laid out without one.
-    weak var window: HostingWindow?
+    weak var window: HostingWindow<N>?
 
-    private unowned let engine: NucleantRenderEngine
+    private unowned let engine: VulkanRenderEngine<N>
     /// For the pass's paint order, the scale and the image-size rule — the
     /// same ones every other per-view node follows.
-    private unowned let renderNodes: RenderNodeManager
+    private unowned let renderNodes: RenderNodeManager<N>
 
     private var entries: [RenderNodeKey: Entry] = [:]
 
@@ -66,7 +66,7 @@ final class TextureNodeManager {
     /// Source callbacks found during the pass, made at `endPass`.
     private var notifications: [@MainActor () -> Void] = []
 
-    init(engine: NucleantRenderEngine, renderNodes: RenderNodeManager) {
+    init(engine: VulkanRenderEngine<N>, renderNodes: RenderNodeManager<N>) {
         self.engine = engine
         self.renderNodes = renderNodes
     }
@@ -87,9 +87,9 @@ final class TextureNodeManager {
         rect: Rect,
         clip: Rect?,
         sourceID: ObjectIdentifier,
-        didChange: @escaping @MainActor (ViewTexture) -> Void,
-        didMove: @escaping @MainActor (ViewTexture) -> Void,
-        didDisappear: @escaping @MainActor (ViewTexture) -> Void
+        didChange: @escaping @MainActor (ViewTexture<N>) -> Void,
+        didMove: @escaping @MainActor (ViewTexture<N>) -> Void,
+        didDisappear: @escaping @MainActor (ViewTexture<N>) -> Void
     ) -> Entry? {
         let scale = renderNodes.scale
         let image = renderNodes.imageSize(for: rect)
@@ -132,7 +132,7 @@ final class TextureNodeManager {
                 moved = true
             }
         } else {
-            let node: ExternalTextureNode<NucleantRenderNode>
+            let node: ExternalTextureNode<N>
             do {
                 node = try engine.makeExternalTextureNode(width: image.width, height: image.height)
             } catch {
@@ -140,7 +140,7 @@ final class TextureNodeManager {
                 nucleantLogError("NucleantUI: texture node (\(image.width)x\(image.height)) failed: \(error)\n")
                 return nil
             }
-            let container = NucleantRenderNode(
+            let container = N(
                 id: Int.random(in: Int.min...Int.max),
                 context: .externalTexture(node)
             )
@@ -178,7 +178,7 @@ final class TextureNodeManager {
     /// texels land on pixels, the image at its own size, and a scissor that
     /// cuts it to the frame and to whatever clips the view — the image is
     /// bigger than the frame by up to a granule, and that slack is nobody's.
-    private func position(_ texture: ViewTexture, rect: Rect, clip: Rect?, scale: Double) {
+    private func position(_ texture: ViewTexture<N>, rect: Rect, clip: Rect?, scale: Double) {
         let x = (rect.minX * scale).rounded(.down)
         let y = (rect.minY * scale).rounded(.down)
         texture.container.compositeRect = SIMD4(x, y, Double(texture.node.width), Double(texture.node.height))

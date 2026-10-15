@@ -6,6 +6,7 @@
 import NucleantApplication
 import NucleantThorVG
 import NucleantWindow
+import NucleantVulkan
 #if os(macOS)
 import AppKit
 #endif
@@ -29,6 +30,11 @@ import Glibc
 /// ```
 @MainActor
 public protocol NucleantApp {
+    /// `NucleantRenderNode` unless the app or its protocol says otherwise —
+    /// `protocol MyApp: NucleantApp where RenderNode == MyRenderNode {}`. Defaulted
+    /// here rather than in an extension: an extension's typealias would win
+    /// over the refining protocol's constraint.
+    associatedtype RenderNode: NucleantContainerNode = NucleantRenderNode
     associatedtype Body: Scene
     init()
 
@@ -78,7 +84,7 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
 
     /// Windows are held for the process's lifetime — each owns its engine and
     /// platform window, and `PlatformWindow` only weakly references back.
-    private var windows: [HostingWindow] = []
+    private var windows: [HostingWindow<A.RenderNode>] = []
 
     public var appDelegate: AppDelegate<AppRuntime<A>>?
 

@@ -230,8 +230,8 @@ final class VertexShaderPipeline {
     /// `inputs` are the images the shader samples: the canvas a `.shader(_:)`
     /// effect drew its view into at binding 2, and a named texture at each
     /// binding from 4 up. Empty for a generative `VertexShader`.
-    init(
-        engine: NucleantRenderEngine,
+    init<N: RenderContainerNode>(
+        engine: VulkanRenderEngine<N>,
         renderPass: VkRenderPass,
         inputs: [ShaderImageInput] = [],
         source: GraphicsShaderCode,

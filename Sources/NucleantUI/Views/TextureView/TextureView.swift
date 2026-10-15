@@ -47,7 +47,7 @@ public struct TextureView<Source: TextureSource> {
     public var body: Never { bodyUnavailable() }
 }
 
-extension TextureView: BuiltinView {
+extension TextureView: BuiltinView where Source.Node == NucleantRenderNode {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let source = self.source
         let send: @MainActor (TextureInputEvent) -> Void = { source.textureInput($0) }
@@ -99,9 +99,9 @@ final class TextureInputTarget {
 struct TextureContent: NodeContent {
     let key: RenderNodeKey
     let sourceID: ObjectIdentifier
-    let didChange: @MainActor (ViewTexture) -> Void
-    let didMove: @MainActor (ViewTexture) -> Void
-    let didDisappear: @MainActor (ViewTexture) -> Void
+    let didChange: @MainActor (ViewTexture<NucleantRenderNode>) -> Void
+    let didMove: @MainActor (ViewTexture<NucleantRenderNode>) -> Void
+    let didDisappear: @MainActor (ViewTexture<NucleantRenderNode>) -> Void
     let input: TextureInputTarget
     let focus: FocusTarget
     let hitTarget: HitTarget?

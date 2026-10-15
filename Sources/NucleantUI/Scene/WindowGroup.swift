@@ -3,6 +3,7 @@
 //  NucleantUI
 //
 
+import NucleantVulkan
 import NucleantWindow
 
 /// A scene that presents one window over a view hierarchy.
@@ -24,7 +25,7 @@ public struct WindowGroup<Content: View>: Scene {
         self.content = content
     }
 
-    public func _makeWindows() -> [HostingWindow] {
+    public func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>] {
         [HostingWindow(title: title, root: content())]
     }
 

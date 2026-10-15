@@ -24,8 +24,8 @@ extension RenderNodeManager {
     /// input instead.
     @MainActor
     final class ThorCanvasNode {
-        let node: ThorShaderNode<NucleantRenderNode>
-        let container: NucleantRenderNode
+        let node: ThorShaderNode<N>
+        let container: N
         /// The canvas as the view's closures see it.
         let thorContext: ThorContext
         /// Pixel size of the image — the frame rounded up to whole granules,
@@ -50,7 +50,7 @@ extension RenderNodeManager {
         var rect: Rect = .zero
         var pixelOrigin: Point = .zero
 
-        init(node: ThorShaderNode<NucleantRenderNode>, container: NucleantRenderNode, width: Int, height: Int) {
+        init(node: ThorShaderNode<N>, container: N, width: Int, height: Int) {
             self.node = node
             self.container = container
             self.thorContext = ThorContext(base: node.canvas.base)
@@ -92,7 +92,7 @@ extension RenderNodeManager {
     /// waits to be freed.
     @MainActor
     final class ThorCanvasNodes {
-        private unowned let engine: NucleantRenderEngine
+        private unowned let engine: VulkanRenderEngine<N>
         private unowned let manager: RenderNodeManager
 
         private var nodes: [RenderNodeKey: ThorCanvasNode] = [:]
@@ -107,7 +107,7 @@ extension RenderNodeManager {
             }
         }
 
-        init(engine: NucleantRenderEngine, manager: RenderNodeManager) {
+        init(engine: VulkanRenderEngine<N>, manager: RenderNodeManager) {
             self.engine = engine
             self.manager = manager
         }
@@ -198,7 +198,7 @@ extension RenderNodeManager {
                 nucleantLogError("NucleantUI: ThorCanvas node build (\(width)x\(height)) failed\n")
                 return nil
             }
-            let container = NucleantRenderNode(id: Int.random(in: Int.min...Int.max), context: .thor(thor))
+            let container = N(id: Int.random(in: Int.min...Int.max), context: .thor(thor))
             container.observeContext()
             engine.append(container)
             let node = ThorCanvasNode(node: thor, container: container, width: width, height: height)

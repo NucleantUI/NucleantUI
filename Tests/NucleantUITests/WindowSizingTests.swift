@@ -47,7 +47,8 @@ struct WindowSizingTests {
     // MARK: Scene modifiers
 
     @Test func aWindowGroupHasNoSizeOfItsOwn() {
-        let window = WindowGroup("Plain") { EmptyView() }._makeWindows()[0]
+        let windows: [HostingWindow<NucleantRenderNode>] = WindowGroup("Plain") { EmptyView() }._makeWindows()
+        let window = windows[0]
         #expect(window.sizing.defaultSize == nil)
         #expect(window.sizing.resizability == nil)
         #expect(window.sizing.idealSize == nil)
@@ -59,7 +60,8 @@ struct WindowSizingTests {
             .windowResizability(.contentSize)
             .windowIdealSize(.fitToContent)
             .commands {}
-        let window = scene._makeWindows()[0]
+        let windows: [HostingWindow<NucleantRenderNode>] = scene._makeWindows()
+        let window = windows[0]
         #expect(window.sizing.defaultSize == Size(width: 640, height: 480))
         #expect(window.sizing.resizability == .contentSize)
         #expect(window.sizing.idealSize == .fitToContent)
@@ -71,7 +73,8 @@ struct WindowSizingTests {
             .windowResizability(.contentMinSize)
             .defaultSize(width: 1000, height: 800)
             .windowResizability(.contentSize)
-        let window = scene._makeWindows()[0]
+        let windows: [HostingWindow<NucleantRenderNode>] = scene._makeWindows()
+        let window = windows[0]
         #expect(window.sizing.defaultSize == Size(width: 320, height: 240))
         #expect(window.sizing.resizability == .contentMinSize)
     }
@@ -81,7 +84,7 @@ struct WindowSizingTests {
             SizedScenes()
             WindowGroup("Outer") { EmptyView() }
         }
-        let windows = body.defaultSize(width: 800, height: 600)._makeWindows()
+        let windows: [HostingWindow<NucleantRenderNode>] = body.defaultSize(width: 800, height: 600)._makeWindows()
         #expect(windows.map(\.title) == ["Inner", "Outer"])
         #expect(windows.map(\.sizing.defaultSize) == [Size(width: 400, height: 300), Size(width: 800, height: 600)])
     }

@@ -89,7 +89,7 @@ struct BrowserTests {
     // MARK: Windows
 
     @Test func windowDrawsItsTreeIntoACanvasOnThePage() async throws {
-        let window = HostingWindow(title: "browser", width: 120, height: 80, root: Color(red: 1, green: 0, blue: 0))
+        let window = HostingWindow<NucleantRenderNode>(title: "browser", width: 120, height: 80, root: Color(red: 1, green: 0, blue: 0))
         try window.present()
         defer { window.platformWindow?.close() }
         let platformWindow = try #require(window.platformWindow)
@@ -123,7 +123,7 @@ struct BrowserTests {
     }
 
     @Test func windowFollowsThePagesColorScheme() async throws {
-        let window = HostingWindow(title: "appearance", width: 120, height: 80, root: Color.background)
+        let window = HostingWindow<NucleantRenderNode>(title: "appearance", width: 120, height: 80, root: Color.background)
         try window.present()
         defer { window.platformWindow?.close() }
         let engine = try #require(window.renderEngine)

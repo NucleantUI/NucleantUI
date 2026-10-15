@@ -81,7 +81,7 @@ struct SceneTests {
     }
 
     @Test func everySceneContributesItsWindowsInOrder() {
-        let windows = ThreeWindowApp().body._makeWindows()
+        let windows: [HostingWindow<NucleantRenderNode>] = ThreeWindowApp().body._makeWindows()
         #expect(windows.map(\.title) == ["Editor", "Inspector", "Console"])
     }
 
@@ -91,7 +91,8 @@ struct SceneTests {
 
     @Test func aSingleSceneIsPassedThrough() {
         let scene = WindowGroup("Only") { EmptyView() }
-        #expect(scene._makeWindows().map(\.title) == ["Only"])
+        let windows: [HostingWindow<NucleantRenderNode>] = scene._makeWindows()
+        #expect(windows.map(\.title) == ["Only"])
         #expect(menuTitles(of: scene).isEmpty)
     }
 

@@ -212,7 +212,7 @@ final class OverlayCapture {
     var order: Int?
     /// The nodes placed inside the overlay, for the host to file its
     /// images around — see `RenderBoundaries.Frame`.
-    var frame: RenderBoundaries.Frame?
+    var frame: RenderBoundaries<NucleantRenderNode>.Frame?
 }
 
 /// Slot `[1]`: the open popovers, and over them the context menu if one is

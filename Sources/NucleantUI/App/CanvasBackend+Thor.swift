@@ -23,18 +23,18 @@ public typealias DisplayRenderer = ThorDisplayRenderer
 
 /// How a canvas node is built, resized, emptied and freed with ThorVG.
 @MainActor
-final class CanvasBackend {
-    typealias Node = ThorShaderNode<NucleantRenderNode>
+final class CanvasBackend<N: NucleantContainerNode> {
+    typealias Node = ThorShaderNode<N>
 
-    private unowned let engine: NucleantRenderEngine
+    private unowned let engine: VulkanRenderEngine<N>
 
-    init(engine: NucleantRenderEngine) {
+    init(engine: VulkanRenderEngine<N>) {
         self.engine = engine
     }
 
     /// A fresh canvas at `width × height` and its engine container — not yet
     /// in the engine's list — with a renderer drawing into it.
-    func makeCanvas(width: Int, height: Int) -> (node: Node, container: NucleantRenderNode, renderer: DisplayRenderer)? {
+    func makeCanvas(width: Int, height: Int) -> (node: Node, container: N, renderer: DisplayRenderer)? {
         guard let node = engine.makeThorWidgetNode(width: width, height: height) else {
             // The engine reports *why* on stdout, which is fully buffered when
             // the process isn't attached to a terminal — flush it so the
@@ -43,7 +43,7 @@ final class CanvasBackend {
             nucleantLogError("NucleantUI: ThorVG canvas build (\(width)x\(height)) failed\n")
             return nil
         }
-        let container = NucleantRenderNode(id: Int.random(in: Int.min...Int.max), context: .thor(node))
+        let container = N(id: Int.random(in: Int.min...Int.max), context: .thor(node))
         container.observeContext()
         return (node, container, ThorDisplayRenderer(canvas: node.canvas.base))
     }
@@ -69,7 +69,7 @@ final class CanvasBackend {
 
     /// The copy-target image an automatic per-view node holds, in the
     /// engine's own format, which the ThorVG painter's image shares.
-    func makeImageNode(width: Int, height: Int) throws -> ImageNode<NucleantRenderNode> {
+    func makeImageNode(width: Int, height: Int) throws -> ImageNode<N> {
         try engine.makeImageNode(width: width, height: height)
     }
 }

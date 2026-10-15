@@ -8,6 +8,7 @@
 //  rows by `MenuItems.swift`.
 //
 
+import NucleantVulkan
 import NucleantWindow
 
 /// Where a `CommandGroup` goes among the standard menus.
@@ -223,7 +224,7 @@ struct CommandsScene<Base: Scene, Content: Commands>: Scene {
 
     var body: Never { fatalError() }
 
-    func _makeWindows() -> [HostingWindow] {
+    func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>] {
         base._makeWindows()
     }
 

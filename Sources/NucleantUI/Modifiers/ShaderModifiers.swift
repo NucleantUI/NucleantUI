@@ -195,7 +195,7 @@ struct ShaderEffectContent: NodeContent {
 final class ShaderCanvasInput {
     @MainActor
     struct Canvas {
-        let node: RenderNodeManager.ThorCanvasNode
+        let node: RenderNodeManager<NucleantRenderNode>.ThorCanvasNode
         let rect: Rect
         let clip: Rect?
         /// Whether its paints were rasterized again this pass.
@@ -215,7 +215,7 @@ final class ShaderCanvasInput {
         }
 
         /// Composite the node into its frame, as one outside an effect is.
-        func composite(host: ShaderSlotRegistry) {
+        func composite(host: ShaderSlotRegistry<NucleantRenderNode>) {
             node.container.compositesToWindow = true
             node.place(rect: rect, clip: clip, scale: host.renderNodes.scale)
             host.renderNodes.composite(node.container, at: order)

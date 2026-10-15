@@ -39,11 +39,11 @@ import CVulkan
 import Platform_Wasm
 #endif
 
-public final class HostingWindow: NucleantWindow, @unchecked Sendable {
+public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @unchecked Sendable {
 
-    public typealias Node = NucleantRenderNode
+    //public typealias Node = NucleantRenderNode
 
-    public var renderEngine: NucleantRenderEngine?
+    public var renderEngine: VulkanRenderEngine<Node>?
 
     /// (x, y, width, height) in *pixels*, like every other Nucleant window.
     public var win_rect: SIMD4<Int>
@@ -67,7 +67,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
 
     /// GPU slots for `Shader` views — one per live shader, composited into the
     /// view's own rect rather than into the shared canvas.
-    private var shaderSlots: ShaderSlotRegistry?
+    private var shaderSlots: ShaderSlotRegistry<Node>?
 
     /// Where the pointer last was, in points — shaders get it as a uniform.
     private var pointerLocation: Point = .zero
@@ -77,7 +77,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     /// bound to, held so a repaint can re-arm it directly; its id also keys
     /// every engine-side map, so a resize names the same one it was appended
     /// with.
-    private var windowCanvas: RenderNodeManager.CanvasNode?
+    private var windowCanvas: RenderNodeManager<Node>.CanvasNode?
 
     /// Backing-store pixels per point. Layout is in points; the renderer scales.
     private var displayScale: Double = 1
@@ -211,7 +211,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         )
 
         // 2. The Vulkan engine renders into that layer.
-        let engine = try NucleantRenderEngine(metalLayer: platformWindow.metalLayer)
+        let engine = try VulkanRenderEngine<Node>(metalLayer: platformWindow.metalLayer)
         self.renderEngine = engine
         self.platformWindow = platformWindow
         platformWindow.win_delegate = self
@@ -322,7 +322,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
             platformWindow = PlatformWindow<HostingWindow>(frame: bounds)
         }
 
-        let engine = try NucleantRenderEngine(metalLayer: platformWindow.metalLayer)
+        let engine = try VulkanRenderEngine<Node>(metalLayer: platformWindow.metalLayer)
         self.renderEngine = engine
         self.platformWindow = platformWindow
         platformWindow.win_delegate = self
@@ -367,16 +367,16 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
                 height: platformWindow?.bufferHeight ?? 0
             )
         }
-        let engine: NucleantRenderEngine
+        let engine: VulkanRenderEngine<Node>
         switch platformWindow.vulkanSurfaceKind {
         case .wayland(let display, let surface):
-            engine = try NucleantRenderEngine(
+            engine = try VulkanRenderEngine<Node>(
                 waylandDisplay: display,
                 waylandSurface: surface,
                 getExtent: getExtent
             )
         case .xcb(let connection, let window):
-            engine = try NucleantRenderEngine(
+            engine = try VulkanRenderEngine<Node>(
                 xcbConnection: connection,
                 xcbWindow: window,
                 getExtent: getExtent
@@ -431,7 +431,7 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
         //    Linux there is no layer to read a drawable size from, so the
         //    swapchain asks for the canvas's drawing buffer, in device
         //    pixels, whenever it recreates itself.
-        let engine = try NucleantRenderEngine(canvasSelector: platformWindow.canvasSelector) { [weak platformWindow] in
+        let engine = try VulkanRenderEngine<Node>(canvasSelector: platformWindow.canvasSelector) { [weak platformWindow] in
             (Int(platformWindow?.bufferWidth ?? 0), Int(platformWindow?.bufferHeight ?? 0))
         }
         self.renderEngine = engine
@@ -540,17 +540,22 @@ public final class HostingWindow: NucleantWindow, @unchecked Sendable {
     /// Build the window's canvas and bind it as the engine's slot for the
     /// tree, drawn by the window's renderer.
     @MainActor
-    private func attachCanvas(engine: NucleantRenderEngine, width: Int, height: Int) {
+    private func attachCanvas(engine: VulkanRenderEngine<Node>, width: Int, height: Int) {
         guard width > 0, height > 0 else { return }
         // The registry first: its node manager makes every canvas, the
         // window's included, and holds what they share.
         let shaderSlots = ShaderSlotRegistry(engine: engine)
         shaderSlots.scale = displayScale
-        shaderSlots.textures.window = self
+        shaderSlots.textures.window = self //as! HostingWindow<NucleantRenderNode>
         guard let canvas = shaderSlots.renderNodes.makeWindowCanvas(width: width, height: height) else { return }
         windowCanvas = canvas
         host.renderer = canvas.renderer
-        host.shaderSlots = shaderSlots
+        // The views reach the registry through `ShaderHost`, which is still
+        // `NucleantRenderNode`'s.
+        host.shaderSlots = shaderSlots as? ShaderSlotRegistry<NucleantRenderNode>
+        if host.shaderSlots == nil {
+            nucleantLogError("NucleantUI: the views can't reach a \(Node.self) registry yet (ShaderHost is NucleantRenderNode's)\n")
+        }
         self.shaderSlots = shaderSlots
         host.environment.displayScale = displayScale
         // The tree may already have been laid out against a size that arrived

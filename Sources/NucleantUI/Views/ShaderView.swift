@@ -749,7 +749,7 @@ struct ShaderContent: NodeContent {
 enum ShaderHost {
     /// The registry of the pass being laid out — `nil` outside a pass, which
     /// is also how anything offscreen knows it is not in one.
-    static var current: ShaderSlotRegistry?
+    static var current: ShaderSlotRegistry<NucleantRenderNode>?
 
     /// The registry of the window that is up, pass or no pass.
     ///
@@ -763,5 +763,5 @@ enum ShaderHost {
     ///
     /// Weak: the window owns its registry, and a window that has gone leaves
     /// this nil rather than a registry whose engine is dead.
-    static weak var attached: ShaderSlotRegistry?
+    static weak var attached: ShaderSlotRegistry<NucleantRenderNode>?
 }

@@ -39,7 +39,7 @@ public final class ViewHost {
 
     /// GPU slots for `Shader` views — and the per-view render nodes — if the
     /// window has an engine yet.
-    var shaderSlots: ShaderSlotRegistry?
+    var shaderSlots: ShaderSlotRegistry<NucleantRenderNode>?
 
     /// What the window canvas holds. A pass whose list comes out identical
     /// — a change that landed entirely inside a per-view node — leaves the
@@ -497,7 +497,7 @@ public final class ViewHost {
             shaderSlots.boundaries.useBoundary(
                 key: Self.overlayKey,
                 clip: nil,
-                frame: overlay.frame ?? RenderBoundaries.Frame(primaryOrder: overlay.order ?? shaderSlots.renderNodes.nextPaintOrder()),
+                frame: overlay.frame ?? RenderBoundaries<NucleantRenderNode>.Frame(primaryOrder: overlay.order ?? shaderSlots.renderNodes.nextPaintOrder()),
                 content: overlay.list
             )
             // Whatever the window paints over a node placed before it
