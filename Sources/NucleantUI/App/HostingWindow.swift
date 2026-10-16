@@ -54,6 +54,10 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     /// through `assumeIsolated`.
     let host: ViewHost
 
+    /// The window's input as its views reach it (`\.windowInput`): its
+    /// delegate hears each event before `host` does.
+    let input: WindowInput
+
     #if os(macOS) || os(iOS) || os(Android) || os(Linux) || os(WASI)
     /// Strongly held: `PlatformWindow` keeps only a weak `win_delegate` back
     /// here, so the window's lifetime is this object's to own.
@@ -115,6 +119,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         self.title = title
         self.win_rect = SIMD4(0, 0, 0, 0)
         self.host = ViewHost(root: root)
+        self.input = WindowInput()
+        host.environment.windowInput = input
         self.holdsCreatedSize = false
     }
 
@@ -125,6 +131,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         self.title = title
         self.win_rect = SIMD4(0, 0, Int(width), Int(height))
         self.host = ViewHost(root: root)
+        self.input = WindowInput()
+        host.environment.windowInput = input
         self.holdsCreatedSize = true
         self.sizing.defaultSize = Size(width: width, height: height)
     }
@@ -762,45 +770,72 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     public func on_mouse_down(x: Double, y: Double) {
         MainActor.assumeIsolated {
-            host.pointerDown(at: viewPoint(x: x, y: y), modifiers: Self.currentModifiers)
+            let point = viewPoint(x: x, y: y)
+            let modifiers = Self.currentModifiers
+            if input.delegate?.windowMouseDown(at: point, modifiers: modifiers) == true { return }
+            host.pointerDown(at: point, modifiers: modifiers)
         }
     }
 
     public func on_mouse_up(x: Double, y: Double) {
-        MainActor.assumeIsolated { host.pointerUp(at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowMouseUp(at: point) == true { return }
+            host.pointerUp(at: point)
+        }
     }
 
     public func on_mouse_dragged(x: Double, y: Double) {
-        MainActor.assumeIsolated { host.pointerMoved(to: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowMouseDragged(to: point) == true { return }
+            host.pointerMoved(to: point)
+        }
     }
 
     public func on_mouse_moved(x: Double, y: Double) {
         MainActor.assumeIsolated {
             let point = viewPoint(x: x, y: y)
             pointerLocation = point
+            if input.delegate?.windowMouseMoved(to: point) == true { return }
             host.pointerMoved(to: point)
         }
     }
 
     public func on_right_mouse_down(x: Double, y: Double) {
-        MainActor.assumeIsolated { host.secondaryClick(at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowRightMouseDown(at: point) == true { return }
+            host.secondaryClick(at: point)
+        }
     }
 
-    public func on_right_mouse_up(x: Double, y: Double) {}
+    public func on_right_mouse_up(x: Double, y: Double) {
+        MainActor.assumeIsolated {
+            _ = input.delegate?.windowRightMouseUp(at: viewPoint(x: x, y: y))
+        }
+    }
 
     public func on_scroll(dx: Double, dy: Double) {
-        MainActor.assumeIsolated { host.scroll(dx: dx, dy: dy) }
+        MainActor.assumeIsolated {
+            if input.delegate?.windowScroll(dx: dx, dy: dy, at: pointerLocation) == true { return }
+            host.scroll(dx: dx, dy: dy)
+        }
     }
 
     public func on_key_down(keyCode: UInt16, characters: String?) {
         MainActor.assumeIsolated {
-            host.keyDown(keyCode: keyCode, characters: characters, modifiers: Self.currentModifiers)
+            let modifiers = Self.currentModifiers
+            if input.delegate?.windowKeyDown(keyCode: keyCode, characters: characters, modifiers: modifiers) == true { return }
+            host.keyDown(keyCode: keyCode, characters: characters, modifiers: modifiers)
         }
     }
 
     public func on_key_up(keyCode: UInt16, characters: String?) {
         MainActor.assumeIsolated {
-            host.keyUp(keyCode: keyCode, characters: characters, modifiers: Self.currentModifiers)
+            let modifiers = Self.currentModifiers
+            if input.delegate?.windowKeyUp(keyCode: keyCode, characters: characters, modifiers: modifiers) == true { return }
+            host.keyUp(keyCode: keyCode, characters: characters, modifiers: modifiers)
         }
     }
 
@@ -826,27 +861,51 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     }
 
     public func on_magnify(phase: TrackpadGesturePhase, delta: Double, x: Double, y: Double) {
-        MainActor.assumeIsolated { host.magnify(phase: phase, delta: delta, at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowMagnify(phase: phase, delta: delta, at: point) == true { return }
+            host.magnify(phase: phase, delta: delta, at: point)
+        }
     }
 
     public func on_rotate(phase: TrackpadGesturePhase, delta: Double, x: Double, y: Double) {
-        MainActor.assumeIsolated { host.rotate(phase: phase, delta: delta, at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowRotate(phase: phase, delta: delta, at: point) == true { return }
+            host.rotate(phase: phase, delta: delta, at: point)
+        }
     }
 
     public func on_touch_down(id: Int, x: Double, y: Double) {
-        MainActor.assumeIsolated { host.pointerDown(id: id, at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowTouchDown(id: id, at: point) == true { return }
+            host.pointerDown(id: id, at: point)
+        }
     }
 
     public func on_touch_moved(id: Int, x: Double, y: Double) {
-        MainActor.assumeIsolated { host.pointerMoved(id: id, to: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowTouchMoved(id: id, to: point) == true { return }
+            host.pointerMoved(id: id, to: point)
+        }
     }
 
     public func on_touch_up(id: Int, x: Double, y: Double) {
-        MainActor.assumeIsolated { host.pointerUp(id: id, at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowTouchUp(id: id, at: point) == true { return }
+            host.pointerUp(id: id, at: point)
+        }
     }
 
     public func on_touch_cancelled(id: Int, x: Double, y: Double) {
-        MainActor.assumeIsolated { host.pointerCancelled(id: id, at: viewPoint(x: x, y: y)) }
+        MainActor.assumeIsolated {
+            let point = viewPoint(x: x, y: y)
+            if input.delegate?.windowTouchCancelled(id: id, at: point) == true { return }
+            host.pointerCancelled(id: id, at: point)
+        }
     }
 }
 
