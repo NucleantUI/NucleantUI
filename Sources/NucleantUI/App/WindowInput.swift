@@ -2,18 +2,25 @@
 //  WindowInput.swift
 //  NucleantUI
 //
-//  The window's input as the platform reports it, before the view tree's
-//  hit testing, gestures and focus see it — for a view that runs something
-//  of its own inside it (another UI toolkit) and wants the pointer and the
-//  keys as they come.
+//  The window's input as the platform reports it, where the view tree has
+//  no taker for it — for a view that runs something of its own inside it
+//  (another UI toolkit) and wants the pointer and the keys as they come.
 //
 
 import NucleantWindow
 
-/// Hears a window's input before its views do. Each method gets one event,
-/// in the window's points (origin top-left), and returns whether it took it:
-/// `true` keeps it from the views, `false` lets them have it. Every method
-/// returns `false` unless implemented.
+/// Hears the window's input that none of its views takes. Each method gets
+/// one event, in the window's points (origin top-left), and returns whether
+/// it took it: `true` keeps it from the views, `false` lets them have it.
+/// Every method returns `false` unless implemented.
+///
+/// A press, a touch, a wheel or trackpad gesture, or a hover is offered only
+/// where the delegate wants it (`windowWantsInput`) and no view takes presses — no control, gesture, or menu or popover
+/// backdrop is frontmost there. The moves and the release of a press it
+/// took are its, wherever they go — and only those: what the methods for
+/// them return is not asked. Keys are offered only while no view has them,
+/// and a press it takes takes them from the view that had them. So what
+/// the views draw on top of the delegate's content keeps its own input.
 ///
 /// ```swift
 /// @Environment(\.windowInput) var windowInput
@@ -22,6 +29,9 @@ import NucleantWindow
 /// ```
 @MainActor
 public protocol WindowInputDelegate: AnyObject {
+    /// Whether `point` is in what the delegate shows — asked before
+    /// anything else, so input elsewhere costs the views nothing more.
+    func windowWantsInput(at point: Point) -> Bool
     func windowMouseDown(at point: Point, modifiers: EventModifiers) -> Bool
     func windowMouseUp(at point: Point) -> Bool
     /// The mouse moved with its button down.
@@ -45,6 +55,7 @@ public protocol WindowInputDelegate: AnyObject {
 }
 
 extension WindowInputDelegate {
+    public func windowWantsInput(at point: Point) -> Bool { true }
     public func windowMouseDown(at point: Point, modifiers: EventModifiers) -> Bool { false }
     public func windowMouseUp(at point: Point) -> Bool { false }
     public func windowMouseDragged(to point: Point) -> Bool { false }
@@ -63,7 +74,8 @@ extension WindowInputDelegate {
 }
 
 /// A window's input, as its views reach it: `@Environment(\.windowInput)`.
-/// Its `delegate` hears every event first. One per window, for its lifetime.
+/// Its `delegate` hears what no view takes. One per window, for its
+/// lifetime.
 @MainActor
 public final class WindowInput {
     public weak var delegate: WindowInputDelegate?

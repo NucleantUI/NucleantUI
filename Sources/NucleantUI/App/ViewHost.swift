@@ -870,6 +870,35 @@ public final class ViewHost {
         return target
     }
 
+    // MARK: - What the window's input delegate may have
+
+    /// Whether a view here takes the pointer at `point` (window
+    /// coordinates): a pointer target or a gesture, frontmost — a menu's or
+    /// a popover's backdrop included. Where none does, the window's input
+    /// delegate may have the hover and the wheel.
+    func takesPointer(at point: Point) -> Bool {
+        guard let chain = rootNode?.pressChain(at: point) else { return false }
+        return chain.press != nil || !chain.gestures.isEmpty
+    }
+
+    /// Whether a view here takes a press at `point`: one that takes the
+    /// pointer, or one a press there gives the keys to.
+    func takesPress(at point: Point) -> Bool {
+        if takesPointer(at: point) { return true }
+        return rootNode?.hitTest(point) { node in
+            node.content.focusTarget.flatMap { $0.isEnabled ? $0 : nil }
+        } != nil
+    }
+
+    /// Whether a view here has the keys.
+    var hasFocusedView: Bool { focusedTarget() != nil }
+
+    /// Take the keys from the view that has them: the window's input
+    /// delegate took a press.
+    func clearFocus() {
+        setFocus(nil)
+    }
+
     // MARK: - Keys
 
     /// A key pressed, for the view that has the keys — or, for Tab, a move
