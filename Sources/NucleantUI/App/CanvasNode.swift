@@ -21,8 +21,8 @@ extension RenderNodeManager {
     /// instead of composited.
     @MainActor
     final class CanvasNode {
-        let node: CanvasBackend.Node
-        let container: NucleantRenderNode
+        let node: CanvasBackend<N>.Node
+        let container: N
         let renderer: DisplayRenderer
         /// Pixel size of the image — the frame rounded up to whole granules,
         /// and kept while the frame fits with under two granules spare, so a
@@ -43,7 +43,7 @@ extension RenderNodeManager {
         var rect: Rect = .zero
         var pixelOrigin: Point = .zero
 
-        init(node: CanvasBackend.Node, container: NucleantRenderNode, renderer: DisplayRenderer, width: Int, height: Int) {
+        init(node: CanvasBackend<N>.Node, container: N, renderer: DisplayRenderer, width: Int, height: Int) {
             self.node = node
             self.container = container
             self.renderer = renderer

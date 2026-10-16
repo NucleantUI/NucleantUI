@@ -24,15 +24,15 @@ public typealias DisplayRenderer = SkiaDisplayRenderer
 
 /// How a canvas node is built, resized, emptied and freed with Skia.
 @MainActor
-final class CanvasBackend {
-    typealias Node = SkiaShaderNode<NucleantRenderNode>
+final class CanvasBackend<N: NucleantContainerNode> {
+    typealias Node = SkiaShaderNode<N>
 
-    private unowned let engine: NucleantRenderEngine
+    private unowned let engine: VulkanRenderEngine<N>
 
     /// The Ganesh context every node draws through, made with the first.
     private var context: SkiaVulkanContext?
 
-    init(engine: NucleantRenderEngine) {
+    init(engine: VulkanRenderEngine<N>) {
         self.engine = engine
     }
 
@@ -52,14 +52,14 @@ final class CanvasBackend {
 
     /// A fresh node at `width × height` and its engine container — not yet
     /// in the engine's list — with a renderer drawing into it.
-    func makeCanvas(width: Int, height: Int) -> (node: Node, container: NucleantRenderNode, renderer: DisplayRenderer)? {
+    func makeCanvas(width: Int, height: Int) -> (node: Node, container: N, renderer: DisplayRenderer)? {
         guard let context = sharedContext(),
               let node = engine.makeSkiaWidgetNode(context: context, width: width, height: height) else {
             nucleantFlushStandardOutput()
             nucleantLogError("NucleantUI: Skia canvas build (\(width)x\(height)) failed\n")
             return nil
         }
-        let container = NucleantRenderNode(id: Int.random(in: Int.min...Int.max), context: .skia(node))
+        let container = N(id: Int.random(in: Int.min...Int.max), context: .skia(node))
         container.observeContext()
         return (node, container, SkiaDisplayRenderer(node: node))
     }
@@ -81,7 +81,7 @@ final class CanvasBackend {
     /// The copy-target image an automatic per-view node holds. Its pixels
     /// are copied out of the painter's Skia image, which is RGBA and read as
     /// RGBA — the copy is bytes, so this one is the same.
-    func makeImageNode(width: Int, height: Int) throws -> ImageNode<NucleantRenderNode> {
+    func makeImageNode(width: Int, height: Int) throws -> ImageNode<N> {
         try engine.makeImageNode(
             width: width, height: height,
             format: VK_FORMAT_R8G8B8A8_UNORM, viewFormat: VK_FORMAT_R8G8B8A8_UNORM

@@ -22,6 +22,7 @@
 //
 
 import Foundation
+import NucleantVulkan
 
 /// Wraps the node a boundary view's body produced. Layout passes straight
 /// through — size, flexibility, hit testing all reach the body — and only
@@ -57,8 +58,8 @@ struct RenderBoundaryContent: NodeContent {
 /// The images are pulled from the `RenderNodeManager` and filled through
 /// the `NodePainter`.
 @MainActor
-final class RenderBoundaries {
-    typealias ImageEntry = RenderNodeManager.ImageEntry
+final class RenderBoundaries<N: NucleantContainerNode> {
+    typealias ImageEntry = RenderNodeManager<N>.ImageEntry
 
     /// One boundary being placed: the nodes placed directly inside it, in
     /// paint order, each with where in the boundary's own list it fell.
@@ -80,14 +81,14 @@ final class RenderBoundaries {
         let runOrder: Int
     }
 
-    private let nodes: RenderNodeManager
-    private let painter: NodePainter
+    private let nodes: RenderNodeManager<N>
+    private let painter: NodePainter<N>
 
     /// The boundaries open at this point of the pass, innermost last; the
     /// first is the window's own frame.
     private var frames: [Frame] = []
 
-    init(nodes: RenderNodeManager, painter: NodePainter) {
+    init(nodes: RenderNodeManager<N>, painter: NodePainter<N>) {
         self.nodes = nodes
         self.painter = painter
     }
@@ -190,7 +191,7 @@ final class RenderBoundaries {
         list = DisplayList(commands: split.primary)
     }
 
-    private static let rootIdentity = ViewIdentity(type: ObjectIdentifier(RenderBoundaries.self), viewID: .unknown)
+    private static var rootIdentity: ViewIdentity { ViewIdentity(type: ObjectIdentifier(RenderBoundaries.self), viewID: .unknown) }
 
     /// Cut `commands` into runs at the markers, and sort what comes after
     /// the first marker into the primary image — which composites under

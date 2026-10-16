@@ -66,10 +66,9 @@ public struct ShaderImageInput: @unchecked Sendable {
 /// it stays out of `engine.readable` rather than compositing whatever the
 /// allocation happened to contain.
 @Observable
-public final class ComputeShaderNode: VulkanRenderNode, @unchecked Sendable {
+public final class ComputeShaderNode<ContainerNode: RenderContainerNode>: VulkanRenderNode, @unchecked Sendable {
 
-    public typealias ContainerNode = NucleantRenderNode
-    public typealias Engine = NucleantRenderEngine
+    public typealias Engine = VulkanRenderEngine<ContainerNode>
 
     public var width: UInt32
     public var height: UInt32
@@ -127,7 +126,7 @@ public final class ComputeShaderNode: VulkanRenderNode, @unchecked Sendable {
     }
 
     /// No canvas draw — the dispatch writes every pixel of the image.
-    public func update(_ engine: Engine, slot: NucleantRenderNode, cmd: VkCommandBuffer) {
+    public func update(_ engine: Engine, slot: ContainerNode, cmd: VkCommandBuffer) {
         guard slot.needsRender else { return }
         guard let pipeline = computePipeline,
               let layout = computeLayout,
@@ -225,10 +224,9 @@ public final class ComputeShaderNode: VulkanRenderNode, @unchecked Sendable {
 /// dispatch and no canvas draw to run, and without the publish the composite
 /// pass skips the slot entirely (`recordComposite` gates on `readable`).
 @Observable
-public final class RenderTextureNode: VulkanRenderNode, @unchecked Sendable {
+public final class RenderTextureNode<ContainerNode: RenderContainerNode>: VulkanRenderNode, @unchecked Sendable {
 
-    public typealias ContainerNode = NucleantRenderNode
-    public typealias Engine = NucleantRenderEngine
+    public typealias Engine = VulkanRenderEngine<ContainerNode>
 
     public var width: UInt32
     public var height: UInt32
@@ -278,7 +276,7 @@ public final class RenderTextureNode: VulkanRenderNode, @unchecked Sendable {
     /// whoever wrote it — the texture's canvas node, or a compute slot — and
     /// that is the layout the composite samples in, so there is nothing to
     /// transition here either.
-    public func update(_ engine: Engine, slot: NucleantRenderNode, cmd: VkCommandBuffer) {
+    public func update(_ engine: Engine, slot: ContainerNode, cmd: VkCommandBuffer) {
         guard hasContent else { return }
         engine.readable.insert(slot.id)
     }

@@ -9,6 +9,7 @@
 //  and how far it may go, and the content's own frame supplies the limits.
 //
 
+import NucleantVulkan
 import NucleantWindow
 
 /// The strategy a scene's windows use for their minimum and maximum size.
@@ -207,8 +208,8 @@ struct WindowSizingScene<Base: Scene>: Scene {
 
     var body: Never { fatalError() }
 
-    func _makeWindows() -> [HostingWindow] {
-        let windows = base._makeWindows()
+    func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>] {
+        let windows: [HostingWindow<Node>] = base._makeWindows()
         for window in windows {
             apply(&window.sizing)
         }

@@ -26,6 +26,7 @@
 //
 
 import NucleantSkia
+import NucleantVulkan
 
 @MainActor
 public final class SkiaDisplayRenderer {
@@ -37,7 +38,7 @@ public final class SkiaDisplayRenderer {
     /// Layout runs in points; the canvas is sized in backing-store pixels.
     public var scale: Double = 1
 
-    public init(node: SkiaShaderNode<NucleantRenderNode>) {
+    public init<N: RenderContainerNode>(node: SkiaShaderNode<N>) {
         target = { node.canvas.surface?.canvas }
         setUpPaints()
     }

@@ -29,11 +29,11 @@ import NucleantVulkan
 import Dispatch
 
 @MainActor
-final class NodePainter {
-    typealias ImageEntry = RenderNodeManager.ImageEntry
+final class NodePainter<N: NucleantContainerNode> {
+    typealias ImageEntry = RenderNodeManager<N>.ImageEntry
 
-    private unowned let engine: NucleantRenderEngine
-    private let nodes: RenderNodeManager
+    private unowned let engine: VulkanRenderEngine<N>
+    private let nodes: RenderNodeManager<N>
 
     /// Backing-store pixels per point.
     var scale: Double = 1 {
@@ -44,10 +44,10 @@ final class NodePainter {
 
     /// Rows the painter may grow to for one pass: wgpu's default limit on
     /// a 2D texture. Past it, what is left waits for the next frame.
-    static let maxHeight = 8192
+    static var maxHeight: Int { 8192 }
 
     /// The painter's canvas node, made on first use.
-    private var canvas: RenderNodeManager.CanvasNode?
+    private var canvas: RenderNodeManager<N>.CanvasNode?
     private var warned = false
 
     /// Entries with `pending` content, painted at the end of the pass — or
@@ -62,7 +62,7 @@ final class NodePainter {
     /// cleared by `frameWillDraw`.
     private var paintedThisFrame = false
 
-    init(engine: NucleantRenderEngine, nodes: RenderNodeManager) {
+    init(engine: VulkanRenderEngine<N>, nodes: RenderNodeManager<N>) {
         self.engine = engine
         self.nodes = nodes
     }
@@ -223,7 +223,7 @@ final class NodePainter {
         // The window's height unless the pass needs more — and back to it
         // afterwards, so a pass that paints one knob is not drawing a
         // canvas sized for the pass that painted everything.
-        let granule = RenderNodeManager.granule
+        let granule = RenderNodeManager<N>.granule
         let height = max(window.height, (packed.height + granule - 1) / granule * granule)
         guard let painter = painter(width: window.width, height: height), !packed.placed.isEmpty else {
             for entry in entries {
@@ -284,7 +284,7 @@ final class NodePainter {
         width: Int,
         maxHeight: Int
     ) -> (placed: [(entry: ImageEntry, x: Int, y: Int)], height: Int, rest: [ImageEntry]) {
-        let gutter = RenderNodeManager.granule
+        let gutter = RenderNodeManager<N>.granule
         var placed: [(entry: ImageEntry, x: Int, y: Int)] = []
         var rest: [ImageEntry] = []
         var x = 0, y = 0, shelf = 0
@@ -323,7 +323,7 @@ final class NodePainter {
     /// The painter at `width × height` — retargeted when that changed, made
     /// on first use: a canvas node pulled from the manager like any other,
     /// composited nowhere.
-    private func painter(width: Int, height: Int) -> RenderNodeManager.CanvasNode? {
+    private func painter(width: Int, height: Int) -> RenderNodeManager<N>.CanvasNode? {
         if let canvas {
             guard canvas.width != width || canvas.height != height else { return canvas }
             if nodes.resize(canvas, width: width, height: height) { return canvas }

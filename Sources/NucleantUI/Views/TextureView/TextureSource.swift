@@ -34,28 +34,30 @@ import NucleantVulkan
 /// the layout pass that caused it — never during one.
 @MainActor
 public protocol TextureSource: AnyObject {
+    
+    associatedtype Node: NucleantContainerNode
     /// The view has a texture, or its texture changed size or scale — the
     /// first call is the view appearing. Frames written from now on should
     /// be `texture.pixelWidth × texture.pixelHeight`.
-    func textureDidChange(_ texture: ViewTexture)
+    func textureDidChange(_ texture: ViewTexture<Node>)
 
     /// The view left the tree, or was handed another source. `texture`
     /// accepts no more writes.
-    func textureDidDisappear(_ texture: ViewTexture)
+    func textureDidDisappear(_ texture: ViewTexture<Node>)
 
     /// The view moved in its window, or what clips it changed, while its
     /// size and scale stayed the same — `texture.frame` and
     /// `texture.visibleFrame` say where it is now. (A move together with a
     /// resize is a `textureDidChange`.) Ignored by default: a source that
     /// only fills the texture has no use for where it is shown.
-    func textureDidMove(_ texture: ViewTexture)
+    func textureDidMove(_ texture: ViewTexture<Node>)
 
     /// Input over the view — see `TextureInputEvent`. Ignored by default.
     func textureInput(_ event: TextureInputEvent)
 }
 
 extension TextureSource {
-    public func textureDidMove(_ texture: ViewTexture) {}
+    public func textureDidMove(_ texture: ViewTexture<Node>) {}
     public func textureInput(_ event: TextureInputEvent) {}
 }
 
@@ -92,7 +94,7 @@ public enum TextureInputEvent: Sendable {
 /// call returns — so what was written may be reused or recycled by the
 /// producer at once, and the view shows whole frames only.
 @MainActor
-public final class ViewTexture {
+public final class ViewTexture<Node: NucleantContainerNode> {
     /// The view's frame, in points.
     public internal(set) var size: Size
     /// Backing-store pixels per point.
@@ -110,7 +112,7 @@ public final class ViewTexture {
     public internal(set) var visibleFrame: Rect
 
     /// The window the view is in — `nil` for a tree laid out without one.
-    weak var window: HostingWindow?
+    weak var window: HostingWindow<Node>?
 
     /// The size to render frames at: the frame in pixels, rounded up.
     public var pixelWidth: Int { max(1, Int((size.width * scale).rounded(.up))) }
@@ -119,14 +121,14 @@ public final class ViewTexture {
     /// False once the view has let the texture go; writes are then refused.
     public internal(set) var isAttached = true
 
-    let node: ExternalTextureNode<NucleantRenderNode>
-    let container: NucleantRenderNode
-    private unowned let engine: NucleantRenderEngine
+    let node: ExternalTextureNode<Node>
+    let container: Node
+    private unowned let engine: VulkanRenderEngine<Node>
 
     init(
-        node: ExternalTextureNode<NucleantRenderNode>,
-        container: NucleantRenderNode,
-        engine: NucleantRenderEngine,
+        node: ExternalTextureNode<Node>,
+        container: Node,
+        engine: VulkanRenderEngine<Node>,
         frame: Rect,
         visibleFrame: Rect,
         scale: Double

@@ -48,14 +48,14 @@ struct RenderNodeKey: Hashable {
 }
 
 @MainActor
-final class RenderNodeManager {
+final class RenderNodeManager<N: NucleantContainerNode> {
 
     /// A standing automatic node: the engine's copy-target image, and what
     /// `NodePainter` knows it holds.
     @MainActor
     final class ImageEntry {
-        let node: ImageNode<NucleantRenderNode>
-        let container: NucleantRenderNode
+        let node: ImageNode<N>
+        let container: N
         /// What the image holds, in the image's own coordinates; `nil` for a
         /// fresh or pooled image holding nothing of use.
         var content: DisplayList?
@@ -75,16 +75,16 @@ final class RenderNodeManager {
         var width: Int { Int(node.width) }
         var height: Int { Int(node.height) }
 
-        init(node: ImageNode<NucleantRenderNode>, container: NucleantRenderNode) {
+        init(node: ImageNode<N>, container: N) {
             self.node = node
             self.container = container
         }
     }
 
-    private unowned let engine: NucleantRenderEngine
+    private unowned let engine: VulkanRenderEngine<N>
 
     /// How this build's canvases are made — Skia's or ThorVG's.
-    private let backend: CanvasBackend
+    private let backend: CanvasBackend<N>
 
     /// The `ThorCanvas` views' nodes, ThorVG in every build.
     private(set) lazy var thorCanvases = ThorCanvasNodes(engine: engine, manager: self)
@@ -113,7 +113,7 @@ final class RenderNodeManager {
     /// Images are allocated in multiples of this many pixels per side: a
     /// 128×130 frame gets a 128×144 image, and growing to 128×140 reallocates
     /// nothing. `compositeRect` keeps the exact frame.
-    static let granule = 16
+    static var granule: Int { 16 }
 
     /// Canvases no longer in use, kept for the next node to appear — see the
     /// file comment for why a canvas is never thrown away lightly.
@@ -135,7 +135,7 @@ final class RenderNodeManager {
     private var paintOrders: [Int: Int] = [:]
     private var paintCounter = 0
 
-    init(engine: NucleantRenderEngine) {
+    init(engine: VulkanRenderEngine<N>) {
         self.engine = engine
         self.backend = CanvasBackend(engine: engine)
     }
@@ -162,7 +162,7 @@ final class RenderNodeManager {
     /// File `container` at `order` for this pass. `layer` puts a slot's
     /// canvas just before the compute node that samples it: the engine
     /// updates nodes in list order, so the canvas must be drawn first.
-    func composite(_ container: NucleantRenderNode, at order: Int, layer: Bool = false) {
+    func composite(_ container: N, at order: Int, layer: Bool = false) {
         paintOrders[container.id] = order * 2 + (layer ? 0 : 1)
     }
 
@@ -207,7 +207,7 @@ final class RenderNodeManager {
     private struct Ranked: Comparable {
         let order: Int
         let offset: Int
-        let node: NucleantRenderNode
+        let node: N
 
         static func < (a: Ranked, b: Ranked) -> Bool {
             a.order != b.order ? a.order < b.order : a.offset < b.offset
@@ -422,7 +422,7 @@ final class RenderNodeManager {
             engine.append(entry.container)
             return entry
         }
-        let node: ImageNode<NucleantRenderNode>
+        let node: ImageNode<N>
         do {
             node = try backend.makeImageNode(width: width, height: height)
         } catch {
@@ -430,7 +430,7 @@ final class RenderNodeManager {
             nucleantLogError("NucleantUI: image node (\(width)x\(height)) failed: \(error)\n")
             return nil
         }
-        let container = NucleantRenderNode(id: Int.random(in: Int.min...Int.max), context: .image(node))
+        let container = N(id: Int.random(in: Int.min...Int.max), context: .image(node))
         container.observeContext()
         // Nothing to draw at frame time; the composite samples it once
         // `readable` says the first copy landed.

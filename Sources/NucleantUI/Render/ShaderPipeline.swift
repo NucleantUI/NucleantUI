@@ -407,8 +407,8 @@ final class ShaderPipeline {
     /// `argumentCapacity` is how many floats of `ShaderArgument` data to make
     /// room for — 0 for a shader without arguments, which then has no
     /// binding 3 at all.
-    init(
-        engine: NucleantRenderEngine,
+    init<N: RenderContainerNode>(
+        engine: VulkanRenderEngine<N>,
         imageView: VkImageView,
         inputs: [ShaderImageInput] = [],
         source: ShaderCode,

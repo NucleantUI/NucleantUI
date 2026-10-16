@@ -83,7 +83,7 @@ public final class RenderTexture {
 
     /// The pooled canvas node the content is rasterized into, once a registry
     /// exists. Recycled a frame after this object goes away.
-    private var canvas: RenderNodeManager.CanvasNode?
+    private var canvas: RenderNodeManager<NucleantRenderNode>.CanvasNode?
 
     /// The image a placement borrows and a shader samples.
     var gpuImage: (image: VkImage, view: VkImageView, width: Int, height: Int)? {

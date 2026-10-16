@@ -24,18 +24,18 @@ import CVulkan
 import NucleantVulkan
 
 @MainActor
-final class RenderTextureManager {
+final class RenderTextureManager<N: NucleantContainerNode> {
 
-    private unowned let engine: NucleantRenderEngine
+    private unowned let engine: VulkanRenderEngine<N>
     /// For the canvas pool, the paint order and the composite bookkeeping —
     /// the same ones every other per-view node goes through.
-    private unowned let renderNodes: RenderNodeManager
+    private unowned let renderNodes: RenderNodeManager<N>
 
     /// One live texture's canvas. `texture` is weak: the texture is the
     /// owner, and its going away is what releases this.
     private struct Backing {
         weak var texture: RenderTexture?
-        let canvas: RenderNodeManager.CanvasNode
+        let canvas: RenderNodeManager<N>.CanvasNode
     }
 
     private var backings: [Backing] = []
@@ -43,8 +43,8 @@ final class RenderTextureManager {
     /// One `tex.view()`'s container: a borrowed image composited into a rect.
     @MainActor
     final class Placement {
-        let node: RenderTextureNode
-        let container: NucleantRenderNode
+        let node: RenderTextureNode<N>
+        let container: N
         /// The image view the engine's composite descriptor set was built
         /// with — it caches per slot id, so a changed handle has to invalidate
         /// it rather than just being written here.
@@ -52,7 +52,7 @@ final class RenderTextureManager {
         /// Seen during the current pass. Anything not seen has left the tree.
         var used = true
 
-        init(node: RenderTextureNode, container: NucleantRenderNode) {
+        init(node: RenderTextureNode<N>, container: N) {
             self.node = node
             self.container = container
             self.boundView = node.imageView
@@ -68,7 +68,7 @@ final class RenderTextureManager {
     /// Renders asked for during a layout pass, run at `endPass`.
     private var queued: [@MainActor () -> Void] = []
 
-    init(engine: NucleantRenderEngine, renderNodes: RenderNodeManager) {
+    init(engine: VulkanRenderEngine<N>, renderNodes: RenderNodeManager<N>) {
         self.engine = engine
         self.renderNodes = renderNodes
     }
@@ -88,7 +88,7 @@ final class RenderTextureManager {
         width: Int,
         height: Int,
         scale: Double
-    ) -> RenderNodeManager.CanvasNode? {
+    ) -> RenderNodeManager<N>.CanvasNode? {
         guard let canvas = renderNodes.acquire(width: width, height: height) else {
             nucleantLogError("NucleantUI: render texture canvas (\(width)x\(height)) failed\n")
             return nil
@@ -135,13 +135,13 @@ final class RenderTextureManager {
                 engine.invalidateComposite(id: placement.container.id)
             }
         } else {
-            let node = RenderTextureNode(
+            let node = RenderTextureNode<N>(
                 width: UInt32(image.width),
                 height: UInt32(image.height),
                 image: image.image,
                 imageView: image.view
             )
-            let container = NucleantRenderNode(
+            let container = N(
                 id: Int.random(in: Int.min...Int.max),
                 context: .renderTexture(node)
             )

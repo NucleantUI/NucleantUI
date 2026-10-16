@@ -12,9 +12,35 @@ import NucleantVulkan
 import NucleantThorVG
 import NucleantSkia
 
-public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable {
+/// What every node NucleantUI's view tree draws into has to offer: its
+/// contexts — the cases below, which a node of an app's own carries alongside
+/// any of its own — and where it composites. An enum's cases satisfy the
+/// `static func`s, so `NucleantRenderNode.Context` does as it is.
+public protocol NucleantNodeContext: RenderNodeContext {
+    associatedtype Node: RenderContainerNode
 
-    public enum Context: RenderNodeContext {
+    static func thor(_ node: ThorShaderNode<Node>) -> Self
+    static func skia(_ node: SkiaShaderNode<Node>) -> Self
+    static func compute(_ node: ComputeShaderNode<Node>) -> Self
+    static func vertexShader(_ node: VertFragShaderNode<Node>) -> Self
+    static func image(_ node: ImageNode<Node>) -> Self
+    static func externalTexture(_ node: ExternalTextureNode<Node>) -> Self
+    static func renderTexture(_ node: RenderTextureNode<Node>) -> Self
+}
+
+/// The container node a NucleantUI window renders with — `NucleantRenderNode`
+/// unless the app picks its own (`NucleantApp.RenderNode`).
+public protocol NucleantContainerNode: RenderContainerNode where Context: NucleantNodeContext, Context.Node == Self {
+    var compositeRect: SIMD4<Double>? { get set }
+    var compositeScissor: SIMD4<Double>? { get set }
+    var compositesToWindow: Bool { get set }
+}
+
+public final class NucleantRenderNode: NucleantContainerNode, @unchecked Sendable {
+
+    public enum Context: NucleantNodeContext {
+        public typealias Node = NucleantRenderNode
+
         /// A ThorVG canvas: a `ThorCanvas` view's in every build, and every
         /// display-list canvas in the ThorVG build (CanvasBackend+Thor.swift).
         case thor(ThorShaderNode<NucleantRenderNode>)
@@ -29,7 +55,7 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
         /// its own backends, and what a NucleantUI shader needs — a dispatch
         /// released to the compute stage as well as the fragment one, several
         /// sampled images — is ours to decide.
-        case compute(ComputeShaderNode)
+        case compute(ComputeShaderNode<NucleantRenderNode>)
         /// One `VertexShader` view's image, drawn by a vertex + fragment
         /// pipeline and composited the same way.
         case vertexShader(VertFragShaderNode<NucleantRenderNode>)
@@ -44,7 +70,7 @@ public final class NucleantRenderNode: RenderContainerNode, @unchecked Sendable 
         /// One *placement* of a `RenderTexture`: an image the slot does not
         /// own, composited into a view's rect. Several of these, and a shader
         /// sampling it, can point at the same image — the texture owns it.
-        case renderTexture(RenderTextureNode)
+        case renderTexture(RenderTextureNode<NucleantRenderNode>)
     }
 
     public let id: Int

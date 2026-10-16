@@ -35,13 +35,13 @@ import NucleantThorVG
 import Dispatch
 
 @MainActor
-final class ShaderSlotRegistry {
+final class ShaderSlotRegistry<N: NucleantContainerNode> {
 
     /// What a slot draws with: a compute dispatch or a vertex + fragment pass.
     @MainActor
     enum Backend {
-        case compute(ComputeShaderNode, ShaderPipeline)
-        case graphics(VertFragShaderNode<NucleantRenderNode>, VertexShaderPipeline)
+        case compute(ComputeShaderNode<N>, ShaderPipeline)
+        case graphics(VertFragShaderNode<N>, VertexShaderPipeline)
 
         var argumentCapacity: Int {
             switch self {
@@ -97,7 +97,7 @@ final class ShaderSlotRegistry {
     @MainActor
     final class Slot {
         let backend: Backend
-        let container: NucleantRenderNode
+        let container: N
         /// For a `.shader(_:)` effect: the canvas the view is drawn into,
         /// which the shader samples. `nil` for a generative `Shader` view —
         /// and for a retired effect slot whose canvas has been handed on.
@@ -107,7 +107,7 @@ final class ShaderSlotRegistry {
         /// a layer. Borrowed — `RenderNodeManager` keeps and frees it — and
         /// `canvasView` is the image view the pipeline was bound to, so a
         /// node that got a new image gets a new slot.
-        let canvas: RenderNodeManager.ThorCanvasNode?
+        let canvas: RenderNodeManager<N>.ThorCanvasNode?
         let canvasView: VkImageView?
         /// For `tex.shader(_:)`: the `RenderTexture` whose image is what the
         /// shader samples as its content, in place of a layer. Borrowed the
@@ -171,9 +171,9 @@ final class ShaderSlotRegistry {
 
         init(
             backend: Backend,
-            container: NucleantRenderNode,
+            container: N,
             layer: Layer?,
-            canvas: RenderNodeManager.ThorCanvasNode?,
+            canvas: RenderNodeManager<N>.ThorCanvasNode?,
             contentTexture: RenderTexture?,
             inputs: [ShaderImageInput],
             width: Int,
@@ -208,22 +208,22 @@ final class ShaderSlotRegistry {
     /// node that is never composited — `content` and `origin` are what it
     /// holds and where the view was when it was drawn; an identical list at
     /// the same place is not drawn again.
-    typealias Layer = RenderNodeManager.CanvasNode
+    typealias Layer = RenderNodeManager<N>.CanvasNode
 
-    private unowned let engine: NucleantRenderEngine
+    private unowned let engine: VulkanRenderEngine<N>
 
     /// The per-view render nodes (and the canvas pool the layers share),
     /// the painter that fills the automatic image nodes, and the
     /// boundaries a pass's drawing splits at.
-    let renderNodes: RenderNodeManager
-    let painter: NodePainter
-    let boundaries: RenderBoundaries
+    let renderNodes: RenderNodeManager<N>
+    let painter: NodePainter<N>
+    let boundaries: RenderBoundaries<N>
     /// The `TextureView` nodes, whose pixels their sources write.
-    let textures: TextureNodeManager
+    let textures: TextureNodeManager<N>
     /// The `RenderTexture` canvases, and the containers that show one in the
     /// tree. Unlike everything else here, a texture's lifetime is its owner's
     /// Swift reference rather than the pass.
-    let renderTextures: RenderTextureManager
+    let renderTextures: RenderTextureManager<N>
 
     /// Keyed by the view's structural path — the same identity `@State` uses,
     /// so a shader keeps its pipeline across rebuilds and loses it only when
@@ -241,7 +241,7 @@ final class ShaderSlotRegistry {
     /// Slots detached from the engine but not yet freed — see `endPass`.
     private var pendingDestroy: [Slot] = []
 
-    init(engine: NucleantRenderEngine) {
+    init(engine: VulkanRenderEngine<N>) {
         self.engine = engine
         self.renderNodes = RenderNodeManager(engine: engine)
         self.painter = NodePainter(engine: engine, nodes: renderNodes)
@@ -249,7 +249,7 @@ final class ShaderSlotRegistry {
         self.textures = TextureNodeManager(engine: engine, renderNodes: renderNodes)
         self.renderTextures = RenderTextureManager(engine: engine, renderNodes: renderNodes)
         // What a `RenderTexture` made outside any pass reaches for.
-        ShaderHost.attached = self
+        ShaderHost.attached = self as? ShaderSlotRegistry<NucleantRenderNode>
     }
 
     // MARK: - Layout-pass lifecycle
@@ -362,7 +362,7 @@ final class ShaderSlotRegistry {
         textures: ShaderTextures = .none,
         rect: Rect,
         clip: Rect?,
-        canvas: RenderNodeManager.ThorCanvasNode,
+        canvas: RenderNodeManager<N>.ThorCanvasNode,
         changed: Bool
     ) {
         let request: Request = function.isGraphics
@@ -419,7 +419,7 @@ final class ShaderSlotRegistry {
         textures: ShaderTextures,
         rect: Rect,
         clip: Rect?,
-        canvas canvasInput: RenderNodeManager.ThorCanvasNode? = nil,
+        canvas canvasInput: RenderNodeManager<N>.ThorCanvasNode? = nil,
         texture textureInput: RenderTexture? = nil
     ) -> Slot? {
         let source = request.source
@@ -751,7 +751,7 @@ final class ShaderSlotRegistry {
         /// A canvas to retarget if given, a spare or a fresh one otherwise.
         case reuse(Layer?)
         /// No layer: sample this canvas node's own image.
-        case canvas(RenderNodeManager.ThorCanvasNode)
+        case canvas(RenderNodeManager<N>.ThorCanvasNode)
         /// No layer: sample this `RenderTexture`'s own image.
         case texture(RenderTexture)
     }
@@ -767,7 +767,7 @@ final class ShaderSlotRegistry {
     ) -> Slot? {
         let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
         let layer: Layer?
-        let canvas: RenderNodeManager.ThorCanvasNode?
+        let canvas: RenderNodeManager<N>.ThorCanvasNode?
         let contentTexture: RenderTexture?
         let withLayer: Bool
         switch layerRequest {
@@ -810,7 +810,7 @@ final class ShaderSlotRegistry {
             // array that grows a little does not rebuild the slot each time.
             let capacity = arguments.isEmpty ? 0 : max(256, arguments.packed.count * 3 / 2)
             let backend: Backend
-            let context: NucleantRenderNode.Context
+            let context: N.Context
             switch request {
             case .compute(let function, _):
                 let image = try makeImage(width: width, height: height, usage: .storage)
@@ -818,7 +818,7 @@ final class ShaderSlotRegistry {
                 // canvas's, or the texture's owns the image and frees it. The
                 // content comes first so binding 2 is written before 4 and up.
                 let inputs = (input.map { [ShaderImageInput.content($0.view)] } ?? []) + textureInputs
-                let node = ComputeShaderNode(
+                let node = ComputeShaderNode<N>(
                     width: UInt32(width),
                     height: UInt32(height),
                     image: image.image,
@@ -850,7 +850,7 @@ final class ShaderSlotRegistry {
             case .graphics(let function, let draw, _):
                 let pass = try colorPass()
                 let image = try makeImage(width: width, height: height, usage: .colorAttachment)
-                let node = try VertFragShaderNode<NucleantRenderNode>(
+                let node = try VertFragShaderNode<N>(
                     width: UInt32(width),
                     height: UInt32(height),
                     image: image.image,
@@ -887,7 +887,7 @@ final class ShaderSlotRegistry {
                 context = .vertexShader(node)
             }
 
-            let container = NucleantRenderNode(
+            let container = N(
                 id: Int.random(in: Int.min...Int.max),
                 context: context
             )

@@ -3,6 +3,7 @@
 //  NucleantUI
 //
 
+import NucleantVulkan
 import NucleantWindow
 
 /// A part of an app's user interface with a life cycle — currently, a window.
@@ -22,14 +23,14 @@ public protocol Scene {
     @SceneBuilder @MainActor @preconcurrency var body: Body { get }
 
     /// The windows this scene contributes. The runtime presents each one.
-    func _makeWindows() -> [HostingWindow]
+    func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>]
 
     /// The scene's `.commands`, added to the app's menu bar.
     func _lowerCommands(into menuBar: MenuBar)
 }
 
 extension Scene {
-    public func _makeWindows() -> [HostingWindow] {
+    public func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>] {
         body._makeWindows()
     }
 
