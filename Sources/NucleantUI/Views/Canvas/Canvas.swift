@@ -2,7 +2,7 @@
 //  Canvas.swift
 //  NucleantUI
 //
-import SulphurGeometry
+import NucleantGeometry
 
 #if SKIA_MODE
 
