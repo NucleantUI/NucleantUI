@@ -37,8 +37,7 @@ let skiaMode: Bool = {
 // MARK: - Dependency source
 
 /// Build against the sibling checkouts (`../NucleantVulkan` etc.) or against
-/// each repo on GitHub — its releases, or its default branch while it has
-/// none (`nucleantDependencies()`).
+/// each repo's releases on GitHub (`nucleantDependencies()`).
 ///
 /// Decided the same way in every Nucleant package, so one setting covers the
 /// whole chain: `NUCLEANT_LOCAL_DEV=1|0` in the environment wins; otherwise
@@ -112,14 +111,15 @@ func nucleantDependencies() -> [Package.Dependency] {
         return ["NucleantVulkan", "NucleantThorVG", "NucleantApplication", "PyShader", "NucleantSkia"]
             .map { .package(path: "../\($0)") }
     }
-    // A released package by version, up to its next minor: its new 0.0.x
-    // releases are picked up as they come; its 0.1.0 only once its line here
-    // is moved to it. One not released yet by its default branch.
+    // Each by version, up to its next minor: its new 0.0.x releases are
+    // picked up as they come; its 0.1.0 only once its line here is moved to
+    // it. (Never by branch: a package depended on by version may not have
+    // one, so NucleantUI could not be.)
     return [
         .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMinor(from: "0.0.1")),
         .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMinor(from: "0.0.1")),
-        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", branch: "master"),
-        .package(url: "https://github.com/NucleantUI/PyShader.git", branch: "main"),
+        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMinor(from: "0.0.1")),
+        .package(url: "https://github.com/NucleantUI/PyShader.git", .upToNextMinor(from: "0.0.1")),
         .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMinor(from: "0.0.1")),
     ]
 }

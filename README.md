@@ -38,7 +38,7 @@ struct DemoApp: NucleantApp {
 ## Adding it
 
 ```swift
-.package(url: "https://github.com/NucleantUI/NucleantUI.git", branch: "master")
+.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.0.1"))
 ```
 
 and `import NucleantUI`. `swift build` at this package's root builds the
@@ -48,7 +48,7 @@ resolved from GitHub automatically; when they are checked out as siblings
 of this directory they are used from there instead (`NUCLEANT_LOCAL_DEV=0|1`
 overrides).
 
-[Examples/](Examples) has seven standalone apps built on the library — a
+[Examples/](Examples) has eighteen standalone apps built on the library — a
 calculator, a task list, a drawing pad, a dashboard, 2048, a pomodoro
 timer and a drum sampler — each its own package to copy from.
 
