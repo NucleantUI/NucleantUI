@@ -37,7 +37,8 @@ let skiaMode: Bool = {
 // MARK: - Dependency source
 
 /// Build against the sibling checkouts (`../NucleantVulkan` etc.) or against
-/// `master` of each repo on GitHub.
+/// each repo on GitHub — its releases, or its default branch while it has
+/// none (`nucleantDependencies()`).
 ///
 /// Decided the same way in every Nucleant package, so one setting covers the
 /// whole chain: `NUCLEANT_LOCAL_DEV=1|0` in the environment wins; otherwise
@@ -107,17 +108,20 @@ func platformProviders() -> [Target.Dependency] {
 }
 
 func nucleantDependencies() -> [Package.Dependency] {
-    // Repository and its default branch — PyShader's is `main`.
-    let repos = [
-        ("NucleantVulkan", "master"), ("NucleantThorVG", "master"),
-        ("NucleantApplication", "master"), ("PyShader", "main"),
-        ("NucleantSkia", "master"),
-    ]
-    return repos.map { name, branch in
-        localDev
-            ? .package(path: "../\(name)")
-            : .package(url: "https://github.com/NucleantUI/\(name).git", branch: branch)
+    if localDev {
+        return ["NucleantVulkan", "NucleantThorVG", "NucleantApplication", "PyShader", "NucleantSkia"]
+            .map { .package(path: "../\($0)") }
     }
+    // A released package by version, up to its next minor: its new 0.0.x
+    // releases are picked up as they come; its 0.1.0 only once its line here
+    // is moved to it. One not released yet by its default branch.
+    return [
+        .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMinor(from: "0.0.1")),
+        .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMinor(from: "0.0.1")),
+        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", branch: "master"),
+        .package(url: "https://github.com/NucleantUI/PyShader.git", branch: "main"),
+        .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMinor(from: "0.0.1")),
+    ]
 }
 
 /// The layout / input / perf traces (`LayoutTrace`, `InputTrace`,
