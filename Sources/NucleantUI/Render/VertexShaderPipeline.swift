@@ -309,6 +309,15 @@ final class VertexShaderPipeline {
         }
     }
 
+    /// An input's packed bytes, whole — same contract as the floats.
+    func updateArguments(bytes: [UInt8]) {
+        guard let arguments, !bytes.isEmpty else { return }
+        let count = min(bytes.count, argumentCapacity * MemoryLayout<Float>.stride)
+        bytes.withUnsafeBytes { buffer in
+            arguments.update(device: device, data: buffer.baseAddress!, bytes: count)
+        }
+    }
+
     /// Point the sampled-image descriptors at new handles — see
     /// `ShaderPipeline.rebindDescriptors`, which this mirrors for the
     /// graphics path.

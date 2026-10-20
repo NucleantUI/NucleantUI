@@ -400,6 +400,8 @@ final class ShaderPipeline {
     private var arguments: BufferAndMemory?
     /// Floats the argument buffer can hold; 0 when there is none.
     let argumentCapacity: Int
+    /// The compute entry point's name in the module.
+    private let entryPoint: String
 
     /// `inputs` are the images the shader samples: the canvas a `.shader`
     /// effect's view is drawn into at binding 2, and a named texture at each
@@ -414,9 +416,11 @@ final class ShaderPipeline {
         imageView: VkImageView,
         inputs: [ShaderImageInput] = [],
         source: ShaderCode,
+        entryPoint: String = "main",
         argumentCapacity: Int = 0
     ) throws {
         self.device = engine.device
+        self.entryPoint = entryPoint
         self.inputs = inputs
         self.argumentCapacity = argumentCapacity
         self.uniforms = engine.createBuffer(
@@ -484,6 +488,15 @@ final class ShaderPipeline {
                 data: UnsafeRawPointer(buffer.baseAddress!),
                 bytes: count * MemoryLayout<Float>.stride
             )
+        }
+    }
+
+    /// An input's packed bytes, whole — same contract as the floats.
+    func updateArguments(bytes: [UInt8]) {
+        guard let arguments, !bytes.isEmpty else { return }
+        let count = min(bytes.count, argumentCapacity * MemoryLayout<Float>.stride)
+        bytes.withUnsafeBytes { buffer in
+            arguments.update(device: device, data: buffer.baseAddress!, bytes: count)
         }
     }
 
@@ -586,7 +599,7 @@ final class ShaderPipeline {
     }
 
     private func createPipeline() throws {
-        let result = "main".withCString { entry -> VkResult in
+        let result = entryPoint.withCString { entry -> VkResult in
             var stage = VkPipelineShaderStageCreateInfo()
             stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
             stage.stage = VK_SHADER_STAGE_COMPUTE_BIT

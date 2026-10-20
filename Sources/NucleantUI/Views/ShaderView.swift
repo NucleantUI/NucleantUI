@@ -596,18 +596,59 @@ struct ShaderTextures: Equatable {
     }
 }
 
-/// A view whose pixels are produced by a compute shader on the GPU.
+/// A view whose pixels are produced by a shader on the GPU.
 ///
 /// It takes whatever space it is offered, so give it a `.frame`. Unlike every
 /// other view here it does not draw into the shared ThorVG canvas — it gets its
 /// own image, composited into its rect. That means a shader view is never free:
 /// it dispatches every frame, which is the point of it.
+///
+/// Any `ShaderProtocol` runs here — a `SpirvFunction`, or a module from
+/// anywhere else. A module with a compute entry point is dispatched over every
+/// pixel; one with a vertex + fragment pair draws `vertices` vertices
+/// `instances` times. Its input is observed: a change to it is uploaded and
+/// redrawn without this view being rebuilt.
+///
+/// ```swift
+/// Shader(SpirvFunction(spirv: words) { model.tint })
+/// ```
 @View
-public struct Shader: View {
-    let function: ShaderFunction
-    let arguments: [ShaderArgument]
-    /// Named `RenderTexture`s the shader samples — `a(uv)` in the body.
+public struct Shader<Function: ShaderProtocol> {
+    let function: Function
+    /// Named `RenderTexture`s the shader samples — `a(uv)` in the body, or
+    /// binding 4 and up in a module.
     let textures: [ShaderTextureInput]
+    /// What one draw covers, for a module with a vertex stage.
+    let draw: ShaderDraw
+    /// The `ShaderFunction` and `ShaderArgument`s of the inits that take
+    /// them, which compile its source for those arguments rather than taking
+    /// a module as it is. `nil` for every other `ShaderProtocol`.
+    let sourceFunction: ShaderFunction?
+    let arguments: [ShaderArgument]
+
+    /// - Parameters:
+    ///   - vertices: with a vertex stage, vertices per instance; 6 is a quad
+    ///     as two triangles.
+    ///   - instances: how many times the vertex stage runs over them.
+    public init(
+        _ function: Function,
+        textures: [ShaderTextureInput] = [],
+        vertices: Int = 6,
+        instances: Int = 1,
+        _viewID: ViewID = #viewID
+    ) {
+        self.function = function
+        self.textures = textures
+        self.draw = ShaderDraw(vertices: max(0, vertices), instances: max(0, instances))
+        self.sourceFunction = nil
+        self.arguments = []
+        self._viewID = _viewID
+    }
+
+    public var body: Never { bodyUnavailable() }
+}
+
+extension Shader where Function == ShaderFunction {
 
     public init(
         _ function: ShaderFunction,
@@ -616,8 +657,10 @@ public struct Shader: View {
         _viewID: ViewID = #viewID
     ) {
         self.function = function
-        self.arguments = arguments
         self.textures = textures
+        self.draw = ShaderDraw(vertices: 6, instances: 1)
+        self.sourceFunction = function
+        self.arguments = arguments
         self._viewID = _viewID
     }
 
@@ -627,23 +670,30 @@ public struct Shader: View {
         textures: [ShaderTextureInput] = [],
         _viewID: ViewID = #viewID
     ) {
-        self.function = ShaderFunction(source)
-        self.arguments = arguments
-        self.textures = textures
-        self._viewID = _viewID
+        self.init(ShaderFunction(source), arguments: arguments, textures: textures, _viewID: _viewID)
     }
-
-    public var body: Never { bodyUnavailable() }
 }
 
 extension Shader: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: ShaderContent(
+        guard let sourceFunction else {
+            // Read once per build: compiling is the function's business, and
+            // the slot compares the words it is handed every pass.
+            return ViewNode(content: ShaderModuleContent(
+                path: context.path,
+                words: function.spirv,
+                input: function.input,
+                isAnimated: function.isAnimated,
+                draw: draw,
+                textures: ShaderTextures(textures)
+            ))
+        }
+        return ViewNode(content: ShaderContent(
             // The structural path is the slot's identity, so the compiled
             // pipeline survives rebuilds and is torn down only when this view
             // actually leaves the tree.
             path: context.path,
-            function: function,
+            function: sourceFunction,
             arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
             textures: ShaderTextures(textures)
         ))
