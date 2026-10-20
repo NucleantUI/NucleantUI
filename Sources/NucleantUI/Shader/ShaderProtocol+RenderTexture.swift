@@ -20,9 +20,10 @@ extension ShaderProtocol {
     /// left out.
     ///
     /// ```swift
-    /// observation = shader.observe { [weak self] shader in
-    ///     guard let self else { return }
+    /// shader.observe { [weak self] shader in
+    ///     guard let self else { return false }
     ///     shader.render(into: self.thumbnail)
+    ///     return true
     /// }
     /// ```
     @MainActor

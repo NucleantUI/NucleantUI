@@ -78,8 +78,9 @@ struct ShaderRenderIntoTexture {
     func observeCallsBackOnEachChange() async {
         let tint = Tint()
         let calls = Calls()
-        let observation = SpirvFunction(spirv: words, input: tint).observe { shader in
+        SpirvFunction(spirv: words, input: tint).observe { shader in
             calls.levels.append(shader.input.level)
+            return true
         }
         await settle()
         #expect(calls.levels.isEmpty)
@@ -88,37 +89,21 @@ struct ShaderRenderIntoTexture {
         tint.level = 3
         await settle()
         #expect(calls.levels == [2, 3])
-        _ = observation
     }
 
+    /// `false` stops it: the change it answered is the last one it sees.
     @Test
-    func aCancelledObservationIsQuiet() async {
+    func returningFalseStopsWatching() async {
         let tint = Tint()
         let calls = Calls()
-        let observation = SpirvFunction(spirv: words, input: tint).observe { shader in
+        SpirvFunction(spirv: words, input: tint).observe { shader in
             calls.levels.append(shader.input.level)
+            return calls.levels.count < 2
         }
-        observation.cancel()
-        tint.level = 2
-        await settle()
-        #expect(calls.levels.isEmpty)
-    }
-
-    /// Letting go of it is the same as cancelling, and holds nothing alive.
-    @Test
-    func aReleasedObservationIsQuietAndHoldsNothing() async {
-        let tint = Tint()
-        let calls = Calls()
-        weak var released: ShaderObservation?
-        do {
-            let observation = SpirvFunction(spirv: words, input: tint).observe { shader in
-                calls.levels.append(shader.input.level)
-            }
-            released = observation
+        for level: Float in [2, 3, 4, 5] {
+            tint.level = level
+            await settle()
         }
-        #expect(released == nil)
-        tint.level = 2
-        await settle()
-        #expect(calls.levels.isEmpty)
+        #expect(calls.levels == [2, 3])
     }
 }

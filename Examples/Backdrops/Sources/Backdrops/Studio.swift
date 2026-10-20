@@ -18,7 +18,6 @@ final class Studio {
     let thumbnails: [String: RenderTexture]
     /// The current look as a still — what a still wallpaper of it shows.
     let still: RenderTexture
-    @ObservationIgnored private var watching: ShaderObservation?
 
     init() {
         let look = Look(Preset.all[0])
@@ -33,8 +32,10 @@ final class Studio {
         let shader = SpirvFunction(spirv: auroraModule, input: look)
         let still = shader.renderTexture(size: Size(width: 240, height: 135), scale: 2)
         self.still = still
-        watching = shader.observe { shader in
+        shader.observe { [weak self] shader in
+            guard self != nil else { return false }
             shader.render(into: still)
+            return true
         }
     }
 }
