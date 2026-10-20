@@ -27,8 +27,10 @@ How:
 
 1. A package is generated in .build/examples-wasm with every example as an
    executable target (its sources symlinked from Examples/, its resources
-   from the example's manifest), so NucleantUI and what it depends on are
-   compiled once, and the main module and every side module are linked
+   and the other packages it links from the example's manifest; the shaders
+   an example's PyShader build plugin would compile, compiled here by a host
+   `pyshaderc` and added as resources), so NucleantUI and what it depends on
+   are compiled once, and the main module and every side module are linked
    from the same objects. Each example is built as SwiftPM builds it for
    build_wasm_app.py (a WASI reactor); the link line the driver ran is
    taken from the verbose output.
@@ -141,23 +143,143 @@ def sibling_web(name: str, marker: str) -> Path:
 
 # MARK: - The generated package
 
-def example_target(bin_dir: Path, name: str) -> dict:
-    """The example's one target, from its manifest."""
+def example_manifest(bin_dir: Path, name: str) -> tuple[dict, list[dict]]:
+    """The example's one target, and its package dependencies, from its manifest."""
     dump = subprocess.run([str(bin_dir / "swift"), "package", "dump-package"], cwd=EXAMPLES_DIR / name,
                           capture_output=True, text=True)
     if dump.returncode != 0:
         sys.exit(f"error: reading Examples/{name}/Package.swift failed:\n{dump.stderr}")
-    targets = json.loads(dump.stdout)["targets"]
+    package = json.loads(dump.stdout)
+    targets = package["targets"]
     if len(targets) != 1 or targets[0]["name"] != name or targets[0]["type"] != "executable":
         sys.exit(f"error: Examples/{name} is expected to have one executable target named {name}")
     for dependency in targets[0]["dependencies"]:
-        if dependency.get("product", [None])[0] != "NucleantUI":
-            sys.exit(f"error: Examples/{name} depends on {dependency}; only NucleantUI is supported here")
-    return targets[0]
+        if "product" not in dependency:
+            sys.exit(f"error: Examples/{name} depends on {dependency}; only products are supported here")
+    return targets[0], package["dependencies"]
 
 
-def resource_rule(resource: dict) -> str:
-    path = json.dumps(resource["path"])
+def package_dependency(dependency: dict) -> tuple[str, str] | None:
+    """(identity, `.package(...)`) for one of an example's dependencies — None
+    for NucleantUI, which the generated package takes from this checkout."""
+    if "fileSystem" in dependency:
+        entry = dependency["fileSystem"][0]
+        if entry["identity"] == "nucleantui":
+            return None
+        return entry["identity"], f".package(path: {json.dumps(entry['path'])})"
+    entry = dependency["sourceControl"][0]
+    if entry["identity"] == "nucleantui":
+        return None
+    url = json.dumps(entry["location"]["remote"][0]["urlString"])
+    requirement = entry["requirement"]
+    if "range" in requirement:
+        bounds = requirement["range"][0]
+        return entry["identity"], f".package(url: {url}, {json.dumps(bounds['lowerBound'])}..<{json.dumps(bounds['upperBound'])})"
+    if "exact" in requirement:
+        return entry["identity"], f".package(url: {url}, exact: {json.dumps(requirement['exact'][0])})"
+    if "branch" in requirement:
+        return entry["identity"], f".package(url: {url}, branch: {json.dumps(requirement['branch'][0])})"
+    sys.exit(f"error: unsupported requirement {requirement}")
+
+
+def pyshader_config(path: Path) -> list[dict]:
+    """The sections of a `pyshader.toml`, in order: the subset PyShader reads —
+    `[name]` tables of strings, booleans and arrays of strings."""
+    def strip_comment(line: str) -> str:
+        quote = None
+        for index, char in enumerate(line):
+            if quote:
+                quote = None if char == quote else quote
+            elif char in "\"'":
+                quote = char
+            elif char == "#":
+                return line[:index]
+        return line
+
+    def value(text: str):
+        text = text.strip()
+        if text in ("true", "false"):
+            return text == "true"
+        if text.startswith("["):
+            return [a or b for a, b in re.findall(r'"([^"]*)"|\'([^\']*)\'', text)]
+        return text[1:-1]
+
+    sections: list[dict] = []
+    pending = ""
+    for raw in path.read_text().splitlines():
+        line = (pending + " " if pending else "") + strip_comment(raw).strip()
+        if line.count("[") > line.count("]") and "=" in line:
+            pending = line  # an array continuing on the next line
+            continue
+        pending = ""
+        if not line:
+            continue
+        if line.startswith("[") and "=" not in line:
+            sections.append({"name": line[1:-1].strip().strip('"')})
+        elif sections:
+            key, text = line.split("=", 1)
+            sections[-1][key.strip()] = value(text)
+    return sections
+
+
+def host_pyshaderc(bin_dir: Path, dependency: dict) -> Path:
+    """`pyshaderc`, built for this Mac from the PyShader an example depends on.
+
+    Not by PyShader's build plugin inside the wasm build: that build runs with
+    WASM_BUILD=1, which SpirvTools' manifest reads to leave its macOS library
+    out, so the plugin's host tool would not compile there."""
+    if "fileSystem" in dependency:
+        root = Path(dependency["fileSystem"][0]["path"])
+    else:
+        host = WORK / "pyshaderc-package"
+        host.mkdir(parents=True, exist_ok=True)
+        found = package_dependency(dependency)
+        assert found, "PyShader is never NucleantUI"
+        line = found[1]
+        (host / "Package.swift").write_text(
+            "// swift-tools-version: 6.2\n// Generated by Scripts/build_examples_wasm.py: resolves PyShader.\n\n"
+            "import PackageDescription\n\n"
+            f"let package = Package(name: \"PyShaderHost\", dependencies: [{line}], targets: [])\n")
+        run = subprocess.run([str(bin_dir / "swift"), "package", "resolve"], cwd=host, capture_output=True, text=True)
+        if run.returncode != 0:
+            sys.exit(f"error: resolving PyShader failed:\n{run.stderr}")
+        root = host / ".build" / "checkouts" / "PyShader"
+    scratch = WORK / "pyshaderc-build"
+    env = {k: v for k, v in os.environ.items() if k != "WASM_BUILD"}
+    print("+ swift build --product pyshaderc -c release (host)", flush=True)
+    build = subprocess.run([str(bin_dir / "swift"), "build", "--package-path", str(root), "--scratch-path", str(scratch),
+                            "--product", "pyshaderc", "-c", "release"], env=env, capture_output=True, text=True)
+    if build.returncode != 0:
+        sys.exit(f"error: building pyshaderc failed:\n{build.stdout[-4000:]}{build.stderr[-4000:]}")
+    return scratch / "release" / "pyshaderc"
+
+
+def compile_shaders(pyshaderc: Path, name: str, into: Path) -> list[str]:
+    """Each section of the example's `pyshader.toml` compiled into `into`, as
+    its build plugin would; the files' names."""
+    config = EXAMPLES_DIR / name / "pyshader.toml"
+    if not config.is_file():
+        sys.exit(f"error: Examples/{name} uses PyShaderBuildPlugin but has no pyshader.toml")
+    into.mkdir(parents=True, exist_ok=True)
+    outputs = []
+    for section in pyshader_config(config):
+        output = Path(section.get("output", f"{section['name']}.spv")).name
+        args = [str(pyshaderc), str(EXAMPLES_DIR / name / section["source"]), "-o", str(into / output),
+                "--target", section.get("target", "fragment")]
+        if section.get("content"):
+            args.append("--content")
+        for flag, key in (("--arg", "arguments"), ("--texture", "textures"), ("--optimize", "optimize")):
+            for item in section.get(key, []):
+                args += [flag, item]
+        run = subprocess.run(args, capture_output=True, text=True)
+        if run.returncode != 0:
+            sys.exit(f"error: compiling Examples/{name}/{section['source']} failed:\n{run.stderr}")
+        outputs.append(output)
+    return outputs
+
+
+def resource_rule(resource: dict, prefix: str = "") -> str:
+    path = json.dumps(prefix + resource["path"])
     if "copy" in resource["rule"]:
         return f".copy({path})"
     if "process" in resource["rule"]:
@@ -171,15 +293,47 @@ def generate_package(bin_dir: Path, names: list[str]) -> None:
         shutil.rmtree(sources)
     sources.mkdir(parents=True)
     targets = []
+    packages: dict[str, str] = {}
+    pyshaderc: Path | None = None
     for name in names:
-        target = example_target(bin_dir, name)
-        (sources / name).symlink_to(EXAMPLES_DIR / name / "Sources" / name)
-        resources = ", ".join(resource_rule(r) for r in target.get("resources") or [])
+        target, dependencies = example_manifest(bin_dir, name)
+        used = {d["product"][1].lower() for d in target["dependencies"]}
+        for dependency in dependencies:
+            found = package_dependency(dependency)
+            # Only what the app links: a package it takes a plugin from is
+            # run here, not depended on.
+            if found and found[0] in used:
+                packages[found[0]] = found[1]
+        products = ", ".join(
+            f".product(name: {json.dumps(d['product'][0])}, package: {json.dumps(d['product'][1])})"
+            for d in target["dependencies"])
+        usages = [u["plugin"] for u in target.get("pluginUsages") or []]
+        if any(p[0] != "PyShaderBuildPlugin" for p in usages):
+            sys.exit(f"error: Examples/{name} uses {usages}; only PyShaderBuildPlugin is supported here")
+        if usages:
+            # The shaders the plugin would build, compiled here and handed to
+            # the target as resources beside its sources, at the bundle's root
+            # where the plugin's land.
+            if pyshaderc is None:
+                pyshader = next(d for d in dependencies
+                                if (d.get("fileSystem") or d.get("sourceControl") or [{}])[0].get("identity") == "pyshader")
+                pyshaderc = host_pyshaderc(bin_dir, pyshader)
+            directory = sources / name
+            directory.mkdir()
+            (directory / "App").symlink_to(EXAMPLES_DIR / name / "Sources" / name)
+            shaders = compile_shaders(pyshaderc, name, directory / "Shaders")
+            rules = [resource_rule(r, "App/") for r in target.get("resources") or []]
+            rules += [f".copy({json.dumps('Shaders/' + s)})" for s in shaders]
+        else:
+            (sources / name).symlink_to(EXAMPLES_DIR / name / "Sources" / name)
+            rules = [resource_rule(r) for r in target.get("resources") or []]
+        resources = ", ".join(rules)
         targets.append(
             f"        .executableTarget(\n"
             f"            name: {json.dumps(name)},\n"
-            f"            dependencies: [.product(name: \"NucleantUI\", package: \"NucleantUI\")]"
+            f"            dependencies: [{products}]"
             + (f",\n            resources: [{resources}]" if resources else "") + "\n        ),")
+    package_lines = [f".package(path: {json.dumps(str(PACKAGE_ROOT))})"] + [packages[k] for k in sorted(packages)]
     manifest = (
         "// swift-tools-version: 6.2\n"
         "// Generated by Scripts/build_examples_wasm.py: every example as a target of one\n"
@@ -188,7 +342,7 @@ def generate_package(bin_dir: Path, names: list[str]) -> None:
         "let package = Package(\n"
         "    name: \"NucleantUIExamples\",\n"
         "    platforms: [.macOS(.v14), .iOS(.v17)],\n"
-        f"    dependencies: [.package(path: {json.dumps(str(PACKAGE_ROOT))})],\n"
+        "    dependencies: [\n" + "".join(f"        {line},\n" for line in package_lines) + "    ],\n"
         "    targets: [\n" + "\n".join(targets) + "\n    ]\n)\n")
     path = GENERATED / "Package.swift"
     if not path.exists() or path.read_text() != manifest:
