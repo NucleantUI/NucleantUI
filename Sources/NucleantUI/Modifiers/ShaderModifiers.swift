@@ -109,7 +109,7 @@ extension View {
     ///
     /// The view is the sampled image at binding 2, stored top-down as every
     /// image a module samples is — what PyShader's `layer(uv)` reads upright
-    /// (`PyShaderFunction`, or `content = true` in a `pyshader.toml`).
+    /// (`PyShaderFunction`, or `content-top-down = true` in a `pyshader.toml`).
     /// `textures` are bound at 4 and up, in order. Its input is observed: a
     /// change to it redraws the effect with no view rebuilt.
     ///

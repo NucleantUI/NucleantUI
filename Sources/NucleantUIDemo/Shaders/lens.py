@@ -1,6 +1,6 @@
 # One quad over the view, its fragment stage a lens bulging the middle and
 # darkening the edges.
-#   pyshaderc lens.py --target graphics --content -o lens.spv
+#   pyshaderc lens.py --target graphics --content-top-down -o lens.spv
 QUAD = [float2(-1.0, -1.0), float2(1.0, -1.0), float2(-1.0, 1.0),
         float2(-1.0, 1.0), float2(1.0, -1.0), float2(1.0, 1.0)]
 
