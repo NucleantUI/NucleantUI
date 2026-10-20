@@ -101,7 +101,9 @@ enum ShaderCode {
             // and `textures` described what to *generate*, and there is
             // nothing to generate: the module declares what it reads, and
             // the bindings it declares are the ones below.
-            return .spirv(function.spirv)
+            // Nothing compiles it — it is handed to `vkCreateShaderModule` as
+            // it stands, so it already meets the compute contract.
+            return .spirv(function.precompiled?.words ?? [])
         }
     }
 }

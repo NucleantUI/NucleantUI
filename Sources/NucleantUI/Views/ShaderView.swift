@@ -68,7 +68,7 @@ public struct ShaderFunction: Hashable, Sendable {
 
     /// A module compiled somewhere other than here — `nil` for every source
     /// language, which is all of them but `.spirv`.
-    private let precompiled: Precompiled?
+    let precompiled: Precompiled?
 
     /// What there is to know about a module when there is no source to read
     /// it from: the words, an identity to compare them by, and whether it
@@ -84,14 +84,6 @@ public struct ShaderFunction: Hashable, Sendable {
         let identity: String
         let isAnimated: Bool
     }
-
-    /// The module itself, when `language` is `.spirv`; empty otherwise.
-    ///
-    /// Nothing compiles this — it is handed to `vkCreateShaderModule` as it
-    /// stands — so it has to already meet the compute contract the pipeline
-    /// binds against (see `ShaderCode`), which is the same contract a
-    /// PyShader module compiled for `.computeImage` meets.
-    public var spirv: [UInt32] { precompiled?.words ?? [] }
 
     /// The GLSL vertex half of a pair.
     public struct VertexStage: Hashable, Sendable {
@@ -341,7 +333,7 @@ public struct ShaderFunction: Hashable, Sendable {
     /// `.shader(_:)`, again only when the view beneath it is repainted. A
     /// textual test, so a helper that takes `time` as a parameter counts too;
     /// erring towards "animated" only costs dispatches.
-    var isAnimated: Bool {
+    public var isAnimated: Bool {
         precompiled?.isAnimated ?? Self.mentionsClock(source)
     }
 
