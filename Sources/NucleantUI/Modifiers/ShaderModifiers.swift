@@ -11,49 +11,28 @@
 //  renders into its own VkImage, and `ComputeShaderNode` takes sampled
 //  inputs; this is the view layer reaching both.
 //
-//  One modifier, whichever kind of function it is handed. A function with a
-//  vertex stage gets the same texture at the same binding under the same name
-//  (`uContent`, read with `layer(uv)`); its fragment stage runs over the
-//  geometry the vertex stage places instead of over every pixel. The only
-//  extra it takes is what a graphics draw cannot infer — how many vertices
-//  and instances.
+//  One modifier, whatever `ShaderProtocol` it is handed. A module with a
+//  vertex + fragment pair gets the same texture at the same binding; its
+//  fragment stage runs over the geometry the vertex stage places instead of
+//  over every pixel. The only extra it takes is what a graphics draw cannot
+//  infer — how many vertices and instances.
 //
 
 extension View {
 
     /// Runs `function` over this view's rendered pixels.
     ///
-    /// Inside the body the view is `uContent`, a `sampler2D` stored y-up like
-    /// the rest of shader space, and `layer(uv)` reads the view's pixel under
-    /// the current one — so `fragColor = layer(uv);` is the identity, and a
-    /// distortion is `layer(uv + offset)`. ShaderToy's `iChannel0` is the
-    /// same texture, so a post-processing shader written against it drops in
-    /// through `ShaderFunction(shaderToy:)` unchanged.
+    /// Inside the body `layer(uv)` reads the view's pixel under the current
+    /// one, in the same y-up shader space as `uv` — so `fragColor = layer(uv);`
+    /// is the identity, and a distortion is `layer(uv + offset)`. ShaderToy's
+    /// `iChannel0` is the same view, so a post-processing shader written
+    /// against it drops in through `ShaderFunction(shaderToy:)` unchanged.
     ///
     /// The view keeps its layout and its input: a fader under a ripple is
     /// still a fader. What the effect changes is only what is drawn, and it
     /// composites as a rectangle over the canvas — so clip *inside* the
     /// effect (`.cornerRadius(10).shader(fx)`), where the rounding lands in
     /// the texture, rather than outside it.
-    ///
-    /// A `function` with a vertex stage — `isGraphics` — is drawn instead of
-    /// dispatched, and everything above still holds: same texture, same name,
-    /// same `layer(uv)`, same `ShaderArgument`s. What changes is which pixels
-    /// the fragment body runs over. A per-pixel function covers the rect, so
-    /// leaving `fragColor` alone leaves the view on screen; a vertex stage
-    /// shades only what its triangles cover, and the rest of the rect is
-    /// cleared. So a glow drawn over a view is one more instance, not one
-    /// fewer:
-    ///
-    /// ```swift
-    /// view.shader(glow, arguments: [.float4Array("touches", touches)],
-    ///             vertices: 6, instances: touches.count + 1)
-    /// ```
-    ///
-    /// with instance 0 the full-view quad returning `layer(uv)` — the
-    /// identity — and the rest the glows. `vertices` and `instances` are
-    /// ignored by a per-pixel function, and are per-frame values otherwise:
-    /// changing them redraws without a rebuild.
     ///
     /// `isEnabled: false` draws the view as usual, keeping its identity and
     /// state so an effect can be toggled without rebuilding what is under it.
@@ -72,10 +51,8 @@ extension View {
     /// what makes an effect a *composite*: the view it is applied to mixed
     /// with images rendered elsewhere.
     ///
-    /// - Parameters:
-    ///   - vertices: with a vertex stage, vertices per instance; 6 is a quad
-    ///     as two triangles.
-    ///   - instances: how many times the vertex stage runs over them.
+    /// `vertices` and `instances` are for a `ShaderFunction(spirv:)` module
+    /// with a vertex + fragment pair, as the generic overload draws one.
     public func shader(
         _ function: ShaderFunction,
         arguments: [ShaderArgument] = [],
@@ -85,27 +62,28 @@ extension View {
         backdrop: Bool = false,
         isEnabled: Bool = true
     ) -> some View {
+        let function = function.reading(arguments, textures: textures, content: true)
         let draw = ShaderDraw(vertices: max(0, vertices), instances: max(0, instances))
         return _ModifierView(
             content: self,
-            key: ["shader", function, draw, arguments, textures, backdrop, isEnabled] as [AnyHashable]
+            // The function by value, its arguments included: its input is
+            // made anew from them, so its identity says nothing.
+            key: ["shader", function, draw, textures, backdrop, isEnabled] as [AnyHashable]
         ) { context in
-            ShaderEffectContent<ShaderNoArguments>(
+            ShaderEffectContent(
                 path: context.path,
-                function: isEnabled ? function : nil,
-                module: nil,
+                module: isEnabled ? (function.spirv, function.input, function.isAnimated) : nil,
                 draw: draw,
-                arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
                 textures: ShaderTextures(textures),
-                backdrop: backdrop
+                backdrop: backdrop,
+                colorScheme: context.environment.colorScheme
             )
         }
     }
 
     /// Runs `function` — generic over its `ShaderProtocol` type: a
     /// `SpirvFunction`, a `PyShaderFunction`, a type of your own — over this
-    /// view's rendered pixels, as `shader(_:arguments:)` runs a
-    /// `ShaderFunction`.
+    /// view's rendered pixels.
     ///
     /// The view is the sampled image at binding 2, stored top-down as every
     /// image a module samples is — what PyShader's `layer(uv)` reads upright
@@ -113,8 +91,20 @@ extension View {
     /// `textures` are bound at 4 and up, in order. Its input is observed: a
     /// change to it redraws the effect with no view rebuilt.
     ///
-    /// A module with a vertex + fragment pair draws `vertices` vertices
-    /// `instances` times over the view, as a `ShaderFunction` pair does.
+    /// A module with a vertex + fragment pair is drawn instead of dispatched:
+    /// `vertices` vertices `instances` times over the view. A per-pixel
+    /// module covers the rect, so leaving the view's pixel alone leaves the
+    /// view on screen; a vertex stage shades only what its triangles cover,
+    /// and the rest of the rect is cleared. So a glow drawn over a view is one
+    /// more instance, not one fewer — instance 0 the full-view quad returning
+    /// `layer(uv)`, the rest the glows. `vertices` and `instances` are
+    /// ignored by a compute module, and are per-frame values otherwise:
+    /// changing them redraws without a rebuild.
+    ///
+    /// - Parameters:
+    ///   - vertices: with a vertex stage, vertices per instance; 6 is a quad
+    ///     as two triangles.
+    ///   - instances: how many times the vertex stage runs over them.
     public func shader<Function: ShaderProtocol>(
         _ function: Function,
         textures: [ShaderTextureInput] = [],
@@ -135,12 +125,11 @@ extension View {
         ) { context in
             ShaderEffectContent(
                 path: context.path,
-                function: nil,
                 module: isEnabled ? (words, input, isAnimated) : nil,
                 draw: draw,
-                arguments: .none,
                 textures: ShaderTextures(textures),
-                backdrop: backdrop
+                backdrop: backdrop,
+                colorScheme: context.environment.colorScheme
             )
         }
     }
@@ -162,22 +151,21 @@ extension View {
 /// frames are still written, so hit testing is untouched.
 struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
     let path: [Int]
-    /// What runs over the view: a `ShaderFunction`, compiled for its
-    /// arguments, or a `ShaderProtocol`'s module, run as it is. Both `nil`
-    /// when disabled — the child then draws straight into the window.
-    let function: ShaderFunction?
+    /// The module that runs over the view, and its input. `nil` when
+    /// disabled — the child then draws straight into the window.
     let module: (words: [UInt32], input: Input, isAnimated: Bool)?
-    /// What one draw covers, when `function` has a vertex stage.
+    /// What one draw covers, when the module has a vertex stage.
     let draw: ShaderDraw
-    let arguments: ShaderArguments
     /// `RenderTexture`s the body samples by name, beside `layer(uv)`.
     let textures: ShaderTextures
     /// Seed the layer with what is already painted under the view.
     let backdrop: Bool
+    /// The view's, which a `Color` in the input is packed for.
+    let colorScheme: ColorScheme
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard let child = node.singleChild else { return }
-        guard function != nil || module != nil, rect.width > 0, rect.height > 0, let host = ShaderHost.current else {
+        guard let module, rect.width > 0, rect.height > 0, let host = ShaderHost.current else {
             child.place(in: rect, proposal: proposal, context: context, into: &list)
             return
         }
@@ -202,62 +190,37 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
            canvas.covers(rect, scale: host.renderNodes.scale) {
             // The view is one canvas node and nothing else: its image is
             // already the view's pixels, and the shader samples it as it is.
-            if let module {
-                host.useModule(
-                    path: path,
-                    words: module.words,
-                    input: module.input,
-                    isAnimated: module.isAnimated,
-                    draw: draw,
-                    textures: textures,
-                    rect: rect,
-                    clip: context.compositeClip,
-                    canvas: canvas.node,
-                    changed: canvas.changed
-                )
-            } else if let function {
-                host.useCanvas(
-                    path: path,
-                    function: function,
-                    draw: draw,
-                    arguments: arguments,
-                    textures: textures,
-                    rect: rect,
-                    clip: context.compositeClip,
-                    canvas: canvas.node,
-                    changed: canvas.changed
-                )
-            }
+            host.useModule(
+                path: path,
+                words: module.words,
+                input: module.input,
+                isAnimated: module.isAnimated,
+                draw: draw,
+                textures: textures,
+                colorScheme: colorScheme,
+                rect: rect,
+                clip: context.compositeClip,
+                canvas: canvas.node,
+                changed: canvas.changed
+            )
         } else {
             // Anything else is drawn into the layer; a canvas node among it
             // composites by itself, over the effect, as it always has.
             for canvas in canvasInput.canvases {
                 canvas.composite(host: host)
             }
-            if let module {
-                host.useModule(
-                    path: path,
-                    words: module.words,
-                    input: module.input,
-                    isAnimated: module.isAnimated,
-                    draw: draw,
-                    textures: textures,
-                    rect: rect,
-                    clip: context.compositeClip,
-                    layer: content
-                )
-            } else if let function {
-                host.useLayer(
-                    path: path,
-                    function: function,
-                    draw: draw,
-                    arguments: arguments,
-                    textures: textures,
-                    rect: rect,
-                    clip: context.compositeClip,
-                    content: content
-                )
-            }
+            host.useModule(
+                path: path,
+                words: module.words,
+                input: module.input,
+                isAnimated: module.isAnimated,
+                draw: draw,
+                textures: textures,
+                colorScheme: colorScheme,
+                rect: rect,
+                clip: context.compositeClip,
+                layer: content
+            )
         }
         host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
     }

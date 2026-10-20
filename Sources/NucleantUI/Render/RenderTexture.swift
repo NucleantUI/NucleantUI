@@ -46,7 +46,7 @@ import NucleantVulkan
 /// testing, its `onAppear` never runs, and it does not re-render when state
 /// it read changes — `@State` inside it keeps its value across renders, but
 /// only an explicit `render()` or `update { }` draws again. A `Shader`,
-/// `VertexShader`, `TextureView` or `ThorCanvas` nested inside draws nothing
+/// `TextureView` or `ThorCanvas` nested inside draws nothing
 /// (there is no window rect for it to composite into); a `.drawingGroup()` or
 /// `.shader(_:)` inside is flattened into the texture's own canvas.
 @MainActor
@@ -166,7 +166,7 @@ public final class RenderTexture {
     /// Make sure there is an image to bind, without walking the view tree.
     ///
     /// A shader sampling this texture needs a `VkImageView` before its
-    /// descriptor set can be written, and `ShaderContent.place` asks for one
+    /// descriptor set can be written, and `ShaderModuleContent.place` asks for one
     /// from *inside* a layout pass — where a render is queued rather than run
     /// (`render()`), so the image would not exist until the pass was over.
     /// Taking the canvas is not a render, though, and rasterizing the display

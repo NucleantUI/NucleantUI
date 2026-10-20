@@ -18,10 +18,6 @@
 public struct RenderTextureShaderView<Function: ShaderProtocol> {
     let texture: RenderTexture
     let function: Function
-    /// The `ShaderFunction` overload's function and arguments, compiled for
-    /// them; `nil` for a module, run as it is.
-    let sourceFunction: ShaderFunction?
-    let arguments: [ShaderArgument]
     let textures: [ShaderTextureInput]
     let draw: ShaderDraw
     var isResizable = false
@@ -29,16 +25,12 @@ public struct RenderTextureShaderView<Function: ShaderProtocol> {
     init(
         texture: RenderTexture,
         function: Function,
-        sourceFunction: ShaderFunction?,
-        arguments: [ShaderArgument],
         textures: [ShaderTextureInput],
         draw: ShaderDraw,
         _viewID: ViewID
     ) {
         self.texture = texture
         self.function = function
-        self.sourceFunction = sourceFunction
-        self.arguments = arguments
         self.textures = textures
         self.draw = draw
         self._viewID = _viewID
@@ -59,26 +51,15 @@ public struct RenderTextureShaderView<Function: ShaderProtocol> {
 
 extension RenderTextureShaderView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        guard let sourceFunction else {
-            return ViewNode(content: RenderTextureShaderContent(
-                path: context.path,
-                texture: texture,
-                function: nil,
-                module: (function.spirv, function.input, function.isAnimated),
-                draw: draw,
-                arguments: .none,
-                textures: ShaderTextures(textures),
-                isResizable: isResizable
-            ))
-        }
-        return ViewNode(content: RenderTextureShaderContent<ShaderNoArguments>(
+        ViewNode(content: RenderTextureShaderContent(
             path: context.path,
             texture: texture,
-            function: sourceFunction,
-            module: nil,
+            words: function.spirv,
+            input: function.input,
+            isAnimated: function.isAnimated,
             draw: draw,
-            arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
             textures: ShaderTextures(textures),
+            colorScheme: context.environment.colorScheme,
             isResizable: isResizable
         ))
     }
@@ -89,12 +70,13 @@ extension RenderTextureShaderView: BuiltinView {
 struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
     let path: [Int]
     let texture: RenderTexture
-    /// A `ShaderFunction` compiled for its arguments, or a module run as it is.
-    let function: ShaderFunction?
-    let module: (words: [UInt32], input: Input, isAnimated: Bool)?
+    let words: [UInt32]
+    let input: Input
+    let isAnimated: Bool
     let draw: ShaderDraw
-    let arguments: ShaderArguments
     let textures: ShaderTextures
+    /// The view's, which a `Color` in the input is packed for.
+    let colorScheme: ColorScheme
     let isResizable: Bool
 
     /// The texture's size, as `tex.view()` is — the effect does not change
@@ -109,30 +91,18 @@ struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0, let host = ShaderHost.current else { return }
-        if let module {
-            host.useModule(
-                path: path,
-                words: module.words,
-                input: module.input,
-                isAnimated: module.isAnimated,
-                draw: draw,
-                textures: textures,
-                rect: rect,
-                clip: context.compositeClip,
-                texture: texture
-            )
-        } else if let function {
-            host.useTexture(
-                path: path,
-                function: function,
-                draw: draw,
-                arguments: arguments,
-                textures: textures,
-                rect: rect,
-                clip: context.compositeClip,
-                texture: texture
-            )
-        }
+        host.useModule(
+            path: path,
+            words: words,
+            input: input,
+            isAnimated: isAnimated,
+            draw: draw,
+            textures: textures,
+            colorScheme: colorScheme,
+            rect: rect,
+            clip: context.compositeClip,
+            texture: texture
+        )
         host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
     }
 }
@@ -154,7 +124,8 @@ extension RenderTexture {
     /// is `a.shader(mix, textures: [.init("b", b)])`.
     ///
     /// - Parameters:
-    ///   - vertices: with a vertex stage, vertices per instance.
+    ///   - vertices: for a `ShaderFunction(spirv:)` module with a vertex +
+    ///     fragment pair, vertices per instance.
     ///   - instances: how many times the vertex stage runs over them.
     public func shader(
         _ function: ShaderFunction,
@@ -166,9 +137,7 @@ extension RenderTexture {
     ) -> RenderTextureShaderView<ShaderFunction> {
         RenderTextureShaderView(
             texture: self,
-            function: function,
-            sourceFunction: function,
-            arguments: arguments,
+            function: function.reading(arguments, textures: textures, content: true),
             textures: textures,
             draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
             _viewID: _viewID
@@ -188,8 +157,6 @@ extension RenderTexture {
         RenderTextureShaderView(
             texture: self,
             function: function,
-            sourceFunction: nil,
-            arguments: [],
             textures: textures,
             draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
             _viewID: _viewID

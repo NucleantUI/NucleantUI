@@ -3,13 +3,17 @@
 //  NucleantUI
 //
 
-/// A `vec4` of red, green, blue and alpha.
-///
-/// The light components: packing has no environment to resolve a dynamic
-/// color in, so a color that differs in dark mode is resolved by whoever
-/// holds the scheme — `color.resolved(for: scheme)` — before it is packed.
+/// A `vec4` of red, green, blue and alpha, as the color is drawn under the
+/// color scheme of the view it is packed for — so a dynamic color reaches
+/// the shader in the appearance the view shows.
 extension Color: ShaderValue {
     public func pack(into bytes: inout [UInt8]) {
-        Float4(Float(red), Float(green), Float(blue), Float(alpha)).pack(into: &bytes)
+        let color = resolved(for: Color.packingScheme)
+        Float4(Float(color.red), Float(color.green), Float(color.blue), Float(color.alpha)).pack(into: &bytes)
     }
+
+    /// The scheme an input is being packed for: the view's, set by its slot
+    /// around each pack. Light outside one — `render(into:)` has no view.
+    /// Packing happens on the main thread only.
+    nonisolated(unsafe) static var packingScheme: ColorScheme = .light
 }

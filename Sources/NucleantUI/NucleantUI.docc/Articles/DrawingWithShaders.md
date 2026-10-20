@@ -101,16 +101,17 @@ and again only when an argument changes. One that does runs every frame.
 
 ## Vertex shaders
 
-`ShaderFunction(functions:varyings:vertex:fragment:)` is a vertex + fragment
-pair drawn without vertex buffers: the vertex stage places geometry from
-`gl_VertexIndex`, `gl_InstanceIndex` and the arguments, so an array of N
-points becomes N quads in one draw call. Draw it with ``VertexShader``:
+A SPIR-V module with a vertex + fragment pair is drawn without vertex
+buffers: the vertex stage places geometry from its vertex and instance
+indices and its input, so an array of N points becomes N quads in one draw
+call. PyShader writes one as `def vertex` and `def fragment` in one source.
+Any `Shader` draws it, given how many vertices and instances to draw:
 
 ```swift
-VertexShader(glow, vertices: 6, instances: touches.count, arguments: [
-    .float2Array("touches", touches),
-])
+Shader(glow, vertices: 6, instances: touches.count)
 ```
+
+<doc:TouchSparks> draws one over a view with `.shader`.
 
 ## Limits
 

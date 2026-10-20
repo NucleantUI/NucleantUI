@@ -13,6 +13,8 @@ struct ShaderModuleContent<Input: ShaderInput>: NodeContent {
     let isAnimated: Bool
     let draw: ShaderDraw
     let textures: ShaderTextures
+    /// The view's, which a `Color` in the input is packed for.
+    let colorScheme: ColorScheme
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
         proposal.replacingUnspecifiedDimensions()
@@ -27,6 +29,7 @@ struct ShaderModuleContent<Input: ShaderInput>: NodeContent {
             isAnimated: isAnimated,
             draw: draw,
             textures: textures,
+            colorScheme: colorScheme,
             rect: rect,
             clip: context.compositeClip
         )

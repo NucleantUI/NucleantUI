@@ -12,7 +12,7 @@
 //    binding 0 — storage image (the shader's output)
 //    binding 1 — uniform buffer (`ShaderUniforms`)
 //    binding 2 — sampled image (the view's own pixels), for a `.shader` effect
-//    binding 3 — storage buffer (`ShaderArgument`s), when the shader has any
+//    binding 3 — storage buffer (the module's input), when it packs anything
 //    binding 4+ — one sampled image per named texture the shader declares
 //  A dedicated one-set pool per shader, for the reason the engine gives every
 //  composite node its own: MoltenVK packing several same-layout sets into one
@@ -50,49 +50,6 @@ enum ShaderError: Error {
     case vulkan(String)
 }
 
-/// What a `ShaderFunction` becomes on its way to `vkCreateShaderModule`:
-/// GLSL still to be compiled by shaderc, or SPIR-V already compiled. Both target the descriptor layout described at the top of this
-/// file, so the pipeline is the same from here on.
-enum ShaderCode {
-    case glsl(String)
-    case spirv([UInt32])
-
-    /// The code for a function under the compute contract. `samplesContent`
-    /// adds the view's own pixels at binding 2 (`layer(uv)`); `arguments`
-    /// declares the `ShaderArgument`s at binding 3; `textures` declares one
-    /// named sampler per `RenderTexture` at binding 4 and up.
-    /// `contentIsTopDown` — the pixels are a canvas node's own image, stored
-    /// top-down rather than drawn y-up as a layer is — has `layer(uv)` read
-    /// them upright.
-    static func compute(
-        _ function: ShaderFunction,
-        samplesContent: Bool,
-        contentIsTopDown: Bool = false,
-        arguments: ShaderArguments,
-        textures: ShaderTextures = .none
-    ) throws -> ShaderCode {
-        switch function.language {
-        case .glsl:
-            return .glsl(ShaderSource.compute(
-                functions: function.functions,
-                body: function.body,
-                samplesContent: samplesContent,
-                arguments: arguments,
-                textures: textures
-            ))
-        case .spirv:
-            // Already compiled, and compiled against this same layout — see
-            // `ShaderFunction.init(spirv:)`. `samplesContent`, `arguments`
-            // and `textures` described what to *generate*, and there is
-            // nothing to generate: the module declares what it reads, and
-            // the bindings it declares are the ones below.
-            // Nothing compiles it — it is handed to `vkCreateShaderModule` as
-            // it stands, so it already meets the compute contract.
-            return .spirv(function.precompiled?.words ?? [])
-        }
-    }
-}
-
 /// Wraps user GLSL into the compute contract above.
 enum ShaderSource {
 
@@ -103,9 +60,10 @@ enum ShaderSource {
     ///
     /// With `samplesContent`, the wrapper also declares the view's own pixels
     /// as `uContent` (and ShaderToy's `iChannel0`), plus `layer(uv)` to read
-    /// them — what a `.shader(_:)` effect is given. `textures` adds one named
-    /// sampler per `RenderTexture`, read as `a(uv)` and measured as `a_size`,
-    /// the same names and bindings a module samples them by.
+    /// them — what a `.shader(_:)` effect is given. `arguments` declares the
+    /// `ShaderArgument`s at binding 3, by name and kind. `textures` adds one
+    /// named sampler per `RenderTexture`, read as `a(uv)` and measured as
+    /// `a_size`, the same names and bindings a module samples them by.
     ///
     /// Local size 8×8 matches the `(w + 7) / 8` dispatch in
     /// `ComputeShaderNode.update` exactly.
@@ -113,8 +71,8 @@ enum ShaderSource {
         functions: String,
         body: String,
         samplesContent: Bool = false,
-        arguments: ShaderArguments = .none,
-        textures: ShaderTextures = .none
+        arguments: [ShaderArgument] = [],
+        textures: [String] = []
     ) -> String {
         if body.trimmingCharactersInWhitespace().hasPrefix("#version") {
             return body
@@ -123,14 +81,26 @@ enum ShaderSource {
         let textureDeclarations = textureSource(textures)
         let content = samplesContent ? """
         // The view this effect is applied to, rendered into its own texture
-        // and stored y-up like everything else in shader space — so
-        // `layer(uv)` is the view's pixel under the current one, and an
-        // unmodified ShaderToy `texture(iChannel0, uv)` reads it upright.
+        // and stored top-down, as every image a module samples is — so
+        // `layer(uv)` flips the read, and is the view's pixel under the
+        // current one in y-up shader space.
         layout(binding = 2) uniform sampler2D uContent;
-        #define iChannel0 uContent
         vec3 iChannelResolution[4];
 
-        vec4 layer(vec2 p) { return texture(uContent, p); }
+        vec4 layer(vec2 p) { return texture(uContent, vec2(p.x, 1.0 - p.y)); }
+
+        // ShaderToy's `iChannel0` is the same view, read the same way: a
+        // type of its own, so an unmodified `texture(iChannel0, uv)` — and
+        // the other reads a post-process makes — flip it upright too.
+        struct NucleantContent { int unused; };
+        const NucleantContent iChannel0 = NucleantContent(0);
+        vec4 texture(NucleantContent c, vec2 p) { return layer(p); }
+        vec4 texture(NucleantContent c, vec2 p, float bias) { return texture(uContent, vec2(p.x, 1.0 - p.y), bias); }
+        vec4 textureLod(NucleantContent c, vec2 p, float lod) { return textureLod(uContent, vec2(p.x, 1.0 - p.y), lod); }
+        ivec2 textureSize(NucleantContent c, int lod) { return textureSize(uContent, lod); }
+        vec4 texelFetch(NucleantContent c, ivec2 p, int lod) {
+            return texelFetch(uContent, ivec2(p.x, textureSize(uContent, lod).y - 1 - p.y), lod);
+        }
         """ : ""
         return """
         #version 450
@@ -226,7 +196,7 @@ extension ShaderSource {
     ///
     /// The declarations depend only on names and kinds, never on values or
     /// lengths, so changing an array's contents or length never recompiles.
-    static func argumentSource(_ arguments: ShaderArguments) -> (declarations: String, loads: String) {
+    static func argumentSource(_ arguments: [ShaderArgument]) -> (declarations: String, loads: String) {
         guard !arguments.isEmpty else { return ("", "") }
         var declarations = """
         layout(std430, binding = 3) readonly buffer ShaderArgs { float data[]; } uArgs;
@@ -235,10 +205,10 @@ extension ShaderSource {
 
         """
         var loads = ""
-        for (index, declaration) in arguments.declarations.enumerated() {
-            let name = declaration.name
+        for (index, argument) in arguments.enumerated() {
+            let name = argument.name
             let at = "ARG_OFFSET(\(index))"
-            let type = declaration.type
+            let type = argument.glslType
             if type.hasSuffix("[]") {
                 // `name(i)` reads element i — `width` floats from the
                 // element's start — and `nameCount` is the length.
@@ -285,11 +255,9 @@ extension ShaderSource {
     /// own binding from 4 up, a reader function of the texture's own name,
     /// and `<name>_size` — the same names and bindings a module samples.
     /// A `RenderTexture` is stored top-down, so the read flips y.
-    static func textureSource(_ textures: ShaderTextures) -> String {
-        guard !textures.isEmpty else { return "" }
+    static func textureSource(_ textures: [String]) -> String {
         var source = ""
-        for (index, input) in textures.inputs.enumerated() {
-            let name = input.name
+        for (index, name) in textures.enumerated() {
             let sampler = "uTex_\(name)"
             let coordinate = "vec2(p.x, 1.0 - p.y)"
             source += """
@@ -333,8 +301,8 @@ final class ShaderPipeline {
     /// The sampled images, at the bindings the shader was compiled against.
     /// Kept so a rebind can be checked against what the set layout holds.
     private var inputs: [ShaderImageInput]
-    /// The `ShaderArgument` storage buffer, when the shader declares any.
-    /// Sized once, with headroom; a list that outgrows it rebuilds the slot.
+    /// The input's storage buffer, when it packs anything. Sized once, with
+    /// headroom; an input that outgrows it rebuilds the slot.
     private var arguments: BufferAndMemory?
     /// Floats the argument buffer can hold; 0 when there is none.
     let argumentCapacity: Int
@@ -346,15 +314,15 @@ final class ShaderPipeline {
     /// binding from 4 up. Each is left in `SHADER_READ_ONLY_OPTIMAL` by
     /// whoever wrote it, whose update runs before this pipeline's dispatch.
     ///
-    /// `argumentCapacity` is how many floats of `ShaderArgument` data to make
-    /// room for — 0 for a shader without arguments, which then has no
-    /// binding 3 at all.
+    /// `argumentCapacity` is how many floats of input to make room for — 0
+    /// for a shader whose input packs nothing, which then has no binding 3
+    /// at all.
     init<N: RenderContainerNode>(
         engine: VulkanRenderEngine<N>,
         imageView: VkImageView,
         inputs: [ShaderImageInput] = [],
-        source: ShaderCode,
-        entryPoint: String = "main",
+        spirv: [UInt32],
+        entryPoint: String,
         argumentCapacity: Int = 0
     ) throws {
         self.device = engine.device
@@ -370,24 +338,6 @@ final class ShaderPipeline {
                 size: argumentCapacity * MemoryLayout<Float>.stride,
                 usage: VkBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT.rawValue)
             )
-        }
-
-        let spirv: [UInt32]
-        switch source {
-        case .spirv(let words):
-            spirv = words
-        case .glsl(let glsl):
-            guard let compiled = VKShaderCompiler.shared.tryCompileCompute(glsl) else {
-                uniforms.destroy(device: device)
-                arguments?.destroy(device: device)
-                // The real GLSL diagnostics, with the line numbers of the *wrapped*
-                // shader — which is what someone pasting a ShaderToy source needs
-                // to see rather than a bare "failed".
-                throw ShaderError.compileFailed(
-                    VKShaderCompiler.shared.lastErrorMessage ?? "shaderc rejected the compute shader"
-                )
-            }
-            spirv = compiled
         }
 
         do {
@@ -414,22 +364,9 @@ final class ShaderPipeline {
         )
     }
 
-    /// The argument buffer, whole. Same contract as `update`: host-coherent,
-    /// read by the next dispatch. A list longer than the capacity is a
-    /// caller error — the registry rebuilds the slot before it gets here.
-    func updateArguments(_ packed: [Float]) {
-        guard let arguments, !packed.isEmpty else { return }
-        let count = min(packed.count, argumentCapacity)
-        packed.withUnsafeBufferPointer { buffer in
-            arguments.update(
-                device: device,
-                data: UnsafeRawPointer(buffer.baseAddress!),
-                bytes: count * MemoryLayout<Float>.stride
-            )
-        }
-    }
-
-    /// An input's packed bytes, whole — same contract as the floats.
+    /// The input's packed bytes, whole. Same contract as `update`:
+    /// host-coherent, read by the next dispatch. Bytes past the capacity are
+    /// a caller error — the registry rebuilds the slot before it gets here.
     func updateArguments(bytes: [UInt8]) {
         guard let arguments, !bytes.isEmpty else { return }
         let count = min(bytes.count, argumentCapacity * MemoryLayout<Float>.stride)

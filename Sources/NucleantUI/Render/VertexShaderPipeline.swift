@@ -2,13 +2,13 @@
 //  VertexShaderPipeline.swift
 //  NucleantUI
 //
-//  The GPU half of a `VertexShader` view: a colour-attachment image the
-//  pipeline draws into, the graphics pipeline itself, and the uniform and
-//  argument buffers — the same descriptor set as `ShaderPipeline` minus what
-//  a compute stage needs and a render pass in its place:
+//  The GPU half of a vertex + fragment module's slot: a colour-attachment
+//  image the pipeline draws into, the graphics pipeline itself, and the
+//  uniform and input buffers — the same descriptor set as `ShaderPipeline`
+//  minus what a compute stage needs and a render pass in its place:
 //    binding 1 — uniform buffer (`ShaderUniforms`), both stages
 //    binding 2 — sampled image (the view's own pixels), for a `.shader` effect
-//    binding 3 — storage buffer (`ShaderArgument`s), both stages, when any
+//    binding 3 — storage buffer (the module's input), both stages, when any
 //  Binding 0 (the storage image) does not exist here: the output is the
 //  attachment. Binding 2 is the same `uContent` a compute effect samples, so
 //  `.shader(_:)` over a vertex + fragment pair reads the view with the same
@@ -22,175 +22,7 @@ import VulkanCore
 import NucleantVulkan
 import NucleantShader
 
-/// What a vertex + fragment pair becomes on its way to the pipeline: two GLSL
-/// stages for shaderc, or one module with an entry point per stage.
-enum GraphicsShaderCode {
-    case glsl(vertex: String, fragment: String)
-    case spirv([UInt32], vertexEntryPoint: String, fragmentEntryPoint: String)
-
-    /// `samplesContent` adds the view's own pixels at binding 2 (`layer(uv)`),
-    /// `contentIsTopDown` reads a canvas node's image upright, and `textures`
-    /// declares one named sampler per `RenderTexture` at binding 4 and up — as
-    /// `ShaderCode.compute` does for a compute effect. Only the fragment stage
-    /// samples them: `texture()` needs derivatives, which a vertex stage has
-    /// none of.
-    static func graphics(
-        _ function: ShaderFunction,
-        samplesContent: Bool = false,
-        contentIsTopDown: Bool = false,
-        arguments: ShaderArguments,
-        textures: ShaderTextures = .none
-    ) throws -> GraphicsShaderCode {
-        switch function.language {
-        case .glsl:
-            // A `.glsl` function reaching here has a vertex stage: that is
-            // what `isGraphics` tested to send it down this path.
-            let stage = function.glslVertexStage ?? .init(varyings: "", body: "")
-            let (vertex, fragment) = ShaderSource.graphics(
-                functions: function.functions,
-                varyings: stage.varyings,
-                vertex: stage.body,
-                fragment: function.body,
-                samplesContent: samplesContent,
-                arguments: arguments,
-                textures: textures
-            )
-            return .glsl(vertex: vertex, fragment: fragment)
-        case .spirv:
-            // `isGraphics` is `false` for a precompiled module, so nothing
-            // routes one here; a pair is two modules and two entry points,
-            // which `ShaderFunction` does not carry.
-            throw ShaderError.compileFailed(
-                "a precompiled SPIR-V function is a compute shader — "
-                + "run a vertex + fragment module with SpirvFunction"
-            )
-        }
-    }
-}
-
-extension ShaderSource {
-
-    /// The two stages of a `VertexShaderFunction`, each wrapped into a complete
-    /// GLSL 450 shader. Both see the uniforms, the constants and the
-    /// arguments; `varyings` is declared as `out`s in one and matching `in`s
-    /// in the other, at consecutive locations.
-    ///
-    /// The vertex body writes `gl_Position` in y-up clip space, as in OpenGL;
-    /// the wrapper flips it into Vulkan's, so a quad placed at the top of
-    /// shader space lands at the top of the view — matching what `uv` and
-    /// `fragCoord` in the fragment stage, and in every compute `Shader`, mean.
-    ///
-    /// With `samplesContent` the fragment stage also gets the view's own
-    /// pixels as `uContent` (and ShaderToy's `iChannel0`) and `layer(uv)` to
-    /// read them — what `.shader(_:)` over a vertex + fragment pair is given.
-    /// `textures` adds the named samplers there too. Only the fragment stage:
-    /// `texture()` needs derivatives, which a vertex stage has none of.
-    static func graphics(
-        functions: String,
-        varyings: String,
-        vertex: String,
-        fragment: String,
-        samplesContent: Bool = false,
-        arguments: ShaderArguments,
-        textures: ShaderTextures = .none
-    ) -> (vertex: String, fragment: String) {
-        let (argumentDeclarations, argumentLoads) = argumentSource(arguments)
-        let outs = varyingDeclarations(varyings, direction: "out")
-        let ins = varyingDeclarations(varyings, direction: "in")
-        let common = """
-        #version 450
-
-        layout(binding = 1) uniform Uniforms {
-            vec4 timeInfo;    // x: time, y: delta, z: frame
-            vec4 res;         // xy: resolution
-            vec4 mouseInfo;   // xy: position, zw: position while pressed
-        } u;
-        \(argumentDeclarations)
-
-        const float PI      = 3.14159265359;
-        const float TAU     = 6.28318530718;
-        const float HALF_PI = 1.57079632679;
-
-        float time;
-        float timeDelta;
-        int   frame;
-        vec2  resolution;
-        vec2  mouse;
-
-        \(functions)
-
-        void loadUniforms() {
-            time       = u.timeInfo.x;
-            timeDelta  = u.timeInfo.y;
-            frame      = int(u.timeInfo.z);
-            resolution = u.res.xy;
-            mouse      = vec2(u.mouseInfo.x, resolution.y - u.mouseInfo.y);
-        \(argumentLoads)
-        }
-        """
-        let vertexSource = """
-        \(common)
-        \(outs)
-
-        void main() {
-            loadUniforms();
-            {
-        \(vertex)
-            }
-            // Shader space is y-up; Vulkan's clip space is y-down.
-            gl_Position.y = -gl_Position.y;
-        }
-        """
-        let content = samplesContent ? """
-        // The view this effect is applied to, rendered into its own texture
-        // and stored y-up like everything else in shader space — so
-        // `layer(uv)` is the view's pixel under the current one.
-        layout(binding = 2) uniform sampler2D uContent;
-        #define iChannel0 uContent
-        vec3 iChannelResolution[4];
-
-        vec4 layer(vec2 p) { return texture(uContent, p); }
-        """ : ""
-        let fragmentSource = """
-        \(common)
-        \(ins)
-        \(content)
-        \(textureSource(textures))
-        layout(location = 0) out vec4 fragColor;
-
-        void main() {
-            loadUniforms();
-            // gl_FragCoord is y-down with the pixel centre at +0.5; shader
-            // space is y-up, so y is flipped and the centre offset survives.
-            vec2 fragCoord = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
-            vec2 uv        = fragCoord / resolution;
-            fragColor      = vec4(0.0);
-            {
-        \(fragment)
-            }
-        }
-        """
-        return (vertexSource, fragmentSource)
-    }
-
-    /// `"vec2 uv; float seed;"` → one `layout(location = i) out vec2 uv;` per
-    /// pair. Integer and boolean types get `flat`, as a fragment input of
-    /// those types must be.
-    static func varyingDeclarations(_ varyings: String, direction: String) -> String {
-        var lines: [String] = []
-        for (location, declaration) in varyings.split(separator: ";").enumerated() {
-            let words = declaration.split(whereSeparator: { $0.isWhitespace })
-            guard words.count == 2 else { continue }
-            let type = words[0], name = words[1]
-            let flat = type.hasPrefix("int") || type.hasPrefix("uint") || type.hasPrefix("ivec")
-                || type.hasPrefix("uvec") || type.hasPrefix("bool") || type.hasPrefix("bvec")
-            lines.append("layout(location = \(location)) \(flat ? "flat " : "")\(direction) \(type) \(name);")
-        }
-        return lines.joined(separator: "\n")
-    }
-}
-
-/// Everything Vulkan behind one `VertexShader` view.
+/// Everything Vulkan behind one vertex + fragment module's slot.
 @MainActor
 final class VertexShaderPipeline {
 
@@ -203,7 +35,7 @@ final class VertexShaderPipeline {
     private var setLayout: VkDescriptorSetLayout?
     private var descriptorPool: VkDescriptorPool?
     private var uniforms: BufferAndMemory
-    /// The `ShaderArgument` storage buffer, when the shader declares any.
+    /// The input's storage buffer, when it packs anything.
     private var arguments: BufferAndMemory?
     /// Floats the argument buffer can hold; 0 when there is none.
     let argumentCapacity: Int
@@ -215,12 +47,14 @@ final class VertexShaderPipeline {
 
     /// `inputs` are the images the shader samples: the canvas a `.shader(_:)`
     /// effect drew its view into at binding 2, and a named texture at each
-    /// binding from 4 up. Empty for a generative `VertexShader`.
+    /// binding from 4 up. Empty for a generative `Shader`.
     init<N: RenderContainerNode>(
         engine: VulkanRenderEngine<N>,
         renderPass: VkRenderPass,
         inputs: [ShaderImageInput] = [],
-        source: GraphicsShaderCode,
+        spirv words: [UInt32],
+        vertexEntryPoint: String,
+        fragmentEntryPoint: String,
         argumentCapacity: Int = 0
     ) throws {
         self.device = engine.device
@@ -237,25 +71,8 @@ final class VertexShaderPipeline {
             )
         }
 
-        let vertex: (spirv: [UInt32], entryPoint: String)
-        let fragment: (spirv: [UInt32], entryPoint: String)
-        switch source {
-        case .spirv(let words, let vertexEntryPoint, let fragmentEntryPoint):
-            vertex = (words, vertexEntryPoint)
-            fragment = (words, fragmentEntryPoint)
-        case .glsl(let vertexGLSL, let fragmentGLSL):
-            let compiler = VKShaderCompiler.shared
-            guard let vertexWords = compiler.compile(source: vertexGLSL, stage: .vertex, filename: "vertex.glsl") else {
-                destroy()
-                throw ShaderError.compileFailed(compiler.lastErrorMessage ?? "shaderc rejected the vertex shader")
-            }
-            guard let fragmentWords = compiler.compile(source: fragmentGLSL, stage: .fragment, filename: "fragment.glsl") else {
-                destroy()
-                throw ShaderError.compileFailed(compiler.lastErrorMessage ?? "shaderc rejected the fragment shader")
-            }
-            vertex = (vertexWords, "main")
-            fragment = (fragmentWords, "main")
-        }
+        let vertex = (spirv: words, entryPoint: vertexEntryPoint)
+        let fragment = (spirv: words, entryPoint: fragmentEntryPoint)
 
         do {
             try createSetLayout()
@@ -281,21 +98,8 @@ final class VertexShaderPipeline {
         uniforms.update(device: device, data: &copy, bytes: MemoryLayout<ShaderUniforms>.stride)
     }
 
-    /// The argument buffer, whole. A list longer than the capacity is a
+    /// The input's packed bytes, whole. Bytes past the capacity are a
     /// caller error — the registry rebuilds the slot before it gets here.
-    func updateArguments(_ packed: [Float]) {
-        guard let arguments, !packed.isEmpty else { return }
-        let count = min(packed.count, argumentCapacity)
-        packed.withUnsafeBufferPointer { buffer in
-            arguments.update(
-                device: device,
-                data: UnsafeRawPointer(buffer.baseAddress!),
-                bytes: count * MemoryLayout<Float>.stride
-            )
-        }
-    }
-
-    /// An input's packed bytes, whole — same contract as the floats.
     func updateArguments(bytes: [UInt8]) {
         guard let arguments, !bytes.isEmpty else { return }
         let count = min(bytes.count, argumentCapacity * MemoryLayout<Float>.stride)

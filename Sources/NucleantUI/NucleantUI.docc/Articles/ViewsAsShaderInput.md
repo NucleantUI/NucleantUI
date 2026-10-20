@@ -30,10 +30,11 @@ Text("Hello").shader(source: """
 """)
 ```
 
-The texture itself is `uContent`, a `sampler2D` stored y-up like the rest of
-shader space. It is also ShaderToy's `iChannel0`, so a ShaderToy
-post-processing shader that reads `texture(iChannel0, uv)` works through
-`ShaderFunction(shaderToy:)` unchanged.
+The texture itself is `uContent`, a `sampler2D` stored top-down, as every
+image a shader samples is; `layer(uv)` flips the read, so it is upright in
+y-up shader space. It is also ShaderToy's `iChannel0`, read upright the same
+way, so a ShaderToy post-processing shader that reads `texture(iChannel0, uv)`
+works through `ShaderFunction(shaderToy:)` unchanged.
 
 ``ShaderLibrary/effects`` has eight to start from: identity, CRT, wave,
 pixelate, chromatic aberration, blur, ripple, and a ShaderToy-form one.

@@ -2,8 +2,8 @@
 //  ShaderViewTests.swift
 //  NucleantUITests
 //
-//  `Shader<Function: ShaderProtocol>`: which path a view takes, and when two
-//  views are the same view. The dispatch itself needs an engine, which this
+//  `Shader<Function: ShaderProtocol>`: what a view holds, and when two views
+//  are the same view. The dispatch itself needs an engine, which this
 //  target does not have — the demo's Shaders screen runs it.
 //
 
@@ -16,21 +16,30 @@ struct ShaderViewOverModules {
     @Test
     func aModuleIsTakenAsItIs() {
         let view = Shader(SpirvFunction(spirv: [1, 2, 3]))
-        #expect(view.sourceFunction == nil)
-        #expect(view.arguments.isEmpty)
+        #expect(view.function.spirv == [1, 2, 3])
         #expect(view.draw == ShaderDraw(vertices: 6, instances: 1))
     }
 
-    /// The `ShaderFunction` inits keep compiling the source for their
-    /// arguments, whatever the generic path could do with the function.
+    /// A `ShaderFunction` is a module like any other: the view holds the
+    /// function with the arguments and textures it was handed, and those are
+    /// what it compiles for and packs as its input.
     @Test
-    func aShaderFunctionKeepsItsOwnPath() {
+    func aShaderFunctionCarriesWhatItWasHanded() {
         let function = ShaderFunction("fragColor = vec4(uv, 0.0, 1.0);")
         let view = Shader(function, arguments: [.float("gain", 2)])
-        #expect(view.sourceFunction == function)
-        #expect(view.arguments == [.float("gain", 2)])
-        #expect(Shader(function).sourceFunction == function, "with no arguments too")
-        #expect(Shader(source: "fragColor = vec4(1.0);").sourceFunction != nil)
+        #expect(view.function.arguments == [.float("gain", 2)])
+        #expect(view.function.samplesContent == false, "a generative view reads no view")
+        #expect(Shader(function).function == function, "with nothing handed, the function as it is")
+        #expect(Shader(source: "fragColor = vec4(1.0);").function.body == "fragColor = vec4(1.0);")
+    }
+
+    /// New argument values are another view, so the slot packs them again.
+    @Test
+    func newArgumentsAreAnotherView() {
+        let function = ShaderFunction("fragColor = vec4(gain);")
+        let one = Shader(function, arguments: [.float("gain", 1)])
+        #expect(one._isEquivalent(to: Shader(function, arguments: [.float("gain", 1)])))
+        #expect(!one._isEquivalent(to: Shader(function, arguments: [.float("gain", 2)])))
     }
 
     @Test

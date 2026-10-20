@@ -8,10 +8,10 @@
 //  No `NucleantRenderEngine` in this target, so the descriptor writes
 //  themselves are verified in the demo. What is covered here is everything
 //  that decides them: the bindings, the identity that chooses rebuild over
-//  rebind, the generation that re-dispatches a static shader, and the two
-//  shader sources — the GLSL wrapper
-//  that has to keep saying the same thing, and a module that arrived already
-//  compiled and so goes through neither.
+//  rebind, the generation that re-dispatches a static shader, the GLSL
+//  wrapper that has to keep saying the same thing, `ShaderFunction` as the
+//  module it compiles to and the arguments it reads, and a module that
+//  arrived already compiled.
 //
 
 import Foundation
@@ -41,7 +41,7 @@ struct ShaderTextureInputs {
     func texturesAreDeclaredFromBindingFour() {
         let set = ShaderTextures([.init("a", texture(1)), .init("b", texture(2))])
         #expect(set.signature == "a,b")
-        let glsl = ShaderSource.textureSource(set)
+        let glsl = ShaderSource.textureSource(["a", "b"])
         #expect(glsl.contains("layout(binding = 4) uniform sampler2D uTex_a;"))
         #expect(glsl.contains("layout(binding = 5) uniform sampler2D uTex_b;"))
         // Every `RenderTexture` is a canvas image, stored top-down.
@@ -93,24 +93,16 @@ struct ShaderTextureInputs {
 }
 
 /// The GLSL inlet: it declares the same names and bindings a module samples
-/// its textures by.
+/// its textures by, and reads every image top-down, as a module does.
 @Suite
 struct ShaderTextureGLSL {
 
-    @MainActor
-    private func textures(_ names: [String]) -> ShaderTextures {
-        ShaderTextures(names.map { name in
-            .init(name, renderTexture(size: Size(width: 4, height: 4)) { Fill(level: 1) })
-        })
-    }
-
-    @MainActor
     @Test
     func theComputeWrapperDeclaresEachTexture() {
         let source = ShaderSource.compute(
             functions: "",
             body: "fragColor = a(uv) * b(uv);",
-            textures: textures(["a", "b"])
+            textures: ["a", "b"]
         )
         #expect(source.contains("layout(binding = 4) uniform sampler2D uTex_a;"))
         #expect(source.contains("layout(binding = 5) uniform sampler2D uTex_b;"))
@@ -120,18 +112,18 @@ struct ShaderTextureGLSL {
     }
 
     /// Binding 2 is the content and is still `uContent`/`layer(uv)`: adding
-    /// textures does not move what an effect already reads.
-    @MainActor
+    /// textures does not move what an effect already reads. Stored top-down
+    /// like every image a module samples, so `layer(uv)` flips the read.
     @Test
     func texturesSitBesideTheContent() {
         let source = ShaderSource.compute(
             functions: "",
             body: "fragColor = layer(uv) + a(uv);",
             samplesContent: true,
-            textures: textures(["a"])
+            textures: ["a"]
         )
         #expect(source.contains("layout(binding = 2) uniform sampler2D uContent;"))
-        #expect(source.contains("vec4 layer(vec2 p) { return texture(uContent, p); }"))
+        #expect(source.contains("vec4 layer(vec2 p) { return texture(uContent, vec2(p.x, 1.0 - p.y)); }"))
         #expect(source.contains("layout(binding = 4) uniform sampler2D uTex_a;"))
     }
 
@@ -139,127 +131,135 @@ struct ShaderTextureGLSL {
     func noTexturesDeclaresNoSampler() {
         let source = ShaderSource.compute(functions: "", body: "fragColor = vec4(1.0);")
         #expect(!source.contains("uTex_"))
+        #expect(!source.contains("uContent"))
     }
 
-    /// Only the fragment stage: `texture()` needs derivatives, which a vertex
-    /// stage has none of.
-    @MainActor
+    /// ShaderToy's `texture(iChannel0, uv)` reads the view upright too: the
+    /// wrapper's own `texture` for it flips the read as `layer(uv)` does, and
+    /// the post-process compiles unchanged.
     @Test
-    func onlyTheFragmentStageGetsThem() {
-        let (vertex, fragment) = ShaderSource.graphics(
-            functions: "",
-            varyings: "vec2 local;",
-            vertex: "gl_Position = vec4(0.0, 0.0, 0.0, 1.0); local = vec2(0.0);",
-            fragment: "fragColor = a(local);",
-            arguments: .none,
-            textures: textures(["a"])
+    func iChannel0ReadsTheViewUpright() {
+        let post = ShaderLibrary.shaderToyPost.reading([], textures: [], content: true)
+        let source = ShaderSource.compute(
+            functions: post.functions,
+            body: post.body,
+            samplesContent: true
         )
-        #expect(!vertex.contains("uTex_a"))
-        #expect(fragment.contains("layout(binding = 4) uniform sampler2D uTex_a;"))
-        #expect(fragment.contains("vec4 a(vec2 p)"))
+        #expect(source.contains("vec4 texture(NucleantContent c, vec2 p) { return layer(p); }"))
+        #expect(!post.spirv.isEmpty, "a ShaderToy post-process compiles against the content as it is")
     }
 }
 
-/// The third inlet: a module compiled somewhere else.
-///
-/// There is no source to wrap, parse or hand to a compiler, so what has to
-/// hold is that nothing tries to — the words come out of `ShaderCode.compute`
-/// exactly as they went in — and that everything `ShaderFunction` derives
-/// from source text still answers for a function that has none.
+/// `ShaderFunction` as a `ShaderProtocol`: the arguments it is handed are its
+/// input, packed as its wrapper reads them, and what it compiles to declares
+/// what it was handed.
+@MainActor
+@Suite(.serialized)
+struct ShaderFunctionAsAModule {
+
+    private func floats(_ bytes: [UInt8]) -> [Float] {
+        bytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+    }
+
+    private func packed(_ function: ShaderFunction) -> [UInt8] {
+        var bytes: [UInt8] = []
+        function.input.pack(into: &bytes)
+        return bytes
+    }
+
+    /// Two floats per argument — offset, count — then the values.
+    @Test
+    func theArgumentsAreItsInput() {
+        let function = ShaderFunction("fragColor = vec4(gain);")
+            .reading([.float("gain", 1.5), .floatArray("xs", [2, 3])], textures: [], content: false)
+        #expect(floats(packed(function)) == [4, 1, 5, 2, 1.5, 2, 3])
+    }
+
+    @Test
+    func noArgumentsPackNothing() {
+        #expect(packed(ShaderFunction("fragColor = vec4(1.0);")).isEmpty)
+    }
+
+    /// A dynamic color reaches the shader as the view's scheme draws it.
+    @Test
+    func aColorIsPackedForTheViewsScheme() {
+        let tint = Color.dynamic(light: Color(red: 1, green: 0, blue: 0), dark: Color(red: 0, green: 0, blue: 1))
+        let function = ShaderFunction("fragColor = tint;").reading([.color("tint", tint)], textures: [], content: false)
+        #expect(Array(floats(packed(function)).suffix(4)) == [1, 0, 0, 1])
+        Color.packingScheme = .dark
+        defer { Color.packingScheme = .light }
+        #expect(Array(floats(packed(function)).suffix(4)) == [0, 0, 1, 1])
+    }
+
+    /// What it was handed is declared, so it is in what it compiles to: a
+    /// body reading an argument, a texture and the view compiles only once
+    /// they are there.
+    @Test
+    func itCompilesForWhatItWasHanded() {
+        let mix = ShaderFunction("fragColor = mix(layer(uv), a(uv), blend);")
+        #expect(mix.spirv.isEmpty, "nothing declares `layer`, `a` or `blend`")
+        let tex = renderTexture(size: Size(width: 4, height: 4)) { Fill(level: 1) }
+        let handed = mix.reading([.float("blend", 0.5)], textures: [.init("a", tex)], content: true)
+        let stages = SpirvEntryPoints(handed.spirv)
+        #expect(stages.compute == "main")
+        #expect(!stages.isGraphics)
+    }
+
+    /// New values are a new function — the view's key — but not a new
+    /// module: the declarations depend on names and kinds only.
+    @Test
+    func newValuesAreTheSameModule() {
+        let base = ShaderFunction("fragColor = vec4(gain);")
+        let one = base.reading([.float("gain", 1)], textures: [], content: false)
+        let two = base.reading([.float("gain", 2)], textures: [], content: false)
+        #expect(one != two)
+        #expect(one.spirv == two.spirv)
+    }
+}
+
+/// A module compiled somewhere else: its words are what it compiles to, and
+/// its entry points say what it is.
 @MainActor
 @Suite(.serialized)
 struct PrecompiledShaderFunctionTests {
 
-    /// A real module — `Fixtures/compute.py`, compiled — rather than a
-    /// made-up array.
-    private func module() throws -> [UInt32] {
-        Fixture.compute
+    @Test
+    func theWordsGoThroughUntouched() {
+        let words = Fixture.compute
+        #expect(ShaderFunction(spirv: words).spirv == words)
+        // What a view hands it describes what to *generate*; a module
+        // already declares what it reads, so nothing changes.
+        let handed = ShaderFunction(spirv: words).reading([.float("blend", 0.5)], textures: [], content: true)
+        #expect(handed.spirv == words)
+    }
+
+    /// A vertex + fragment module is drawn as geometry, whatever carries it.
+    @Test
+    func aPairIsReadFromTheModule() {
+        #expect(!SpirvEntryPoints(ShaderFunction(spirv: Fixture.compute).spirv).isGraphics)
+        #expect(SpirvEntryPoints(ShaderFunction(spirv: Fixture.graphics).spirv).isGraphics)
     }
 
     @Test
-    func theWordsGoThroughUntouched() throws {
-        let words = try module()
-        let code = try ShaderCode.compute(
-            ShaderFunction(spirv: words),
-            samplesContent: false,
-            arguments: .none
-        )
-        guard case .spirv(let out) = code else {
-            Issue.record("a precompiled function did not come back as SPIR-V")
-            return
-        }
-        #expect(out == words, "nothing wraps, rewrites or recompiles a module that is already one")
-    }
-
-    /// `samplesContent`, `arguments` and `textures` describe what to
-    /// *generate*. There is nothing to generate, so they change nothing —
-    /// the module already declares what it reads.
-    @Test
-    func theGeneratorOptionsDoNotTouchIt() throws {
-        let words = try module()
-        let function = ShaderFunction(spirv: words)
-        let plain = try ShaderCode.compute(function, samplesContent: false, arguments: .none)
-        let dressed = try ShaderCode.compute(
-            function,
-            samplesContent: true,
-            contentIsTopDown: true,
-            arguments: ShaderArguments([.float("blend", 0.5)]),
-            textures: ShaderTextures([
-                .init("a", renderTexture(size: Size(width: 4, height: 4)) { Fill(level: 1) })
-            ])
-        )
-        guard case .spirv(let a) = plain, case .spirv(let b) = dressed else {
-            Issue.record("a precompiled function did not come back as SPIR-V")
-            return
-        }
-        #expect(a == b)
-    }
-
-    /// The pipeline cache keeps a slot when `source` is unchanged, so two
-    /// different modules have to disagree here — a digest would only make
-    /// them *likely* to.
-    @Test
-    func twoModulesAreTwoIdentities() throws {
-        let words = try module()
-        let one = ShaderFunction(spirv: words)
-        let same = ShaderFunction(spirv: words)
+    func twoModulesAreTwoValues() {
+        let words = Fixture.compute
         var changed = words
         changed[changed.count - 1] &+= 1
-        let other = ShaderFunction(spirv: changed)
-
-        #expect(one.source == same.source)
-        #expect(one == same, "and the value itself compares equal")
-        #expect(one.source != other.source, "one word apart is a different shader")
-        #expect(one.source.hasPrefix("#spirv"), "and it cannot be read as a source language")
+        #expect(ShaderFunction(spirv: words) == ShaderFunction(spirv: words))
+        #expect(ShaderFunction(spirv: words) != ShaderFunction(spirv: changed), "one word apart is a different shader")
     }
 
-    /// Nothing derived from reading source text may quietly answer for a
-    /// function that has none.
+    /// `isAnimated` is grepped out of the source for a language; here the
+    /// caller says, because there is no source to grep.
     @Test
-    func whatIsNormallyReadFromTheTextIsStated() throws {
-        let words = try module()
-        #expect(ShaderFunction(spirv: words).isGraphics == false, "one module, one entry point")
-
-        // `isAnimated` is grepped out of the source for a language; here the
-        // caller says, because there is no source to grep.
-        #expect(ShaderFunction(spirv: words).isAnimated, "the default errs towards redispatching")
-        #expect(ShaderFunction(spirv: words, isAnimated: false).isAnimated == false)
-
-        // And a module is never mistaken for a vertex + fragment pair, which
-        // it has no way to carry.
-        #expect(throws: ShaderError.self) {
-            try GraphicsShaderCode.graphics(
-                ShaderFunction(spirv: words),
-                arguments: .none
-            )
-        }
+    func whatIsNormallyReadFromTheTextIsStated() {
+        #expect(ShaderFunction(spirv: Fixture.compute).isAnimated, "the default errs towards redispatching")
+        #expect(ShaderFunction(spirv: Fixture.compute, isAnimated: false).isAnimated == false)
     }
 
     @Test
     func anEmptyModuleIsStillAValue() {
-        let empty = ShaderFunction(spirv: [])
-        #expect(empty.spirv.isEmpty)
-        #expect(empty.source == "#spirv\n")
-        #expect(empty.isGraphics == false)
+        #expect(ShaderFunction(spirv: []).spirv.isEmpty)
+        #expect(ShaderFunction(spirv: []).input.arguments.isEmpty)
     }
 }

@@ -78,13 +78,6 @@ struct ShaderProtocolModules {
         #expect(SpirvEntryPoints(words).compute == "main")
     }
 
-    /// Two GLSL stages are two modules, which one `[UInt32]` cannot hold.
-    @Test
-    func aGLSLPairIsNotOneModule() {
-        let pair = ShaderFunction(vertex: "gl_Position = vec4(0.0);", fragment: "fragColor = vec4(1.0);")
-        #expect(pair.spirv.isEmpty)
-    }
-
     @Test
     func aStaticFunctionSaysSo() {
         #expect(ShaderFunction("fragColor = vec4(1.0);").isAnimated == false)

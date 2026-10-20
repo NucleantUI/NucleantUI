@@ -477,40 +477,20 @@ one. A shader that does not compile fails with shaderc's message.
 
 ### Vertex shaders
 
-A `VertexShader` view draws `vertices × instances` through a vertex +
-fragment pipeline into the same kind of slot, with no vertex buffers: the
-vertex body places geometry from `gl_VertexIndex`, `gl_InstanceIndex` and the
-arguments, so an array of N touches becomes N quads in one draw call, and
-only the pixels each quad covers are shaded.
+A SPIR-V module with a vertex + fragment pair draws `vertices × instances`
+through a vertex + fragment pipeline into the same kind of slot, with no
+vertex buffers: the vertex stage places geometry from its vertex and instance
+indices and its input, so an array of N touches becomes N quads in one draw
+call, and only the pixels each quad covers are shaded. PyShader writes one as
+`def vertex` and `def fragment` in one source; any `Shader` or `.shader(_:)`
+draws it:
 
 ```swift
-let glow = VertexShaderFunction(
-    functions: "const vec2 QUAD[6] = vec2[](vec2(-1,-1), vec2(1,-1), vec2(-1,1), vec2(-1,1), vec2(1,-1), vec2(1,1));",
-    varyings: "vec2 local; float seed;",
-    vertex: """
-        int t = gl_InstanceIndex * 3;
-        vec2 corner = QUAD[gl_VertexIndex];
-        gl_Position = vec4(vec2(touches(t), touches(t + 1)) + corner * 0.25, 0.0, 1.0);
-        local = corner * 0.5 + 0.5;
-        seed = touches(t + 2);
-    """,
-    fragment: """
-        fragColor = vec4(vec3(fract(seed + time)), smoothstep(0.5, 0.0, distance(local, vec2(0.5))));
-    """)
-
-VertexShader(glow, vertices: 6, instances: touches.count, arguments: [
-    .floatArray("touches", packed),
-])
+Shader(glow, vertices: 6, instances: touches.count)
 ```
 
-`varyings` is declared once and usable as plain variables in both bodies.
-Both stages see `time`, `resolution`, `mouse` and the arguments; the fragment
-stage has `uv` and `fragCoord` as well. `gl_Position` is written y-up, as
-in OpenGL, and flipped for Vulkan by the wrapper. `vertices` and `instances`
-are per-frame values — changing them redraws without a rebuild. The same
-shader in PyShader is one module with `vertex` and `fragment` functions
-(`VertexShaderFunction(pyshader:)`); see PyShader's README. The Baby Lights
-app draws every glow this way.
+`vertices` and `instances` are per-frame values — changing them redraws
+without a rebuild. The Baby Lights app draws every glow this way.
 
 Shader views are clipped by their containers (a shader in a `ScrollView`
 is cut off at its edge) but always composite as a rectangle —
@@ -537,8 +517,9 @@ Text("Hello").shader(source: """
 
 In the body, `layer(uv)` is the view's pixel under the current one — so
 `fragColor = layer(uv);` is the identity — and `uContent` is the `sampler2D`
-behind it, stored y-up like everything else in shader space. It is also
-`iChannel0`, so a ShaderToy post-processing shader that reads
+behind it, stored top-down as every image a shader samples is, and read
+upright by `layer(uv)`. It is also `iChannel0`, read upright the same way, so
+a ShaderToy post-processing shader that reads
 `texture(iChannel0, uv)` drops in through `ShaderFunction(shaderToy:)`
 unchanged. `ShaderLibrary.effects` has eight to start from: identity, CRT,
 wave, pixelate, chromatic aberration, blur, ripple, and a ShaderToy-form
@@ -552,7 +533,7 @@ on such a pad goes inside the effect, not on top of it:
 
 ```swift
 Text("Play").padding()
-    .shader(ShaderFunction(pyshader: liquidGlass), arguments: [.float("radius", 24)], backdrop: true)
+    .shader(ShaderLibrary.frostedGlass, backdrop: true)
 ```
 
 A shader whose source never reads the clock or the pointer is dispatched

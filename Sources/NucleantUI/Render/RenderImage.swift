@@ -33,7 +33,7 @@ import NucleantThorVG
 /// and no lifecycle — `onAppear` does not run — and it does not re-render for
 /// its own state. Call this again for a new image.
 ///
-/// A `Shader`, `VertexShader`, `TextureView` or `ThorCanvas` inside draws
+/// A `Shader`, `TextureView` or `ThorCanvas` inside draws
 /// nothing: their pixels come from the GPU, and there is none here. A
 /// `.drawingGroup()` or `.shader(_:)` inside draws its content inline — the
 /// node and the effect are flattened away, not applied.

@@ -56,7 +56,7 @@ public final class NucleantRenderNode: NucleantContainerNode, @unchecked Sendabl
         /// released to the compute stage as well as the fragment one, several
         /// sampled images — is ours to decide.
         case compute(ComputeShaderNode<NucleantRenderNode>)
-        /// One `VertexShader` view's image, drawn by a vertex + fragment
+        /// A vertex + fragment module's image, drawn by a vertex + fragment
         /// pipeline and composited the same way.
         case vertexShader(VertFragShaderNode<NucleantRenderNode>)
         /// An automatic per-view node: the engine's copy-target image, filled

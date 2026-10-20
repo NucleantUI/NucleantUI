@@ -54,7 +54,7 @@ final class OffscreenRender {
     /// Nested render nodes are flattened (`flattensRenderNodes`), so a
     /// `.drawingGroup()` inside draws into this list rather than claiming a
     /// node of its own; `ShaderHost.current` is cleared for the walk, so a
-    /// `Shader`, `VertexShader`, `TextureView` or `ThorCanvas` nested inside
+    /// `Shader`, `TextureView` or `ThorCanvas` nested inside
     /// has no window slot to reach for and draws nothing.
     func list<Content: View>(of view: Content, size: Size) -> DisplayList {
         guard size.width > 0, size.height > 0 else { return DisplayList() }
