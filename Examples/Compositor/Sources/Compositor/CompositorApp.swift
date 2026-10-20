@@ -15,8 +15,9 @@
 //    borrowing the one image.
 //  * The **shader** is written out from the stack (`CompositeShader`), so
 //    adding, hiding, reordering a layer or changing a blend mode is a new
-//    shader and a recompile. The mix sliders are `ShaderArgument`s and are
-//    not.
+//    shader, compiled while the app runs (`PyShaderFunction`, from
+//    NucleantUI_PyShader). The mix sliders are its input, read through
+//    observation, and are not.
 //  * The **export** goes the other way entirely: `renderImage` draws the
 //    same trees on the CPU with no window and no GPU, which is how a
 //    document is written out at a size the window never had.
@@ -89,8 +90,8 @@ private struct Toolbar {
 
 // MARK: - The stage
 
-/// The composite: one `Shader` view, fed the generated source, the mix
-/// values and the layer textures.
+/// The composite: one `Shader` view, fed the generated shader — its input
+/// the mix values — and the layer textures.
 ///
 /// It is a generative `Shader` rather than `.shader(_:)` on something —
 /// there is no view underneath to read as `layer(uv)`, only the textures. So
@@ -111,11 +112,7 @@ private struct StagePane {
                         .font(.system(size: 12))
                         .foregroundStyle(Color.secondary)
                 } else {
-                    Shader(
-                        composite.function,
-                        arguments: composite.arguments,
-                        textures: composite.textures
-                    )
+                    Shader(composite.function, textures: composite.textures)
                 }
             }
             // Fitted rather than fixed: the composite takes whatever height
