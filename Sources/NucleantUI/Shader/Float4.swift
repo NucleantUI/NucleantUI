@@ -2,9 +2,6 @@
 //  Float4.swift
 //  NucleantUI
 //
-//  Created by CodeBuilder on 20/10/2026.
-//
-
 
 public struct Float4: Hashable, Sendable {
     public var v1: Float
@@ -18,11 +15,19 @@ public struct Float4: Hashable, Sendable {
         self.v3 = v3
         self.v4 = v4
     }
-    
+
     public init<F: BinaryFloatingPoint>(_ v1: F, _ v2: F, _ v3: F, _ v4: F) {
         self.v1 = .init(v1)
         self.v2 = .init(v2)
         self.v3 = .init(v3)
         self.v4 = .init(v4)
+    }
+}
+
+extension Float4: ShaderValue {
+    /// 16-aligned, as std430 places a `vec4`.
+    public func pack(into bytes: inout [UInt8]) {
+        Self.align(&bytes, to: 16)
+        withUnsafeBytes(of: self) { bytes.append(contentsOf: $0) }
     }
 }

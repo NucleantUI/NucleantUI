@@ -2,7 +2,6 @@
 //  Float2.swift
 //  NucleantUI
 //
-import Foundation
 
 /// Two, three and four floats, laid out as the GPU reads them.
 ///
@@ -17,16 +16,17 @@ public struct Float2: Hashable, Sendable {
         self.v1 = v1
         self.v2 = v2
     }
-    
+
     public init<F: BinaryFloatingPoint>(_ v1: F, _ v2: F) {
         self.v1 = .init(v1)
         self.v2 = .init(v2)
     }
-    
-    
 }
 
-
 extension Float2: ShaderValue {
-
+    /// 8-aligned, as std430 places a `vec2`.
+    public func pack(into bytes: inout [UInt8]) {
+        Self.align(&bytes, to: 8)
+        withUnsafeBytes(of: self) { bytes.append(contentsOf: $0) }
+    }
 }
