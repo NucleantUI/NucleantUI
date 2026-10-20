@@ -90,11 +90,55 @@ extension View {
             content: self,
             key: ["shader", function, draw, arguments, textures, backdrop, isEnabled] as [AnyHashable]
         ) { context in
-            ShaderEffectContent(
+            ShaderEffectContent<ShaderNoArguments>(
                 path: context.path,
                 function: isEnabled ? function : nil,
+                module: nil,
                 draw: draw,
                 arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
+                textures: ShaderTextures(textures),
+                backdrop: backdrop
+            )
+        }
+    }
+
+    /// Runs `function` — generic over its `ShaderProtocol` type: a
+    /// `SpirvFunction`, a `PyShaderFunction`, a type of your own — over this
+    /// view's rendered pixels, as `shader(_:arguments:)` runs a
+    /// `ShaderFunction`.
+    ///
+    /// The view is the sampled image at binding 2, stored y-up like the rest
+    /// of shader space — what PyShader's `layer(uv)` reads, and what a
+    /// module compiled with `content = true` in a `pyshader.toml` expects.
+    /// `textures` are bound at 4 and up, in order. The module's input is
+    /// observed: a change to it redraws the effect with no view rebuilt.
+    ///
+    /// A module with a vertex + fragment pair draws `vertices` vertices
+    /// `instances` times over the view, as a `ShaderFunction` pair does.
+    public func shader<Function: ShaderProtocol>(
+        _ function: Function,
+        textures: [ShaderTextureInput] = [],
+        vertices: Int = 6,
+        instances: Int = 1,
+        backdrop: Bool = false,
+        isEnabled: Bool = true
+    ) -> some View {
+        let draw = ShaderDraw(vertices: max(0, vertices), instances: max(0, instances))
+        let words = function.spirv
+        let input = function.input
+        let isAnimated = function.isAnimated
+        return _ModifierView(
+            content: self,
+            // The module by its words and its input by which object it is —
+            // the values the input holds reach the effect through observation.
+            key: ["shader-module", words, ObjectIdentifier(input), isAnimated, draw, textures, backdrop, isEnabled] as [AnyHashable]
+        ) { context in
+            ShaderEffectContent(
+                path: context.path,
+                function: nil,
+                module: isEnabled ? (words, input, isAnimated) : nil,
+                draw: draw,
+                arguments: .none,
                 textures: ShaderTextures(textures),
                 backdrop: backdrop
             )
@@ -116,10 +160,13 @@ extension View {
 /// otherwise, but routes what the child draws into a display list of its own
 /// and hands that to the layer's canvas instead of the window's. The child's
 /// frames are still written, so hit testing is untouched.
-struct ShaderEffectContent: NodeContent {
+struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
     let path: [Int]
-    /// `nil` when disabled — the child then draws straight into the window.
+    /// What runs over the view: a `ShaderFunction`, compiled for its
+    /// arguments, or a `ShaderProtocol`'s module, run as it is. Both `nil`
+    /// when disabled — the child then draws straight into the window.
     let function: ShaderFunction?
+    let module: (words: [UInt32], input: Input, isAnimated: Bool)?
     /// What one draw covers, when `function` has a vertex stage.
     let draw: ShaderDraw
     let arguments: ShaderArguments
@@ -130,7 +177,7 @@ struct ShaderEffectContent: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard let child = node.singleChild else { return }
-        guard let function, rect.width > 0, rect.height > 0, let host = ShaderHost.current else {
+        guard function != nil || module != nil, rect.width > 0, rect.height > 0, let host = ShaderHost.current else {
             child.place(in: rect, proposal: proposal, context: context, into: &list)
             return
         }
@@ -151,7 +198,25 @@ struct ShaderEffectContent: NodeContent {
         // away by ThorVG.
         var content = backdrop ? list : DisplayList()
         child.place(in: rect, proposal: proposal, context: inner, into: &content)
-        if !backdrop, content.commands.isEmpty, let canvas = canvasInput.sole,
+        if let module {
+            // Always through a layer, which is drawn y-up: a module was
+            // compiled against one orientation of binding 2, so it is never
+            // handed a canvas node's own top-down image in its place.
+            for canvas in canvasInput.canvases {
+                canvas.composite(host: host)
+            }
+            host.useModule(
+                path: path,
+                words: module.words,
+                input: module.input,
+                isAnimated: module.isAnimated,
+                draw: draw,
+                textures: textures,
+                rect: rect,
+                clip: context.compositeClip,
+                layer: content
+            )
+        } else if let function, !backdrop, content.commands.isEmpty, let canvas = canvasInput.sole,
            canvas.covers(rect, scale: host.renderNodes.scale) {
             // The view is one canvas node and nothing else: its image is
             // already the view's pixels, and the shader samples it as it is.
@@ -166,7 +231,7 @@ struct ShaderEffectContent: NodeContent {
                 canvas: canvas.node,
                 changed: canvas.changed
             )
-        } else {
+        } else if let function {
             // Anything else is drawn into the layer; a canvas node among it
             // composites by itself, over the effect, as it always has.
             for canvas in canvasInput.canvases {

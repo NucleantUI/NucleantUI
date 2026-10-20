@@ -79,7 +79,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         case graphics(VertexShaderFunction, ShaderDraw, withLayer: Bool)
         /// A `ShaderProtocol`'s module, compiled already: dispatched or
         /// drawn by what its entry points say.
-        case module([UInt32], SpirvEntryPoints, ShaderDraw, isAnimated: Bool)
+        case module([UInt32], SpirvEntryPoints, ShaderDraw, isAnimated: Bool, withLayer: Bool)
 
         /// Identity for the compiled pipeline; the kind is part of it, so a
         /// path that changes view type rebuilds.
@@ -97,7 +97,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         /// Empty for a source function, whose identity is `source`.
         var words: [UInt32] {
             switch self {
-            case .module(let words, _, _, _): return words
+            case .module(let words, _, _, _, _): return words
             case .compute, .graphics: return []
             }
         }
@@ -106,14 +106,14 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             switch self {
             case .compute(let function, _): return function.isAnimated
             case .graphics(let function, _, _): return function.isAnimated
-            case .module(_, _, _, let isAnimated): return isAnimated
+            case .module(_, _, _, let isAnimated, _): return isAnimated
             }
         }
 
         var withLayer: Bool {
             switch self {
-            case .compute(_, let withLayer), .graphics(_, _, let withLayer): return withLayer
-            case .module: return false
+            case .compute(_, let withLayer), .graphics(_, _, let withLayer), .module(_, _, _, _, let withLayer):
+                return withLayer
             }
         }
     }
@@ -329,7 +329,8 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
 
     /// Called from `ShaderModuleContent.place`: the slot for a
     /// `ShaderProtocol`'s module, with `input` packed into its argument
-    /// buffer.
+    /// buffer. From `ShaderEffectContent.place` with `layer` too — what the
+    /// view under a `.shader(_:)` effect drew this pass, sampled at binding 2.
     ///
     /// The input is packed under observation here only when it is new or
     /// changed; otherwise a change to it is noticed by observation and
@@ -342,7 +343,8 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         draw: ShaderDraw,
         textures: ShaderTextures,
         rect: Rect,
-        clip: Rect?
+        clip: Rect?,
+        layer content: DisplayList? = nil
     ) {
         let stages = SpirvEntryPoints(words)
         let existing = slots[path]
@@ -361,7 +363,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         }
         guard let slot = slot(
             at: path,
-            request: .module(words, stages, draw, isAnimated: isAnimated),
+            request: .module(words, stages, draw, isAnimated: isAnimated, withLayer: content != nil),
             arguments: .none,
             inputBytes: bytes.count,
             textures: textures,
@@ -373,6 +375,9 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         upload(bytes, to: slot)
         if stages.isGraphics {
             redraw(slot, covering: draw)
+        }
+        if let content {
+            rasterize(content, into: slot)
         }
     }
 
@@ -442,12 +447,19 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             ? .graphics(function, draw, withLayer: true)
             : .compute(function, withLayer: true)
         guard let slot = slot(at: path, request: request, arguments: arguments,
-                              textures: textures, rect: rect, clip: clip),
-              let layer = slot.layer
+                              textures: textures, rect: rect, clip: clip)
         else { return }
         if function.isGraphics {
             redraw(slot, covering: draw)
         }
+        rasterize(content, into: slot)
+    }
+
+    /// Rasterize what a `.shader(_:)` effect's view drew into the slot's
+    /// layer, if it is not what the layer already holds, and run the shader
+    /// over it again.
+    private func rasterize(_ content: DisplayList, into slot: Slot) {
+        guard let layer = slot.layer else { return }
         // Absolute coordinates, so a view that merely moved reads as changed
         // and is drawn again at its new place; the canvas transform absorbs
         // the origin, but the comparison does not.
@@ -1211,7 +1223,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                     arguments: arguments,
                     textures: textures
                 ), draw)
-            case .module(let words, let stages, let draw, _):
+            case .module(let words, let stages, let draw, _, _):
                 if let vertex = stages.vertex, let fragment = stages.fragment {
                     graphics = (.spirv(words, vertexEntryPoint: vertex, fragmentEntryPoint: fragment), draw)
                 } else if let entryPoint = stages.compute {

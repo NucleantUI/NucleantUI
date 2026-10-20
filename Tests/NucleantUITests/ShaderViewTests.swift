@@ -2,7 +2,7 @@
 //  ShaderViewTests.swift
 //  NucleantUITests
 //
-//  `Shader` over any `ShaderProtocol`: which path a view takes, and when two
+//  `Shader<Function: ShaderProtocol>`: which path a view takes, and when two
 //  views are the same view. The dispatch itself needs an engine, which this
 //  target does not have — the demo's Shaders screen runs it.
 //
@@ -49,5 +49,38 @@ struct ShaderViewOverModules {
         #expect(one._isEquivalent(to: Shader(SpirvFunction(spirv: words, input: input))))
         #expect(!one._isEquivalent(to: Shader(SpirvFunction(spirv: words, input: ShaderNoArguments()))))
         #expect(!one._isEquivalent(to: Shader(SpirvFunction(spirv: [1, 2, 4], input: input))))
+    }
+
+    /// `.shader(_:)` over a module: the same module reading the same input
+    /// object is the same modifier, so the view under it is not rebuilt for
+    /// a parent's rebuild; another module, input object or flag is another.
+    @Test
+    func aModuleEffectIsItsModuleAndItsInputObject() {
+        let input = ShaderNoArguments()
+        let words: [UInt32] = [1, 2, 3]
+        func effect(_ words: [UInt32], _ input: ShaderNoArguments, isEnabled: Bool = true) -> some View {
+            Color.red.shader(SpirvFunction(spirv: words, input: input), isEnabled: isEnabled)
+        }
+        let one = effect(words, input)
+        #expect(one._isEquivalent(to: effect(words, input)))
+        #expect(!one._isEquivalent(to: effect([1, 2, 4], input)))
+        #expect(!one._isEquivalent(to: effect(words, ShaderNoArguments())))
+        #expect(!one._isEquivalent(to: effect(words, input, isEnabled: false)))
+    }
+
+    /// The view under the effect keeps its input: a tap inside it lands.
+    /// (With no window there is no slot to run the module in, and the view
+    /// draws as it would without it.)
+    @Test
+    func aModuleEffectLeavesItsViewsInput() async {
+        let log = Log()
+        let harness = Harness(
+            Color.red
+                .frame(width: 60, height: 30)
+                .onTapGesture { log("tapped") }
+                .shader(SpirvFunction(spirv: []))
+        )
+        await harness.tap(Point(x: 100, y: 100))
+        #expect(log.take() == ["tapped"])
     }
 }

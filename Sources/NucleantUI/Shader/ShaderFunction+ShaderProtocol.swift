@@ -10,7 +10,7 @@ import NucleantShader
 /// Its arguments, textures and `.shader(_:)` content each change what its
 /// source compiles to, so used with those it keeps going through its own
 /// `Shader(_:arguments:textures:)` and `.shader(_:)`. This is the module for
-/// anywhere that takes any `ShaderProtocol`.
+/// anywhere generic over a `ShaderProtocol` type.
 extension ShaderFunction: ShaderProtocol {
 
     /// Compiled on every read — hold the result rather than reading it again.

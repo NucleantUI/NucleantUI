@@ -603,7 +603,7 @@ struct ShaderTextures: Equatable {
 /// own image, composited into its rect. That means a shader view is never free:
 /// it dispatches every frame, which is the point of it.
 ///
-/// Any `ShaderProtocol` runs here — a `SpirvFunction`, or a module from
+/// Generic over its `ShaderProtocol` type — a `SpirvFunction`, or a module from
 /// anywhere else. A module with a compute entry point is dispatched over every
 /// pixel; one with a vertex + fragment pair draws `vertices` vertices
 /// `instances` times. Its input is observed: a change to it is uploaded and
