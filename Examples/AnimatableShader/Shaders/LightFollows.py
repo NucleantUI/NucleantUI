@@ -1,7 +1,7 @@
 # Decompiled from SPIR-V (glslang 8) by spirv2py.
 #
-# The glow sat in the middle of the view; here it sits at `light`, a
-# ShaderArgument the app animates — in pixels from the view's top left,
+# The glow sat in the middle of the view; here it sits at `light`, the
+# `Light` the app animates — in pixels from the view's top left,
 # the way a tap reports it, and flipped here into y-up shader space.
 from pyshader import *
 
@@ -17,5 +17,10 @@ def mainImage(fragColor: float4, fragCoord: float2, resolution: float2, light: f
     return float4(col, 1.0)
 
 
-def main(frag_coord: float2, resolution: float2, light: float2) -> float4:
-    return mainImage(float4(0.0), frag_coord, resolution, light)
+class Light:
+    """The shader's input: where the glow is, in pixels from the top left."""
+    position: float2
+
+
+def main(frag_coord: float2, resolution: float2, light: Light) -> float4:
+    return mainImage(float4(0.0), frag_coord, resolution, light.position)

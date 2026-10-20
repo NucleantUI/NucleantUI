@@ -1,0 +1,18 @@
+# The scenes' shaders, compiled to SPIR-V by PyShader's build plugin as the
+# app builds. Each takes its input — the playhead, or the light — as a class.
+
+[OrientedBox]
+source = "Shaders/OrientedBox.py"
+target = "compute"
+
+[LonelyWaters]
+source = "Shaders/LonelyWaters.py"
+target = "compute"
+
+[RadarTrace]
+source = "Shaders/RadarTrace.py"
+target = "compute"
+
+[LightFollows]
+source = "Shaders/LightFollows.py"
+target = "compute"

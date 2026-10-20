@@ -2,7 +2,7 @@
 
 # Decompiled from SPIR-V (glslang 8) by spirv2py.
 #
-# ShaderToy's clock (`time`) is replaced by `playhead`, a ShaderArgument the
+# ShaderToy's clock (`time`) is replaced by `playhead`, the `Clock` the
 # app animates. The scope is centred on the view rather than placed for a
 # 16:9 frame, and two no-op expression statements left by the decompile
 # are gone.
@@ -89,5 +89,10 @@ def mainImage(fragColor: float4, fragCoord: float2, playhead: float, resolution:
     return float4(color, 1.0)
 
 
-def main(frag_coord: float2, playhead: float, resolution: float2) -> float4:
-    return mainImage(float4(0.0), frag_coord, playhead, resolution)
+class Clock:
+    """The shader's input: the playhead the app animates, in seconds."""
+    seconds: float
+
+
+def main(frag_coord: float2, clock: Clock, resolution: float2) -> float4:
+    return mainImage(float4(0.0), frag_coord, clock.seconds, resolution)
