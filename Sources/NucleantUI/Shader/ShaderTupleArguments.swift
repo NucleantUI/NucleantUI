@@ -20,9 +20,9 @@ import Observation
 /// observable class — is read inside the shader's observation scope. A change
 /// to any of it is a change to this input, with nothing to forward.
 public final class ShaderTupleArguments<each Value: ShaderValue>: ShaderInput {
-    let values: () -> (repeat each Value)
+    let values: @MainActor () -> (repeat each Value)
 
-    public init(@ShaderArgumentsBuilder _ values: @escaping () -> (repeat each Value)) {
+    public init(@ShaderArgumentsBuilder _ values: @escaping @MainActor () -> (repeat each Value)) {
         self.values = values
     }
 

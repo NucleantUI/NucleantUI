@@ -34,10 +34,11 @@ extension SpirvFunction where Input == ShaderNoArguments {
 
 extension SpirvFunction {
     /// A module whose input is the values `arguments` lists, in order.
+    @MainActor
     public init<each Value: ShaderValue>(
         spirv: [UInt32],
         isAnimated: Bool = true,
-        @ShaderArgumentsBuilder arguments: @escaping () -> (repeat each Value)
+        @ShaderArgumentsBuilder arguments: @escaping @MainActor () -> (repeat each Value)
     ) where Input == ShaderTupleArguments<repeat each Value> {
         self.init(spirv: spirv, input: ShaderTupleArguments(arguments), isAnimated: isAnimated)
     }

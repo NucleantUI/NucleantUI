@@ -26,6 +26,10 @@ import Observation
 /// ```
 ///
 /// — or the values can be listed with `ShaderTupleArguments { … }`.
+///
+/// Main-actor: it is packed where frames are drawn, and a model it reads is
+/// a main-actor model.
+@MainActor
 public protocol ShaderInput: Observable, AnyObject {
     /// Append the values, in the order and layout the shader's argument
     /// struct declares them.
