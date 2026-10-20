@@ -218,26 +218,17 @@ struct TextureDial {
 
 // MARK: - Shaders over textures
 
-/// Two textures mixed by name. `a(uv)` and `b(uv)` are the images; `blend`
-/// is an ordinary `ShaderArgument`, so dragging the slider re-dispatches
-/// without recompiling anything.
+/// Two textures mixed by name — `Shaders/texture_mix.py`. `a(uv)` and
+/// `b(uv)` are the images, bound in the order `textures:` gives them; `blend`
+/// is its class input, so dragging the slider redraws it through observation
+/// without recompiling or rebuilding anything.
 @MainActor
-let textureMix = ShaderFunction(pyshader: """
-def main(uv: float2, blend: float, a: Texture, b: Texture) -> float4:
-    pa = a(uv)
-    pb = b(uv)
-    edge = smoothstep(blend - 0.12, blend + 0.12, uv.x)
-    return mix(pa, pb, edge)
-""")
+let textureMix = shaderModule(named: "texture_mix")
 
 /// An effect over a texture: `layer(uv)` is the texture, exactly as it is
-/// the view under `.shader(_:)`.
+/// the view under `.shader(_:)` — `Shaders/texture_ripple.py`.
 @MainActor
-let textureRipple = ShaderFunction(pyshader: """
-def main(uv: float2, time: float) -> float4:
-    wave = sin(uv.y * 26.0 + time * 2.0) * 0.012
-    return layer(float2(uv.x + wave, uv.y))
-""")
+let textureRipple = SpirvFunction(spirv: shaderModule(named: "texture_ripple"))
 
 // MARK: - Screen
 
@@ -276,8 +267,7 @@ struct TextureScreen {
                 Section("Shader(textures:) — both textures, mixed by name") {
                     VStack(alignment: .leading, spacing: 8) {
                         Shader(
-                            textureMix,
-                            arguments: [.float("blend", Float(demo.blend))],
+                            SpirvFunction(spirv: textureMix) { Float(demo.blend) },
                             textures: [.init("a", demo.card), .init("b", demo.dial)]
                         )
                         .frame(height: TextureDemo.size.height)

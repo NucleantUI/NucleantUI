@@ -81,38 +81,16 @@ final class Landscape: @MainActor ThorRenderContext {
     }
 }
 
-/// The two effects, both in PyShader.
+/// The two effects, both PyShader compiled to SPIR-V — `Shaders/ripple.py`
+/// and `Shaders/lens.py`.
+@MainActor
 enum CanvasEffect {
     /// Compute: a sine ripple across the canvas.
-    static let ripple = ShaderFunction(pyshader: """
-        def main(uv: float2, time: float) -> float4:
-            p = float2(uv.x + 0.012 * sin(uv.y * 40.0 + time * 3.0), uv.y)
-            return layer(p)
-        """)
+    static let ripple = SpirvFunction(spirv: shaderModule(named: "ripple"))
 
     /// Vertex + fragment: one quad over the view, its fragment stage a lens
     /// bulging the middle and darkening the edges.
-    static let lens = ShaderFunction(pyshader: """
-        QUAD = [float2(-1.0, -1.0), float2(1.0, -1.0), float2(-1.0, 1.0),
-                float2(-1.0, 1.0), float2(1.0, -1.0), float2(1.0, 1.0)]
-
-        class Quad:
-            position: float4
-            local: float2
-
-        def vertex(vertex_index: int) -> Quad:
-            quad = QUAD
-            corner = quad[vertex_index]
-            return Quad(position=float4(corner, 0.0, 1.0), local=corner * 0.5 + 0.5)
-
-        def fragment(local: float2, time: float) -> float4:
-            d = local - float2(0.5, 0.5)
-            r = length(d)
-            pull = 0.3 * (1.0 - smoothstep(0.0, 0.5, r)) * (0.75 + 0.25 * sin(time * 2.0))
-            colour = layer(float2(0.5, 0.5) + d * (1.0 - pull))
-            vignette = smoothstep(0.8, 0.35, r)
-            return float4(colour.xyz * vignette, colour.w)
-        """)
+    static let lens = SpirvFunction(spirv: shaderModule(named: "lens"))
 }
 
 /// The sun and the three paintings showing it. The paintings are kept for

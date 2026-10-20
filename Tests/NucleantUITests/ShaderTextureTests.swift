@@ -9,7 +9,7 @@
 //  themselves are verified in the demo. What is covered here is everything
 //  that decides them: the bindings, the identity that chooses rebuild over
 //  rebind, the generation that re-dispatches a static shader, and the two
-//  shader sources — PyShader's SPIR-V, compiled for real, the GLSL wrapper
+//  shader sources — the GLSL wrapper
 //  that has to keep saying the same thing, and a module that arrived already
 //  compiled and so goes through neither.
 //
@@ -41,16 +41,16 @@ struct ShaderTextureInputs {
     func texturesAreDeclaredFromBindingFour() {
         let set = ShaderTextures([.init("a", texture(1)), .init("b", texture(2))])
         #expect(set.signature == "a,b")
-        #expect(set.declarations.map(\.binding) == [4, 5])
-        #expect(set.declarations.map(\.name) == ["a", "b"])
+        let glsl = ShaderSource.textureSource(set)
+        #expect(glsl.contains("layout(binding = 4) uniform sampler2D uTex_a;"))
+        #expect(glsl.contains("layout(binding = 5) uniform sampler2D uTex_b;"))
         // Every `RenderTexture` is a canvas image, stored top-down.
-        #expect(set.declarations.map(\.isTopDown) == [true, true])
+        #expect(glsl.contains("vec2(p.x, 1.0 - p.y)"))
     }
 
     @Test
     func noTexturesIsNoDeclarations() {
         #expect(ShaderTextures.none.isEmpty)
-        #expect(ShaderTextures.none.declarations.isEmpty)
         #expect(ShaderTextures.none.signature == "")
         #expect(ShaderTextures.none.imageInputs?.isEmpty == true)
     }
@@ -92,9 +92,8 @@ struct ShaderTextureInputs {
     }
 }
 
-/// The GLSL inlet. Nothing new is written in GLSL, but it has to declare the
-/// same interface PyShader compiles against, or a body moved between the two
-/// would quietly mean something else.
+/// The GLSL inlet: it declares the same names and bindings a module samples
+/// its textures by.
 @Suite
 struct ShaderTextureGLSL {
 
@@ -161,80 +160,6 @@ struct ShaderTextureGLSL {
     }
 }
 
-/// The PyShader inlet, compiled for real — `ShaderCode.compute` runs the
-/// whole way to SPIR-V with no GPU involved, so this is the declarations
-/// actually reaching the compiler rather than a description of them.
-@MainActor
-@Suite(.serialized)
-struct ShaderTextureCompilation {
-
-    private func textures(_ names: [String]) -> ShaderTextures {
-        ShaderTextures(names.map { name in
-            .init(name, renderTexture(size: Size(width: 4, height: 4)) { Fill(level: 1) })
-        })
-    }
-
-    private func spirv(_ code: ShaderCode) -> [UInt32]? {
-        guard case .spirv(let words) = code else { return nil }
-        return words
-    }
-
-    @Test
-    func aPyShaderBodySamplesItsTexturesByName() throws {
-        let function = ShaderFunction(pyshader: """
-        def main(uv: float2, blend: float, a: Texture, b: Texture) -> float4:
-            return mix(a(uv), b(uv), blend)
-        """)
-        let code = try ShaderCode.compute(
-            function,
-            samplesContent: false,
-            arguments: ShaderArguments([.float("blend", 0.5)]),
-            textures: textures(["a", "b"])
-        )
-        let words = try #require(spirv(code))
-        // A SPIR-V module, and a bigger one than the same shader without the
-        // two sampled images in it.
-        #expect(words.first == 0x0723_0203)
-        #expect(words.count > 32)
-    }
-
-    /// A texture the host did not declare is not a name the module can use —
-    /// the error comes from PyShader, through `ShaderError.compileFailed`.
-    @Test
-    func anUndeclaredTextureIsAnError() {
-        let function = ShaderFunction(pyshader: """
-        def main(uv: float2, a: Texture) -> float4:
-            return a(uv)
-        """)
-        #expect(throws: ShaderError.self) {
-            try ShaderCode.compute(
-                function,
-                samplesContent: false,
-                arguments: .none,
-                textures: .none
-            )
-        }
-    }
-
-    /// `layer(uv)` keeps meaning the view: an effect reads its own pixels and
-    /// a texture in the same body.
-    @Test
-    func aTextureCompilesAlongsideTheContent() throws {
-        let function = ShaderFunction(pyshader: """
-        def main(uv: float2, mask: Texture) -> float4:
-            return layer(uv) * mask(uv).x
-        """)
-        let code = try ShaderCode.compute(
-            function,
-            samplesContent: true,
-            contentIsTopDown: true,
-            arguments: .none,
-            textures: textures(["mask"])
-        )
-        #expect(spirv(code) != nil)
-    }
-}
-
 /// The third inlet: a module compiled somewhere else.
 ///
 /// There is no source to wrap, parse or hand to a compiler, so what has to
@@ -245,22 +170,10 @@ struct ShaderTextureCompilation {
 @Suite(.serialized)
 struct PrecompiledShaderFunctionTests {
 
-    /// A module PyShader built, so these are real words rather than a made-up
-    /// array: whatever comes back from the `.pyshader` inlet is by definition
-    /// something the `.spirv` inlet should be able to carry.
+    /// A real module — `Fixtures/compute.py`, compiled — rather than a
+    /// made-up array.
     private func module() throws -> [UInt32] {
-        let code = try ShaderCode.compute(
-            ShaderFunction(pyshader: """
-            def main(uv: float2) -> float4:
-                return float4(uv.x, uv.y, 0.0, 1.0)
-            """),
-            samplesContent: false,
-            arguments: .none
-        )
-        guard case .spirv(let words) = code else {
-            throw ShaderError.compileFailed("the PyShader inlet did not produce SPIR-V")
-        }
-        return words
+        Fixture.compute
     }
 
     @Test

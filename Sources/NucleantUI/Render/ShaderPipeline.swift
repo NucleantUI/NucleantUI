@@ -23,7 +23,6 @@ import CVulkan
 import VulkanCore
 import NucleantVulkan
 import NucleantShader
-import PyShader
 
 /// What every shader gets for free, matching the `Uniforms` block the wrapper
 /// in `ShaderSource` declares. `std140` puts a `vec2` on an 8-byte boundary,
@@ -52,8 +51,7 @@ enum ShaderError: Error {
 }
 
 /// What a `ShaderFunction` becomes on its way to `vkCreateShaderModule`:
-/// GLSL still to be compiled by shaderc, or SPIR-V already produced by
-/// PyShader. Both target the descriptor layout described at the top of this
+/// GLSL still to be compiled by shaderc, or SPIR-V already compiled. Both target the descriptor layout described at the top of this
 /// file, so the pipeline is the same from here on.
 enum ShaderCode {
     case glsl(String)
@@ -82,56 +80,15 @@ enum ShaderCode {
                 arguments: arguments,
                 textures: textures
             ))
-        case .pyshader:
-            let interface = ComputeImageInterface.nucleantUI(
-                samplesContent: samplesContent,
-                contentIsTopDown: contentIsTopDown,
-                arguments: try ShaderArgumentKind.kinds(of: arguments),
-                textures: textures.declarations
-            )
-            do {
-                return .spirv(try PyShader.compile(function.body, target: .computeImage(interface)).spirv)
-            } catch let error as PyShaderError {
-                // Python line numbers, since that is what was written.
-                throw ShaderError.compileFailed("PyShader: \(error)")
-            }
         case .spirv:
             // Already compiled, and compiled against this same layout — see
             // `ShaderFunction.init(spirv:)`. `samplesContent`, `arguments`
             // and `textures` described what to *generate*, and there is
             // nothing to generate: the module declares what it reads, and
             // the bindings it declares are the ones below.
-            return .spirv(function.spirv)
-        }
-    }
-}
-
-extension ShaderArgumentKind {
-    /// From the GLSL declaration `ShaderArgument` produces for itself.
-    init?(glslType: String) {
-        switch glslType {
-        case "float": self = .float
-        case "vec2": self = .float2
-        case "vec3": self = .float3
-        case "vec4": self = .float4
-        case "float[]": self = .floatArray
-        case "vec2[]": self = .float2Array
-        case "vec3[]": self = .float3Array
-        case "vec4[]": self = .float4Array
-        default: return nil
-        }
-    }
-
-    /// PyShader's view of `arguments`, or the error for one it cannot take.
-    static func kinds(of arguments: ShaderArguments) throws -> [(name: String, kind: ShaderArgumentKind)] {
-        try arguments.declarations.map { declaration in
-            guard let kind = ShaderArgumentKind(glslType: declaration.type) else {
-                throw ShaderError.compileFailed(
-                    "PyShader: argument '\(declaration.name)' is a \(declaration.type); "
-                    + "PyShader takes float, float2/3/4, color and arrays of them"
-                )
-            }
-            return (declaration.name, kind)
+            // Nothing compiles it — it is handed to `vkCreateShaderModule` as
+            // it stands, so it already meets the compute contract.
+            return .spirv(function.precompiled?.words ?? [])
         }
     }
 }
@@ -148,8 +105,7 @@ enum ShaderSource {
     /// as `uContent` (and ShaderToy's `iChannel0`), plus `layer(uv)` to read
     /// them — what a `.shader(_:)` effect is given. `textures` adds one named
     /// sampler per `RenderTexture`, read as `a(uv)` and measured as `a_size`,
-    /// which is the interface PyShader compiles against — declared here too so
-    /// the GLSL inlet does not quietly mean something else.
+    /// the same names and bindings a module samples them by.
     ///
     /// Local size 8×8 matches the `(w + 7) / 8` dispatch in
     /// `ComputeShaderNode.update` exactly.
@@ -325,41 +281,25 @@ extension ShaderSource {
 }
 
 extension ShaderSource {
-    /// The GLSL behind named textures, matching what PyShader emits for the
-    /// same `ShaderTexture`s: one `sampler2D` per texture at its own binding,
-    /// a reader function of the texture's own name, and `<name>_size`.
-    ///
-    /// Nothing new is written in GLSL — this is here so a body ported between
-    /// the two inlets reads the same in both. A `RenderTexture` is stored
-    /// top-down, so the read flips y exactly as `isTopDown` does there.
+    /// The GLSL behind named textures: one `sampler2D` per texture at its
+    /// own binding from 4 up, a reader function of the texture's own name,
+    /// and `<name>_size` — the same names and bindings a module samples.
+    /// A `RenderTexture` is stored top-down, so the read flips y.
     static func textureSource(_ textures: ShaderTextures) -> String {
         guard !textures.isEmpty else { return "" }
         var source = ""
-        for declaration in textures.declarations {
-            let name = declaration.name
+        for (index, input) in textures.inputs.enumerated() {
+            let name = input.name
             let sampler = "uTex_\(name)"
-            let coordinate = declaration.isTopDown ? "vec2(p.x, 1.0 - p.y)" : "p"
+            let coordinate = "vec2(p.x, 1.0 - p.y)"
             source += """
-            layout(binding = \(declaration.binding)) uniform sampler2D \(sampler);
+            layout(binding = \(4 + index)) uniform sampler2D \(sampler);
             vec4 \(name)(vec2 p) { return texture(\(sampler), \(coordinate)); }
             #define \(name)_size textureSize(\(sampler), 0)
 
             """
         }
         return source
-    }
-}
-
-extension ShaderTextures {
-    /// What PyShader declares for these textures. Every `RenderTexture` is
-    /// stored top-down (a canvas image's own orientation), so every one of
-    /// them reads flipped — `contentIsTopDown`'s rule, per texture.
-    /// `ShaderTexture` unqualified: `PyShader` is the module *and* an enum in
-    /// it, so `PyShader.ShaderTexture` looks inside the enum.
-    var declarations: [ShaderTexture] {
-        inputs.enumerated().map { index, input in
-            ShaderTexture(name: input.name, binding: 4 + index, isTopDown: true)
-        }
     }
 }
 
@@ -398,6 +338,8 @@ final class ShaderPipeline {
     private var arguments: BufferAndMemory?
     /// Floats the argument buffer can hold; 0 when there is none.
     let argumentCapacity: Int
+    /// The compute entry point's name in the module.
+    private let entryPoint: String
 
     /// `inputs` are the images the shader samples: the canvas a `.shader`
     /// effect's view is drawn into at binding 2, and a named texture at each
@@ -412,9 +354,11 @@ final class ShaderPipeline {
         imageView: VkImageView,
         inputs: [ShaderImageInput] = [],
         source: ShaderCode,
+        entryPoint: String = "main",
         argumentCapacity: Int = 0
     ) throws {
         self.device = engine.device
+        self.entryPoint = entryPoint
         self.inputs = inputs
         self.argumentCapacity = argumentCapacity
         self.uniforms = engine.createBuffer(
@@ -482,6 +426,15 @@ final class ShaderPipeline {
                 data: UnsafeRawPointer(buffer.baseAddress!),
                 bytes: count * MemoryLayout<Float>.stride
             )
+        }
+    }
+
+    /// An input's packed bytes, whole — same contract as the floats.
+    func updateArguments(bytes: [UInt8]) {
+        guard let arguments, !bytes.isEmpty else { return }
+        let count = min(bytes.count, argumentCapacity * MemoryLayout<Float>.stride)
+        bytes.withUnsafeBytes { buffer in
+            arguments.update(device: device, data: buffer.baseAddress!, bytes: count)
         }
     }
 
@@ -584,7 +537,7 @@ final class ShaderPipeline {
     }
 
     private func createPipeline() throws {
-        let result = "main".withCString { entry -> VkResult in
+        let result = entryPoint.withCString { entry -> VkResult in
             var stage = VkPipelineShaderStageCreateInfo()
             stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
             stage.stage = VK_SHADER_STAGE_COMPUTE_BIT

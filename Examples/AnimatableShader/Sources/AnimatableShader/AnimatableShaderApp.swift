@@ -4,9 +4,12 @@
 //
 //  Shaders driven by an animation rather than by the clock.
 //
-//  Each `.py` here is a ShaderToy port with its `time` swapped for
-//  `playhead`, a `ShaderArgument`. Nothing in them reads the real clock, so
-//  on their own they stand still.
+//  Each `.py` in `Shaders/` is a ShaderToy port with its `time` swapped for
+//  `playhead`, the seconds of a `Clock` class it takes as its input. PyShader's
+//  build plugin compiles them to SPIR-V as the app builds (`pyshader.toml`),
+//  and each runs through `SpirvFunction`, its input the playhead listed in a
+//  builder block. Nothing in them reads the real clock, so on their own they
+//  stand still.
 //
 //  `ShaderCanvas` is an `Animatable` view whose `animatableData` is that
 //  playhead, so while an animation runs its body is rebuilt at every value
@@ -18,7 +21,8 @@
 //  The radar's way back is a `CustomAnimation`, `SettleBounce`: it arrives
 //  still moving, swings past where it started and bounces into place.
 //
-//  The last scene animates a point instead of a clock: a glow at `light`,
+//  The last scene animates a point instead of a clock: a glow at `light` — a
+//  `Light` class with a position —
 //  moved to wherever you tap by `LightCanvas`, whose `animatableData` is the
 //  point's. The move is another `CustomAnimation`, `Wiggle`: most of the way
 //  at once, then a few shrinking swings about the tap.
@@ -42,24 +46,29 @@ struct ShaderScene: Identifiable {
         case follow(Animation)
     }
 
-    /// The bundled .py it is read from.
+    /// The `Shaders/<id>.py` it was compiled from.
     let id: String
     let title: String
-    let function: ShaderFunction
+    /// The SPIR-V the build plugin compiled it to.
+    let module: [UInt32]
+    /// Whether it reads the pointer, and so draws every frame. None of them
+    /// reads the clock.
+    let readsPointer: Bool
     let motion: Motion
 
-    init(_ resource: String, title: String, motion: Motion) {
-        guard let url = Bundle.module.url(forResource: resource, withExtension: "py"),
-              let source = try? String(contentsOf: url, encoding: .utf8)
-        else { fatalError("\(resource).py is missing from the bundle") }
+    init(_ resource: String, title: String, readsPointer: Bool = false, motion: Motion) {
+        guard let url = Bundle.module.url(forResource: resource, withExtension: "spv"),
+              let data = try? Data(contentsOf: url)
+        else { fatalError("\(resource).spv is missing from the bundle — is it in pyshader.toml?") }
         self.id = resource
         self.title = title
-        self.function = ShaderFunction(pyshader: source)
+        self.module = data.withUnsafeBytes { Array($0.bindMemory(to: UInt32.self)) }
+        self.readsPointer = readsPointer
         self.motion = motion
     }
 
     static let all = [
-        ShaderScene("OrientedBox", title: "Oriented Box",
+        ShaderScene("OrientedBox", title: "Oriented Box", readsPointer: true,
                     motion: .playhead(forward: 2, rewind: .easeInOut(duration: 2))),
         ShaderScene("LonelyWaters", title: "Lonely Waters",
                     motion: .playhead(forward: 8, rewind: .easeInOut(duration: 2))),
@@ -129,9 +138,9 @@ struct SceneStage {
     var body: some View {
         switch scene.motion {
         case .playhead(let forward, let rewind):
-            PlayheadStage(function: scene.function, forward: forward, rewind: rewind)
+            PlayheadStage(scene: scene, forward: forward, rewind: rewind)
         case .follow(let animation):
-            FollowStage(function: scene.function, animation: animation)
+            FollowStage(scene: scene, animation: animation)
         }
     }
 }
@@ -171,7 +180,7 @@ struct Hint {
 /// A shader at `playhead`, and a readout of it.
 @View
 struct PlayheadCanvas: Animatable {
-    let function: ShaderFunction
+    let scene: ShaderScene
     /// Seconds of shader time.
     var playhead: Double
 
@@ -182,7 +191,10 @@ struct PlayheadCanvas: Animatable {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Shader(function, arguments: [.float("playhead", Float(playhead))])
+            // The playhead is the shader's `Clock`, its one field.
+            Shader(SpirvFunction(spirv: scene.module, isAnimated: scene.readsPointer) {
+                Float(playhead)
+            })
             Readout(text: String(format: "playhead  %.2f s", playhead))
         }
     }
@@ -191,7 +203,7 @@ struct PlayheadCanvas: Animatable {
 /// A shader whose clock a tap plays forward and back.
 @View
 struct PlayheadStage {
-    let function: ShaderFunction
+    let scene: ShaderScene
     let forward: Double
     let rewind: Animation
 
@@ -200,7 +212,7 @@ struct PlayheadStage {
     @State private var isPlaying = false
 
     var body: some View {
-        PlayheadCanvas(function: function, playhead: playhead)
+        PlayheadCanvas(scene: scene, playhead: playhead)
             .onTapGesture { play() }
             .overlay(alignment: .top) {
                 Hint(text: "Tap to play", isHidden: isPlaying)
@@ -227,7 +239,7 @@ struct PlayheadStage {
 /// A glow at `light`, and a readout of it.
 @View
 struct LightCanvas: Animatable {
-    let function: ShaderFunction
+    let scene: ShaderScene
     /// In points, from the view's top left.
     var light: Point
     @Environment(\.displayScale) private var scale
@@ -239,8 +251,10 @@ struct LightCanvas: Animatable {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            // The shader works in pixels.
-            Shader(function, arguments: [.float2("light", Float2(light.x * scale, light.y * scale))])
+            // The shader's `Light`, in pixels, which the shader works in.
+            Shader(SpirvFunction(spirv: scene.module, isAnimated: false) {
+                Float2(light.x * scale, light.y * scale)
+            })
             Readout(text: String(format: "light  %3.0f, %3.0f", light.x, light.y))
         }
     }
@@ -250,7 +264,7 @@ struct LightCanvas: Animatable {
 /// so a tap mid-move turns it round.
 @View
 struct FollowStage {
-    let function: ShaderFunction
+    let scene: ShaderScene
     let animation: Animation
 
     /// Where it starts: the middle of the window as it opens.
@@ -258,7 +272,7 @@ struct FollowStage {
     @State private var hasMoved = false
 
     var body: some View {
-        LightCanvas(function: function, light: light)
+        LightCanvas(scene: scene, light: light)
             .onTapGesture { point in
                 hasMoved = true
                 withAnimation(animation) { light = point }

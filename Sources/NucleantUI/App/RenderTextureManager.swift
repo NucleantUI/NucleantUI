@@ -40,6 +40,13 @@ final class RenderTextureManager<N: NucleantContainerNode> {
 
     private var backings: [Backing] = []
 
+    /// The live textures a shader has asked to render into.
+    var waitingForShader: [RenderTexture] {
+        backings.compactMap { backing in
+            backing.texture.flatMap { $0.pendingShader == nil ? nil : $0 }
+        }
+    }
+
     /// One `tex.view()`'s container: a borrowed image composited into a rect.
     @MainActor
     final class Placement {

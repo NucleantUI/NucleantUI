@@ -2,7 +2,7 @@
 
 # Decompiled from SPIR-V (glslang 8) by spirv2py.
 #
-# ShaderToy's clock (`time`) is replaced by `playhead`, a ShaderArgument the
+# ShaderToy's clock (`time`) is replaced by `playhead`, the `Clock` the
 # app animates: the shader never reads the real clock, so the box only moves
 # when the app moves the playhead.
 from pyshader import *
@@ -35,5 +35,10 @@ def mainImage(fragColor: float4, fragCoord: float2, playhead: float, resolution:
     return float4(col, 1.0)
 
 
-def main(frag_coord: float2, playhead: float, resolution: float2, mouse: float2, mouse_click: float2) -> float4:
-    return mainImage(float4(0.0), frag_coord, playhead, resolution, mouse, mouse_click)
+class Clock:
+    """The shader's input: the playhead the app animates, in seconds."""
+    seconds: float
+
+
+def main(frag_coord: float2, clock: Clock, resolution: float2, mouse: float2, mouse_click: float2) -> float4:
+    return mainImage(float4(0.0), frag_coord, clock.seconds, resolution, mouse, mouse_click)

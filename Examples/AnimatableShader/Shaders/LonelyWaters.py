@@ -2,7 +2,7 @@
 
 # Decompiled from SPIR-V (glslang 8) by spirv2py.
 #
-# ShaderToy's clock (`time`) is replaced by `playhead`, a ShaderArgument the
+# ShaderToy's clock (`time`) is replaced by `playhead`, the `Clock` the
 # app animates. The mouse orbit is gone: the pointer is always "pressed" as
 # far as a shader here can tell, so the camera would follow it everywhere —
 # the tab bar included. The dead anti-aliasing loop after `mainImage`'s early
@@ -157,5 +157,10 @@ def render(fragCoord: float2, playhead: float, resolution: float2) -> float4:
     return float4(col, 1.0)
 
 
-def main(frag_coord: float2, playhead: float, resolution: float2) -> float4:
-    return render(frag_coord, playhead, resolution)
+class Clock:
+    """The shader's input: the playhead the app animates, in seconds."""
+    seconds: float
+
+
+def main(frag_coord: float2, clock: Clock, resolution: float2) -> float4:
+    return render(frag_coord, clock.seconds, resolution)

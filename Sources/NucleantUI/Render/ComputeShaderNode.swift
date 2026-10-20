@@ -150,8 +150,8 @@ public final class ComputeShaderNode<ContainerNode: RenderContainerNode>: Vulkan
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline)
         var set: VkDescriptorSet? = descriptorSet
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, 1, &set, 0, nil)
-        // 8×8 groups, matching the `local_size` both the GLSL wrapper and
-        // PyShader's compute interface declare.
+        // 8×8 groups, matching the `local_size` the GLSL wrapper declares,
+        // and a module's compute entry point is built for.
         vkCmdDispatch(cmd, (width + 7) / 8, (height + 7) / 8, 1)
 
         // Released to the fragment stage *and* the compute stage: the

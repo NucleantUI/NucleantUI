@@ -5,8 +5,8 @@
 
 /// The older spelling of a vertex + fragment `ShaderFunction`.
 ///
-/// There is one function type: `ShaderFunction(varyings:vertex:fragment:)`,
-/// or a PyShader module defining both stages, is a pair, and `isGraphics`
+/// There is one function type: `ShaderFunction(varyings:vertex:fragment:)`
+/// is a pair, and `isGraphics`
 /// says so — which is what lets `.shader(_:)` take either kind.
 public typealias VertexShaderFunction = ShaderFunction
 

@@ -21,10 +21,9 @@ import CVulkan
 import VulkanCore
 import NucleantVulkan
 import NucleantShader
-import PyShader
 
-/// What a `VertexShaderFunction` becomes on its way to the pipeline: two GLSL
-/// stages for shaderc, or one PyShader module with an entry point per stage.
+/// What a vertex + fragment pair becomes on its way to the pipeline: two GLSL
+/// stages for shaderc, or one module with an entry point per stage.
 enum GraphicsShaderCode {
     case glsl(vertex: String, fragment: String)
     case spirv([UInt32], vertexEntryPoint: String, fragmentEntryPoint: String)
@@ -57,26 +56,13 @@ enum GraphicsShaderCode {
                 textures: textures
             )
             return .glsl(vertex: vertex, fragment: fragment)
-        case .pyshader:
-            let interface = GraphicsInterface.nucleantUI(
-                samplesContent: samplesContent,
-                contentIsTopDown: contentIsTopDown,
-                arguments: try ShaderArgumentKind.kinds(of: arguments),
-                textures: textures.declarations
-            )
-            do {
-                let compiled = try PyShader.compile(function.body, target: .graphics(interface))
-                return .spirv(compiled.spirv, vertexEntryPoint: compiled.vertexEntryPoint!, fragmentEntryPoint: compiled.entryPoint)
-            } catch let error as PyShaderError {
-                throw ShaderError.compileFailed("PyShader: \(error)")
-            }
         case .spirv:
             // `isGraphics` is `false` for a precompiled module, so nothing
             // routes one here; a pair is two modules and two entry points,
             // which `ShaderFunction` does not carry.
             throw ShaderError.compileFailed(
                 "a precompiled SPIR-V function is a compute shader — "
-                + "write a vertex + fragment pair as PyShader or GLSL"
+                + "run a vertex + fragment module with SpirvFunction"
             )
         }
     }
@@ -309,6 +295,15 @@ final class VertexShaderPipeline {
         }
     }
 
+    /// An input's packed bytes, whole — same contract as the floats.
+    func updateArguments(bytes: [UInt8]) {
+        guard let arguments, !bytes.isEmpty else { return }
+        let count = min(bytes.count, argumentCapacity * MemoryLayout<Float>.stride)
+        bytes.withUnsafeBytes { buffer in
+            arguments.update(device: device, data: buffer.baseAddress!, bytes: count)
+        }
+    }
+
     /// Point the sampled-image descriptors at new handles — see
     /// `ShaderPipeline.rebindDescriptors`, which this mirrors for the
     /// graphics path.
@@ -364,8 +359,8 @@ final class VertexShaderPipeline {
             input.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
             input.descriptorCount = 1
             // Both stages: the fragment reads it through `layer()`, and a
-            // PyShader module is one module, so the vertex entry point shares
-            // the global even when it never samples it.
+            // vertex + fragment module is one module, so the vertex entry
+            // point shares the global even when it never samples it.
             input.stageFlags = Self.bothStages
             bindings.append(input)
         }

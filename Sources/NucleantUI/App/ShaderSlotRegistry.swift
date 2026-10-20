@@ -33,6 +33,7 @@ import VulkanCore
 import NucleantVulkan
 import NucleantThorVG
 import Dispatch
+import Observation
 
 @MainActor
 final class ShaderSlotRegistry<N: NucleantContainerNode> {
@@ -63,12 +64,22 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             case .graphics(_, let pipeline): pipeline.updateArguments(packed)
             }
         }
+
+        func updateArguments(bytes: [UInt8]) {
+            switch self {
+            case .compute(_, let pipeline): pipeline.updateArguments(bytes: bytes)
+            case .graphics(_, let pipeline): pipeline.updateArguments(bytes: bytes)
+            }
+        }
     }
 
     /// What a view asks its slot to be.
     enum Request {
         case compute(ShaderFunction, withLayer: Bool)
         case graphics(VertexShaderFunction, ShaderDraw, withLayer: Bool)
+        /// A `ShaderProtocol`'s module, compiled already: dispatched or
+        /// drawn by what its entry points say.
+        case module([UInt32], SpirvEntryPoints, ShaderDraw, isAnimated: Bool, withLayer: Bool)
 
         /// Identity for the compiled pipeline; the kind is part of it, so a
         /// path that changes view type rebuilds.
@@ -76,6 +87,18 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             switch self {
             case .compute(let function, _): return function.source
             case .graphics(let function, _, _): return "#graphics\n" + function.source
+            // The words themselves are compared — see `words`.
+            case .module: return "#module"
+            }
+        }
+
+        /// A module's words, compared as they are: the same array is the
+        /// same storage, so an unchanged module costs nothing to compare.
+        /// Empty for a source function, whose identity is `source`.
+        var words: [UInt32] {
+            switch self {
+            case .module(let words, _, _, _, _): return words
+            case .compute, .graphics: return []
             }
         }
 
@@ -83,12 +106,14 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             switch self {
             case .compute(let function, _): return function.isAnimated
             case .graphics(let function, _, _): return function.isAnimated
+            case .module(_, _, _, let isAnimated, _): return isAnimated
             }
         }
 
         var withLayer: Bool {
             switch self {
-            case .compute(_, let withLayer), .graphics(_, _, let withLayer): return withLayer
+            case .compute(_, let withLayer), .graphics(_, _, let withLayer), .module(_, _, _, _, let withLayer):
+                return withLayer
             }
         }
     }
@@ -123,6 +148,20 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         var height: Int
         /// Source it was compiled from; a change recompiles.
         var source: String
+        /// Whether its layer is drawn top-down, as a module samples every
+        /// image — a `ShaderProtocol`'s module, or a `ShaderFunction` that is
+        /// SPIR-V already. A source function is compiled for a layer drawn
+        /// y-up instead.
+        var samplesTopDown: Bool { !words.isEmpty || source.hasPrefix("#spirv") }
+        /// The module it was built from, for a `ShaderProtocol` — compared
+        /// alongside `source`.
+        var words: [UInt32]
+        /// A `ShaderProtocol`'s input: which object, how to pack it, and the
+        /// bytes last uploaded. A change to anything `pack` reads is noticed
+        /// by observation and uploaded at the next `tick`, with no pass.
+        var inputID: ObjectIdentifier?
+        var pack: (() -> [UInt8])?
+        var packedBytes: [UInt8] = []
         /// The argument names and kinds compiled in, and the values last
         /// uploaded — a change to the former rebuilds, to the latter
         /// re-uploads and re-dispatches.
@@ -193,6 +232,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             self.width = width
             self.height = height
             self.source = request.source
+            self.words = request.words
             self.argumentSignature = arguments.signature
             self.textureSignature = textures.signature
             self.boundInputs = inputs
@@ -241,6 +281,14 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// Slots detached from the engine but not yet freed — see `endPass`.
     private var pendingDestroy: [Slot] = []
 
+    /// Paths whose `ShaderProtocol` input changed since it was last packed,
+    /// set by observation and served by `tick`.
+    private var changedInputs: Set<[Int]> = []
+
+    /// What renders a shader into a `RenderTexture`, per texture — see
+    /// `renderPendingShaders`.
+    private var textureShaders: [ObjectIdentifier: TextureShader] = [:]
+
     init(engine: VulkanRenderEngine<N>) {
         self.engine = engine
         self.renderNodes = RenderNodeManager(engine: engine)
@@ -282,6 +330,97 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             rect: rect,
             clip: clip
         )
+    }
+
+    /// Called from `ShaderModuleContent.place`: the slot for a
+    /// `ShaderProtocol`'s module, with `input` packed into its argument
+    /// buffer. Under a `.shader(_:)` effect it is handed the content it
+    /// samples at binding 2 as well: `layer`, what the view drew this pass,
+    /// or `canvas`, the one canvas node the view is (`changed` when it was
+    /// rasterized again), or — `tex.shader(_:)` — `texture`.
+    ///
+    /// The input is packed under observation here only when it is new or
+    /// changed; otherwise a change to it is noticed by observation and
+    /// uploaded by `tick`, without the view tree.
+    func useModule<Input: ShaderInput>(
+        path: [Int],
+        words: [UInt32],
+        input: Input,
+        isAnimated: Bool,
+        draw: ShaderDraw,
+        textures: ShaderTextures,
+        rect: Rect,
+        clip: Rect?,
+        layer content: DisplayList? = nil,
+        canvas: RenderNodeManager<N>.ThorCanvasNode? = nil,
+        changed: Bool = false,
+        texture: RenderTexture? = nil
+    ) {
+        let stages = SpirvEntryPoints(words)
+        let existing = slots[path]
+        let inputID = ObjectIdentifier(input)
+        let pack = {
+            var bytes: [UInt8] = []
+            input.pack(into: &bytes)
+            return bytes
+        }
+        var bytes = existing?.packedBytes ?? []
+        let repack = existing == nil || existing?.inputID != inputID
+            || existing?.words != words || changedInputs.contains(path)
+        if repack {
+            changedInputs.remove(path)
+            bytes = track(pack, at: path)
+        }
+        guard let slot = slot(
+            at: path,
+            request: .module(
+                words, stages, draw, isAnimated: isAnimated,
+                withLayer: content != nil || canvas != nil || texture != nil
+            ),
+            arguments: .none,
+            inputBytes: bytes.count,
+            textures: textures,
+            rect: rect,
+            clip: clip,
+            canvas: canvas,
+            texture: texture
+        ) else { return }
+        slot.inputID = inputID
+        slot.pack = pack
+        upload(bytes, to: slot)
+        if stages.isGraphics {
+            redraw(slot, covering: draw)
+        }
+        if let content {
+            rasterize(content, into: slot)
+        }
+        if changed {
+            slot.container.needsRender = true
+        }
+        if let texture, slot.contentGeneration != texture.generation {
+            slot.contentGeneration = texture.generation
+            slot.container.needsRender = true
+        }
+    }
+
+    /// Run `pack` under observation: the first change to anything it read
+    /// files `path` for the next `tick`. The handler runs on whichever
+    /// thread wrote, so it hops to the main queue the frames are served on.
+    private func track(_ pack: () -> [UInt8], at path: [Int]) -> [UInt8] {
+        withObservationTracking(pack) { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { _ = self?.changedInputs.insert(path) }
+            }
+        }
+    }
+
+    /// Hand the slot its input's bytes if they changed, and make it draw
+    /// again.
+    private func upload(_ bytes: [UInt8], to slot: Slot) {
+        guard bytes != slot.packedBytes else { return }
+        slot.backend.updateArguments(bytes: bytes)
+        slot.packedBytes = bytes
+        slot.container.needsRender = true
     }
 
     /// Called from `VertexShaderContent.place`: the graphics slot for this
@@ -330,18 +469,36 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             ? .graphics(function, draw, withLayer: true)
             : .compute(function, withLayer: true)
         guard let slot = slot(at: path, request: request, arguments: arguments,
-                              textures: textures, rect: rect, clip: clip),
-              let layer = slot.layer
+                              textures: textures, rect: rect, clip: clip)
         else { return }
         if function.isGraphics {
             redraw(slot, covering: draw)
         }
+        rasterize(content, into: slot)
+    }
+
+    /// Rasterize what a `.shader(_:)` effect's view drew into the slot's
+    /// layer, if it is not what the layer already holds, and run the shader
+    /// over it again.
+    private func rasterize(_ content: DisplayList, into slot: Slot) {
+        guard let layer = slot.layer else { return }
         // Absolute coordinates, so a view that merely moved reads as changed
         // and is drawn again at its new place; the canvas transform absorbs
         // the origin, but the comparison does not.
         guard layer.content != content || layer.origin != slot.pixelOrigin else { return }
         if PerfTrace.isEnabled { PerfTrace.layersDrawn += 1 }
-        layer.renderer.render(content, origin: slot.pixelOrigin, flipHeight: slot.height)
+        if slot.samplesTopDown {
+            // Top-down, as every image a module samples is stored — moved so
+            // the view's corner lands at the image's.
+            let scale = renderNodes.scale
+            layer.renderer.render(packed: [(
+                content,
+                -Int((slot.pixelOrigin.x * scale).rounded()),
+                -Int((slot.pixelOrigin.y * scale).rounded())
+            )])
+        } else {
+            layer.renderer.render(content, origin: slot.pixelOrigin, flipHeight: slot.height)
+        }
         layer.content = content
         layer.origin = slot.pixelOrigin
         // Rasterize the canvas, then resample it — whether or not the shader
@@ -416,6 +573,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         at path: [Int],
         request: Request,
         arguments: ShaderArguments,
+        inputBytes: Int = 0,
         textures: ShaderTextures,
         rect: Rect,
         clip: Rect?,
@@ -423,6 +581,9 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         texture textureInput: RenderTexture? = nil
     ) -> Slot? {
         let source = request.source
+        // What the argument buffer has to hold, in floats: the arguments'
+        // packed list, or a `ShaderProtocol` input's bytes.
+        let argumentFloats = max(arguments.packed.count, (inputBytes + 3) / 4)
         // A slot sampling a canvas node or a texture has no layer of its own.
         let withLayer = request.withLayer && canvasInput == nil && textureInput == nil
         let pixelWidth = max(1, Int((rect.width * scale).rounded()))
@@ -456,8 +617,9 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             if existing.width == pixelWidth,
                existing.height == pixelHeight,
                existing.source == source,
+               existing.words == request.words,
                existing.argumentSignature == arguments.signature,
-               existing.backend.argumentCapacity >= arguments.packed.count,
+               existing.backend.argumentCapacity >= argumentFloats,
                existing.textureSignature == textures.signature,
                (existing.layer != nil) == withLayer,
                existing.canvas === canvasInput,
@@ -504,6 +666,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         guard let slot = makeSlot(
             request: request,
             arguments: arguments,
+            argumentFloats: argumentFloats,
             textures: textures,
             textureInputs: textureInputs,
             width: pixelWidth,
@@ -618,6 +781,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         for (path, slot) in slots where !slot.used {
             retire(slot)
             slots[path] = nil
+            changedInputs.remove(path)
             retired += 1
         }
         if retired > 0 {
@@ -684,7 +848,9 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         renderNodes.releasePending()
         textures.releasePending()
         painter.frameWillDraw()
+        renderPendingShaders()
         guard !slots.isEmpty else { return false }
+        uploadChangedInputs()
         for slot in slots.values {
             slot.elapsed += delta
             slot.frame += 1
@@ -718,11 +884,38 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         return true
     }
 
+    /// Pack again every `ShaderProtocol` input observation said changed, and
+    /// upload it — the whole of what a changed input costs, with no pass
+    /// and no view rebuilt. One that outgrew its buffer waits for a pass
+    /// over its path instead, which rebuilds the slot with room for it.
+    private func uploadChangedInputs() {
+        guard !changedInputs.isEmpty else { return }
+        for path in changedInputs {
+            guard let slot = slots[path], let pack = slot.pack else {
+                changedInputs.remove(path)
+                continue
+            }
+            let bytes = track(pack, at: path)
+            guard (bytes.count + 3) / 4 <= slot.backend.argumentCapacity else {
+                Invalidator.shared.invalidate(owner: path)
+                continue
+            }
+            changedInputs.remove(path)
+            upload(bytes, to: slot)
+        }
+    }
+
     func destroyAll() {
         for slot in slots.values {
             retire(slot)
         }
         slots.removeAll()
+        changedInputs.removeAll()
+        if !textureShaders.isEmpty {
+            vkDeviceWaitIdle(engine.device)
+            for shader in textureShaders.values { shader.destroy(engine) }
+            textureShaders.removeAll()
+        }
         releasePending()
         painter.destroy()
         textures.destroyAll()
@@ -743,6 +936,232 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         for slot in retired { destroy(slot) }
     }
 
+    // MARK: - Shaders rendered into textures
+
+    /// The GPU side of `render(into:)` for one texture: a compute node and
+    /// pipeline of its own at the texture's pixel size, never composited,
+    /// whose output is copied into the texture's image. Kept while the
+    /// texture lives, so a texture rendered again — an input that changed —
+    /// dispatches the same pipeline again rather than building one.
+    @MainActor
+    final class TextureShader {
+        weak var texture: RenderTexture?
+        let words: [UInt32]
+        let node: ComputeShaderNode<N>
+        let pipeline: ShaderPipeline
+        /// Carries the node through its `update`; never in the engine's list.
+        let container: N
+        /// The clock the module reads: seconds since its first render here.
+        let started = DispatchTime.now().uptimeNanoseconds
+        var frame = 0
+
+        init(texture: RenderTexture, words: [UInt32], node: ComputeShaderNode<N>, pipeline: ShaderPipeline, container: N) {
+            self.texture = texture
+            self.words = words
+            self.node = node
+            self.pipeline = pipeline
+            self.container = container
+        }
+
+        /// The caller drains the device first.
+        func destroy(_ engine: VulkanRenderEngine<N>) {
+            node.computePipeline = nil
+            node.computeLayout = nil
+            node.computeDescriptorSet = nil
+            pipeline.destroy()
+            node.destroyResources(engine)
+        }
+    }
+
+    /// Run every shader a texture is waiting for: dispatch it into its own
+    /// image and copy that into the texture's, in one submit.
+    ///
+    /// At the top of a frame, before anything is recorded, and only for a
+    /// texture whose canvas the engine has drawn — the copy starts from the
+    /// layout that draw left the image in. The submit is waited on, so the
+    /// frame that follows samples the new pixels; it costs one dispatch and
+    /// one copy, and only when something asked for it.
+    private func renderPendingShaders() {
+        if textureShaders.values.contains(where: { $0.texture == nil }) {
+            // Nothing in flight uses these: every submit of theirs was waited on.
+            for (key, shader) in textureShaders where shader.texture == nil {
+                shader.destroy(engine)
+                textureShaders[key] = nil
+            }
+        }
+        var rendered = false
+        for texture in renderTextures.waitingForShader {
+            guard let request = texture.pendingShader,
+                  let image = texture.gpuImage,
+                  let canvasID = texture.canvasID,
+                  engine.readable.contains(canvasID)
+            else { continue }
+            texture.pendingShader = nil
+            guard let entryPoint = SpirvEntryPoints(request.words).compute else {
+                nucleantLogError("NucleantUI: render(into:) runs a compute module; this one has no compute entry point\n")
+                continue
+            }
+            guard let shader = textureShader(
+                for: texture,
+                words: request.words,
+                entryPoint: entryPoint,
+                width: image.width,
+                height: image.height,
+                argumentFloats: (request.bytes.count + 3) / 4
+            ) else { continue }
+
+            shader.pipeline.update(ShaderUniforms(
+                time: Float(Double(DispatchTime.now().uptimeNanoseconds - shader.started) / 1e9),
+                frame: Float(shader.frame),
+                resolutionX: Float(image.width),
+                resolutionY: Float(image.height)
+            ))
+            shader.pipeline.updateArguments(bytes: request.bytes)
+            shader.frame += 1
+            engine.oneTimeSubmit { cmd in
+                shader.container.needsRender = true
+                shader.node.update(engine, slot: shader.container, cmd: cmd)
+                copy(shader.node.image, into: image.image, width: image.width, height: image.height, cmd)
+            }
+            // `update` published the container, which is not composited.
+            engine.readable.remove(shader.container.id)
+            texture.shaderDidRender()
+            rendered = true
+        }
+        guard rendered else { return }
+        // A shader sampling one of those textures has new input, with no pass
+        // to tell it — the same check `endPass` makes.
+        for slot in slots.values {
+            if slot.textureGenerations != slot.textures.generations {
+                slot.textureGenerations = slot.textures.generations
+                slot.container.needsRender = true
+            }
+            if let texture = slot.contentTexture, slot.contentGeneration != texture.generation {
+                slot.contentGeneration = texture.generation
+                slot.container.needsRender = true
+            }
+        }
+    }
+
+    /// The texture's shader node, rebuilt if the module, the size or the
+    /// input's size outgrew what it was built for.
+    private func textureShader(
+        for texture: RenderTexture,
+        words: [UInt32],
+        entryPoint: String,
+        width: Int,
+        height: Int,
+        argumentFloats: Int
+    ) -> TextureShader? {
+        let key = ObjectIdentifier(texture)
+        if let existing = textureShaders[key] {
+            if existing.words == words,
+               existing.node.width == UInt32(width),
+               existing.node.height == UInt32(height),
+               existing.pipeline.argumentCapacity >= argumentFloats {
+                return existing
+            }
+            // Its last submit was waited on; nothing else uses it.
+            existing.destroy(engine)
+            textureShaders[key] = nil
+        }
+        do {
+            let image = try makeImage(width: width, height: height, usage: .storage)
+            let node = ComputeShaderNode<N>(
+                width: UInt32(width),
+                height: UInt32(height),
+                image: image.image,
+                imageView: image.view,
+                memory: image.memory
+            )
+            let pipeline: ShaderPipeline
+            do {
+                pipeline = try ShaderPipeline(
+                    engine: engine,
+                    imageView: image.view,
+                    source: .spirv(words),
+                    entryPoint: entryPoint,
+                    argumentCapacity: argumentFloats == 0 ? 0 : max(256, argumentFloats * 3 / 2)
+                )
+            } catch {
+                node.destroyResources(engine)
+                throw error
+            }
+            node.computePipeline = pipeline.pipeline
+            node.computeLayout = pipeline.pipelineLayout
+            node.computeDescriptorSet = pipeline.descriptorSet
+            let shader = TextureShader(
+                texture: texture,
+                words: words,
+                node: node,
+                pipeline: pipeline,
+                container: N(id: Int.random(in: Int.min...Int.max), context: .compute(node))
+            )
+            textureShaders[key] = shader
+            return shader
+        } catch {
+            nucleantLogError("NucleantUI: render(into:) build (\(width)x\(height)) failed: \(error)\n")
+            return nil
+        }
+    }
+
+    /// The shader's output into the texture's image, both left where their
+    /// owners expect them: the output where the node's next dispatch starts
+    /// from, the texture's where its placements and samplers read it.
+    /// Both RGBA8, so a straight copy; both stored top-down.
+    private func copy(_ source: VkImage, into destination: VkImage, width: Int, height: Int, _ cmd: VkCommandBuffer) {
+        engineImageBarrier(
+            cmd, image: source,
+            srcLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_TRANSFER_READ_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_TRANSFER_BIT
+        )
+        engineImageBarrier(
+            cmd, image: destination,
+            srcLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_TRANSFER_BIT
+        )
+        let layers = VkImageSubresourceLayers(
+            aspectMask: VkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT.rawValue),
+            mipLevel: 0, baseArrayLayer: 0, layerCount: 1
+        )
+        var region = VkImageCopy()
+        region.srcSubresource = layers
+        region.dstSubresource = layers
+        region.extent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
+        vkCmdCopyImage(
+            cmd,
+            source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            destination, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &region
+        )
+        engineImageBarrier(
+            cmd, image: destination,
+            srcLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_TRANSFER_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+        )
+        engineImageBarrier(
+            cmd, image: source,
+            srcLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_TRANSFER_READ_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_TRANSFER_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+        )
+    }
+
     // MARK: - Building
 
     /// Whether a slot gets a canvas, and if so which one to start from.
@@ -759,6 +1178,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     private func makeSlot(
         request: Request,
         arguments: ShaderArguments,
+        argumentFloats: Int,
         textures: ShaderTextures,
         textureInputs: [ShaderImageInput],
         width: Int,
@@ -808,11 +1228,48 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         do {
             // Room for half again as many floats as there are now, so an
             // array that grows a little does not rebuild the slot each time.
-            let capacity = arguments.isEmpty ? 0 : max(256, arguments.packed.count * 3 / 2)
-            let backend: Backend
-            let context: N.Context
+            let capacity = argumentFloats == 0 ? 0 : max(256, argumentFloats * 3 / 2)
+            // What the slot runs: a compute module and its entry point, or a
+            // vertex + fragment pair and what one draw covers. Compiled
+            // before any GPU object is made, so a shader that does not
+            // compile leaves nothing to clean up.
+            let samplesContent = input != nil
+            // A canvas node's image and a `RenderTexture`'s are both stored
+            // top-down, unlike a layer drawn y-up.
+            let contentIsTopDown = canvas != nil || contentTexture != nil
+            var compute: (code: ShaderCode, entryPoint: String)?
+            var graphics: (code: GraphicsShaderCode, draw: ShaderDraw)?
             switch request {
             case .compute(let function, _):
+                compute = (try ShaderCode.compute(
+                    function,
+                    samplesContent: samplesContent,
+                    contentIsTopDown: contentIsTopDown,
+                    arguments: arguments,
+                    textures: textures
+                ), "main")
+            case .graphics(let function, let draw, _):
+                graphics = (try GraphicsShaderCode.graphics(
+                    function,
+                    samplesContent: samplesContent,
+                    contentIsTopDown: contentIsTopDown,
+                    arguments: arguments,
+                    textures: textures
+                ), draw)
+            case .module(let words, let stages, let draw, _, _):
+                if let vertex = stages.vertex, let fragment = stages.fragment {
+                    graphics = (.spirv(words, vertexEntryPoint: vertex, fragmentEntryPoint: fragment), draw)
+                } else if let entryPoint = stages.compute {
+                    compute = (.spirv(words), entryPoint)
+                } else {
+                    throw ShaderError.compileFailed(
+                        "the module has neither a compute entry point nor a vertex + fragment pair"
+                    )
+                }
+            }
+            let backend: Backend
+            let context: N.Context
+            if let compute {
                 let image = try makeImage(width: width, height: height, usage: .storage)
                 // Borrowed, as the node's contract says: the layer's node, the
                 // canvas's, or the texture's owns the image and frees it. The
@@ -830,15 +1287,8 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                     engine: engine,
                     imageView: image.view,
                     inputs: inputs,
-                    source: try ShaderCode.compute(
-                        function,
-                        samplesContent: input != nil,
-                        // A canvas node's image and a `RenderTexture`'s are
-                        // both stored top-down, unlike a layer drawn y-up.
-                        contentIsTopDown: canvas != nil || contentTexture != nil,
-                        arguments: arguments,
-                        textures: textures
-                    ),
+                    source: compute.code,
+                    entryPoint: compute.entryPoint,
                     argumentCapacity: capacity
                 )
                 node.computePipeline = pipeline.pipeline
@@ -847,7 +1297,8 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                 node.dirty = true
                 backend = .compute(node, pipeline)
                 context = .compute(node)
-            case .graphics(let function, let draw, _):
+            } else if let graphics {
+                let (code, draw) = graphics
                 let pass = try colorPass()
                 let image = try makeImage(width: width, height: height, usage: .colorAttachment)
                 let node = try VertFragShaderNode<N>(
@@ -866,13 +1317,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                         engine: engine,
                         renderPass: pass.renderPass!,
                         inputs: (input.map { [ShaderImageInput.content($0.view)] } ?? []) + textureInputs,
-                        source: try GraphicsShaderCode.graphics(
-                            function,
-                            samplesContent: input != nil,
-                            contentIsTopDown: canvas != nil || contentTexture != nil,
-                            arguments: arguments,
-                            textures: textures
-                        ),
+                        source: code,
                         argumentCapacity: capacity
                     )
                 } catch {
@@ -885,6 +1330,9 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                 node.dirty = true
                 backend = .graphics(node, pipeline)
                 context = .vertexShader(node)
+            } else {
+                // Every request above set one of the two or threw.
+                return nil
             }
 
             let container = N(

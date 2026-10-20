@@ -30,7 +30,7 @@ The body of a ``ShaderFunction`` is the inside of a per-pixel function.
 assign `fragColor`. Shader space is y-up, as in OpenGL. Helper functions go
 in `ShaderFunction(functions:_:)`.
 
-## ShaderToy and PyShader
+## ShaderToy
 
 An unmodified ShaderToy image shader drops in with
 `ShaderFunction(shaderToy:)`, with `iTime`, `iTimeDelta`, `iFrame`,
@@ -45,9 +45,37 @@ let gradient = ShaderFunction(shaderToy: """
 """)
 ```
 
-`ShaderFunction(pyshader:)` takes a shader written in Python syntax and
-compiled by [PyShader](https://github.com/NucleantUI/PyShader) — the
-AnimatableShader example keeps its four shaders as bundled `.py` files.
+## SPIR-V modules and PyShader
+
+``Shader``, `.shader(_:)` and `tex.shader(_:)` are generic over a
+``ShaderProtocol`` type: a SPIR-V module and the input it reads. NucleantUI
+knows nothing about what the module was written in. A module with a compute
+entry point is dispatched over every pixel; one with a vertex and a fragment
+entry point is drawn as geometry.
+
+``SpirvFunction`` runs a module as it is. Its input is the module's `class`
+parameter, read whole from one buffer, and is listed value by value in a
+builder block — or is a ``ShaderInput`` model that packs itself:
+
+```swift
+Shader(SpirvFunction(spirv: glow) {
+    model.intensity
+    model.tint
+})
+```
+
+The input is observed: a change to anything it packs is uploaded and redrawn
+with no view rebuilt.
+
+Shaders in Python syntax are [PyShader](https://github.com/NucleantUI/PyShader)'s.
+Compile them when the app is built with its build plugin, listing each `.py`
+in a `pyshader.toml` — the Backdrops and AnimatableShader examples do — or
+while the app runs with `PyShaderFunction` from NucleantUI_PyShader, as the
+Compositor example does with the shader it generates.
+
+`shader.render(into: texture)` runs a compute module over a ``RenderTexture``
+with no view at all, and `shader.observe { … }` calls back on each change to
+its input — together, a texture a model keeps up to date.
 
 ## Arguments
 
