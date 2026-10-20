@@ -26,7 +26,9 @@ let package = Package(
 ```
 
 The packages NucleantUI is built on — NucleantVulkan, NucleantSkia,
-NucleantThorVG, NucleantApplication and PyShader — come along with it.
+NucleantThorVG and NucleantApplication — come along with it. Shaders written
+in Python syntax are PyShader's, which an app adds itself — see
+<doc:DrawingWithShaders>.
 
 ## Write an app
 

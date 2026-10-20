@@ -13,7 +13,7 @@ PyShader scenes driven by `withAnimation`.
 
 What it shows:
 
-- Four shaders kept as bundled PyShader `.py` files, with their clock replaced by a `playhead` ``ShaderArgument``.
+- Four PyShader `.py` shaders compiled to SPIR-V by PyShader's build plugin and run through ``SpirvFunction``, with their clock replaced by a `Clock` class input holding the playhead.
 - An `Animatable` view with the playhead as its `animatableData`, so `withAnimation` drives the shader: a tap plays it forward and the completion rewinds it.
 - A glow that follows each tap as an `Animatable` point under a custom wiggle animation.
 - A tab bar whose highlight slides over first, the scene following with a `.push(from:)` transition.
