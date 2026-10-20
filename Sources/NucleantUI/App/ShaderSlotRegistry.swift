@@ -148,6 +148,11 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         var height: Int
         /// Source it was compiled from; a change recompiles.
         var source: String
+        /// Whether its layer is drawn top-down, as a module samples every
+        /// image — a `ShaderProtocol`'s module, or a `ShaderFunction` that is
+        /// SPIR-V already. A source function is compiled for a layer drawn
+        /// y-up instead.
+        var samplesTopDown: Bool { !words.isEmpty || source.hasPrefix("#spirv") }
         /// The module it was built from, for a `ShaderProtocol` — compared
         /// alongside `source`.
         var words: [UInt32]
@@ -329,8 +334,10 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
 
     /// Called from `ShaderModuleContent.place`: the slot for a
     /// `ShaderProtocol`'s module, with `input` packed into its argument
-    /// buffer. From `ShaderEffectContent.place` with `layer` too — what the
-    /// view under a `.shader(_:)` effect drew this pass, sampled at binding 2.
+    /// buffer. Under a `.shader(_:)` effect it is handed the content it
+    /// samples at binding 2 as well: `layer`, what the view drew this pass,
+    /// or `canvas`, the one canvas node the view is (`changed` when it was
+    /// rasterized again), or — `tex.shader(_:)` — `texture`.
     ///
     /// The input is packed under observation here only when it is new or
     /// changed; otherwise a change to it is noticed by observation and
@@ -344,7 +351,10 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         textures: ShaderTextures,
         rect: Rect,
         clip: Rect?,
-        layer content: DisplayList? = nil
+        layer content: DisplayList? = nil,
+        canvas: RenderNodeManager<N>.ThorCanvasNode? = nil,
+        changed: Bool = false,
+        texture: RenderTexture? = nil
     ) {
         let stages = SpirvEntryPoints(words)
         let existing = slots[path]
@@ -363,12 +373,17 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         }
         guard let slot = slot(
             at: path,
-            request: .module(words, stages, draw, isAnimated: isAnimated, withLayer: content != nil),
+            request: .module(
+                words, stages, draw, isAnimated: isAnimated,
+                withLayer: content != nil || canvas != nil || texture != nil
+            ),
             arguments: .none,
             inputBytes: bytes.count,
             textures: textures,
             rect: rect,
-            clip: clip
+            clip: clip,
+            canvas: canvas,
+            texture: texture
         ) else { return }
         slot.inputID = inputID
         slot.pack = pack
@@ -378,6 +393,13 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         }
         if let content {
             rasterize(content, into: slot)
+        }
+        if changed {
+            slot.container.needsRender = true
+        }
+        if let texture, slot.contentGeneration != texture.generation {
+            slot.contentGeneration = texture.generation
+            slot.container.needsRender = true
         }
     }
 
@@ -465,7 +487,18 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         // the origin, but the comparison does not.
         guard layer.content != content || layer.origin != slot.pixelOrigin else { return }
         if PerfTrace.isEnabled { PerfTrace.layersDrawn += 1 }
-        layer.renderer.render(content, origin: slot.pixelOrigin, flipHeight: slot.height)
+        if slot.samplesTopDown {
+            // Top-down, as every image a module samples is stored — moved so
+            // the view's corner lands at the image's.
+            let scale = renderNodes.scale
+            layer.renderer.render(packed: [(
+                content,
+                -Int((slot.pixelOrigin.x * scale).rounded()),
+                -Int((slot.pixelOrigin.y * scale).rounded())
+            )])
+        } else {
+            layer.renderer.render(content, origin: slot.pixelOrigin, flipHeight: slot.height)
+        }
         layer.content = content
         layer.origin = slot.pixelOrigin
         // Rasterize the canvas, then resample it — whether or not the shader

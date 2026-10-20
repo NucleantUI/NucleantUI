@@ -12,9 +12,14 @@
 ///
 /// The module binds what NucleantUI's compute and graphics pipelines bind:
 /// the storage image written one pixel per invocation at binding 0 (compute
-/// only), the `Uniforms` block — clock, resolution, pointer — at 1, and the
-/// input's bytes as a storage buffer at binding 3, laid out as the module's
-/// own struct declares them (std430).
+/// only), the `Uniforms` block — clock, resolution, pointer — at 1, the view
+/// under a `.shader(_:)` effect at 2, the input's bytes as a storage buffer
+/// at 3, laid out as the module's own struct declares them (std430), and the
+/// `textures:` the view hands it at 4 and up, in order.
+///
+/// Every image it samples is handed over as it is stored: top-down, row 0
+/// first. PyShader flips the read for it (`isTopDown`), so `layer(uv)` and
+/// `a(uv)` still read upright in y-up `uv`.
 public protocol ShaderProtocol {
     associatedtype Input: ShaderInput
 

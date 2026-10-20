@@ -107,11 +107,11 @@ extension View {
     /// view's rendered pixels, as `shader(_:arguments:)` runs a
     /// `ShaderFunction`.
     ///
-    /// The view is the sampled image at binding 2, stored y-up like the rest
-    /// of shader space — what PyShader's `layer(uv)` reads, and what a
-    /// module compiled with `content = true` in a `pyshader.toml` expects.
-    /// `textures` are bound at 4 and up, in order. The module's input is
-    /// observed: a change to it redraws the effect with no view rebuilt.
+    /// The view is the sampled image at binding 2, stored top-down as every
+    /// image a module samples is — what PyShader's `layer(uv)` reads upright
+    /// (`PyShaderFunction`, or `content = true` in a `pyshader.toml`).
+    /// `textures` are bound at 4 and up, in order. Its input is observed: a
+    /// change to it redraws the effect with no view rebuilt.
     ///
     /// A module with a vertex + fragment pair draws `vertices` vertices
     /// `instances` times over the view, as a `ShaderFunction` pair does.
@@ -198,55 +198,66 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
         // away by ThorVG.
         var content = backdrop ? list : DisplayList()
         child.place(in: rect, proposal: proposal, context: inner, into: &content)
-        if let module {
-            // Always through a layer, which is drawn y-up: a module was
-            // compiled against one orientation of binding 2, so it is never
-            // handed a canvas node's own top-down image in its place.
-            for canvas in canvasInput.canvases {
-                canvas.composite(host: host)
-            }
-            host.useModule(
-                path: path,
-                words: module.words,
-                input: module.input,
-                isAnimated: module.isAnimated,
-                draw: draw,
-                textures: textures,
-                rect: rect,
-                clip: context.compositeClip,
-                layer: content
-            )
-        } else if let function, !backdrop, content.commands.isEmpty, let canvas = canvasInput.sole,
+        if !backdrop, content.commands.isEmpty, let canvas = canvasInput.sole,
            canvas.covers(rect, scale: host.renderNodes.scale) {
             // The view is one canvas node and nothing else: its image is
             // already the view's pixels, and the shader samples it as it is.
-            host.useCanvas(
-                path: path,
-                function: function,
-                draw: draw,
-                arguments: arguments,
-                textures: textures,
-                rect: rect,
-                clip: context.compositeClip,
-                canvas: canvas.node,
-                changed: canvas.changed
-            )
-        } else if let function {
+            if let module {
+                host.useModule(
+                    path: path,
+                    words: module.words,
+                    input: module.input,
+                    isAnimated: module.isAnimated,
+                    draw: draw,
+                    textures: textures,
+                    rect: rect,
+                    clip: context.compositeClip,
+                    canvas: canvas.node,
+                    changed: canvas.changed
+                )
+            } else if let function {
+                host.useCanvas(
+                    path: path,
+                    function: function,
+                    draw: draw,
+                    arguments: arguments,
+                    textures: textures,
+                    rect: rect,
+                    clip: context.compositeClip,
+                    canvas: canvas.node,
+                    changed: canvas.changed
+                )
+            }
+        } else {
             // Anything else is drawn into the layer; a canvas node among it
             // composites by itself, over the effect, as it always has.
             for canvas in canvasInput.canvases {
                 canvas.composite(host: host)
             }
-            host.useLayer(
-                path: path,
-                function: function,
-                draw: draw,
-                arguments: arguments,
-                textures: textures,
-                rect: rect,
-                clip: context.compositeClip,
-                content: content
-            )
+            if let module {
+                host.useModule(
+                    path: path,
+                    words: module.words,
+                    input: module.input,
+                    isAnimated: module.isAnimated,
+                    draw: draw,
+                    textures: textures,
+                    rect: rect,
+                    clip: context.compositeClip,
+                    layer: content
+                )
+            } else if let function {
+                host.useLayer(
+                    path: path,
+                    function: function,
+                    draw: draw,
+                    arguments: arguments,
+                    textures: textures,
+                    rect: rect,
+                    clip: context.compositeClip,
+                    content: content
+                )
+            }
         }
         host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
     }

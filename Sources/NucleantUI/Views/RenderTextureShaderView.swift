@@ -12,11 +12,15 @@
 //  spelling it the same way.
 //
 
-/// A `RenderTexture` with a shader over it. Made by `RenderTexture.shader(_:)`.
+/// A `RenderTexture` with a shader over it. Made by `RenderTexture.shader(_:)`,
+/// generic over the shader's `ShaderProtocol` type as `Shader` is.
 @View
-public struct RenderTextureShaderView {
+public struct RenderTextureShaderView<Function: ShaderProtocol> {
     let texture: RenderTexture
-    let function: ShaderFunction
+    let function: Function
+    /// The `ShaderFunction` overload's function and arguments, compiled for
+    /// them; `nil` for a module, run as it is.
+    let sourceFunction: ShaderFunction?
     let arguments: [ShaderArgument]
     let textures: [ShaderTextureInput]
     let draw: ShaderDraw
@@ -24,7 +28,8 @@ public struct RenderTextureShaderView {
 
     init(
         texture: RenderTexture,
-        function: ShaderFunction,
+        function: Function,
+        sourceFunction: ShaderFunction?,
         arguments: [ShaderArgument],
         textures: [ShaderTextureInput],
         draw: ShaderDraw,
@@ -32,6 +37,7 @@ public struct RenderTextureShaderView {
     ) {
         self.texture = texture
         self.function = function
+        self.sourceFunction = sourceFunction
         self.arguments = arguments
         self.textures = textures
         self.draw = draw
@@ -44,7 +50,7 @@ public struct RenderTextureShaderView {
     /// own size — `RenderTextureView.resizable()`'s rule. The shader then runs
     /// over the frame's pixels, not the texture's, so its `resolution` is the
     /// frame and `layer(uv)` resamples.
-    public func resizable() -> RenderTextureShaderView {
+    public func resizable() -> RenderTextureShaderView<Function> {
         var copy = self
         copy.isResizable = true
         return copy
@@ -53,10 +59,23 @@ public struct RenderTextureShaderView {
 
 extension RenderTextureShaderView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: RenderTextureShaderContent(
+        guard let sourceFunction else {
+            return ViewNode(content: RenderTextureShaderContent(
+                path: context.path,
+                texture: texture,
+                function: nil,
+                module: (function.spirv, function.input, function.isAnimated),
+                draw: draw,
+                arguments: .none,
+                textures: ShaderTextures(textures),
+                isResizable: isResizable
+            ))
+        }
+        return ViewNode(content: RenderTextureShaderContent<ShaderNoArguments>(
             path: context.path,
             texture: texture,
-            function: function,
+            function: sourceFunction,
+            module: nil,
             draw: draw,
             arguments: ShaderArguments(arguments, colorScheme: context.environment.colorScheme),
             textures: ShaderTextures(textures),
@@ -67,10 +86,12 @@ extension RenderTextureShaderView: BuiltinView {
 
 /// Reserves the shader slot and reports where it composites. Emits no draw
 /// commands: the pixels arrive through the engine, not the canvas.
-struct RenderTextureShaderContent: NodeContent {
+struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
     let path: [Int]
     let texture: RenderTexture
-    let function: ShaderFunction
+    /// A `ShaderFunction` compiled for its arguments, or a module run as it is.
+    let function: ShaderFunction?
+    let module: (words: [UInt32], input: Input, isAnimated: Bool)?
     let draw: ShaderDraw
     let arguments: ShaderArguments
     let textures: ShaderTextures
@@ -88,16 +109,30 @@ struct RenderTextureShaderContent: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0, let host = ShaderHost.current else { return }
-        host.useTexture(
-            path: path,
-            function: function,
-            draw: draw,
-            arguments: arguments,
-            textures: textures,
-            rect: rect,
-            clip: context.compositeClip,
-            texture: texture
-        )
+        if let module {
+            host.useModule(
+                path: path,
+                words: module.words,
+                input: module.input,
+                isAnimated: module.isAnimated,
+                draw: draw,
+                textures: textures,
+                rect: rect,
+                clip: context.compositeClip,
+                texture: texture
+            )
+        } else if let function {
+            host.useTexture(
+                path: path,
+                function: function,
+                draw: draw,
+                arguments: arguments,
+                textures: textures,
+                rect: rect,
+                clip: context.compositeClip,
+                texture: texture
+            )
+        }
         host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
     }
 }
@@ -128,11 +163,33 @@ extension RenderTexture {
         vertices: Int = 6,
         instances: Int = 1,
         _viewID: ViewID = #viewID
-    ) -> RenderTextureShaderView {
+    ) -> RenderTextureShaderView<ShaderFunction> {
         RenderTextureShaderView(
             texture: self,
             function: function,
+            sourceFunction: function,
             arguments: arguments,
+            textures: textures,
+            draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
+            _viewID: _viewID
+        )
+    }
+
+    /// This texture with a module run over its pixels — `layer(uv)` reads
+    /// the texture, top-down as it is stored, as it reads the view under
+    /// `.shader(_:)`. `textures` are bound at 4 and up, in order.
+    public func shader<Function: ShaderProtocol>(
+        _ function: Function,
+        textures: [ShaderTextureInput] = [],
+        vertices: Int = 6,
+        instances: Int = 1,
+        _viewID: ViewID = #viewID
+    ) -> RenderTextureShaderView<Function> {
+        RenderTextureShaderView(
+            texture: self,
+            function: function,
+            sourceFunction: nil,
+            arguments: [],
             textures: textures,
             draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
             _viewID: _viewID

@@ -616,7 +616,7 @@ struct ShaderTextures: Equatable {
 public struct Shader<Function: ShaderProtocol> {
     let function: Function
     /// Named `RenderTexture`s the shader samples — `a(uv)` in the body, or
-    /// binding 4 and up in a module.
+    /// binding 4 and up in a module, in order.
     let textures: [ShaderTextureInput]
     /// What one draw covers, for a module with a vertex stage.
     let draw: ShaderDraw
