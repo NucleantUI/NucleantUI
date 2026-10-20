@@ -280,6 +280,10 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// set by observation and served by `tick`.
     private var changedInputs: Set<[Int]> = []
 
+    /// What renders a shader into a `RenderTexture`, per texture — see
+    /// `renderPendingShaders`.
+    private var textureShaders: [ObjectIdentifier: TextureShader] = [:]
+
     init(engine: VulkanRenderEngine<N>) {
         self.engine = engine
         self.renderNodes = RenderNodeManager(engine: engine)
@@ -799,6 +803,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         renderNodes.releasePending()
         textures.releasePending()
         painter.frameWillDraw()
+        renderPendingShaders()
         guard !slots.isEmpty else { return false }
         uploadChangedInputs()
         for slot in slots.values {
@@ -861,6 +866,11 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         }
         slots.removeAll()
         changedInputs.removeAll()
+        if !textureShaders.isEmpty {
+            vkDeviceWaitIdle(engine.device)
+            for shader in textureShaders.values { shader.destroy(engine) }
+            textureShaders.removeAll()
+        }
         releasePending()
         painter.destroy()
         textures.destroyAll()
@@ -879,6 +889,232 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         // any of these images.
         vkDeviceWaitIdle(engine.device)
         for slot in retired { destroy(slot) }
+    }
+
+    // MARK: - Shaders rendered into textures
+
+    /// The GPU side of `render(into:)` for one texture: a compute node and
+    /// pipeline of its own at the texture's pixel size, never composited,
+    /// whose output is copied into the texture's image. Kept while the
+    /// texture lives, so a texture rendered again — an input that changed —
+    /// dispatches the same pipeline again rather than building one.
+    @MainActor
+    final class TextureShader {
+        weak var texture: RenderTexture?
+        let words: [UInt32]
+        let node: ComputeShaderNode<N>
+        let pipeline: ShaderPipeline
+        /// Carries the node through its `update`; never in the engine's list.
+        let container: N
+        /// The clock the module reads: seconds since its first render here.
+        let started = DispatchTime.now().uptimeNanoseconds
+        var frame = 0
+
+        init(texture: RenderTexture, words: [UInt32], node: ComputeShaderNode<N>, pipeline: ShaderPipeline, container: N) {
+            self.texture = texture
+            self.words = words
+            self.node = node
+            self.pipeline = pipeline
+            self.container = container
+        }
+
+        /// The caller drains the device first.
+        func destroy(_ engine: VulkanRenderEngine<N>) {
+            node.computePipeline = nil
+            node.computeLayout = nil
+            node.computeDescriptorSet = nil
+            pipeline.destroy()
+            node.destroyResources(engine)
+        }
+    }
+
+    /// Run every shader a texture is waiting for: dispatch it into its own
+    /// image and copy that into the texture's, in one submit.
+    ///
+    /// At the top of a frame, before anything is recorded, and only for a
+    /// texture whose canvas the engine has drawn — the copy starts from the
+    /// layout that draw left the image in. The submit is waited on, so the
+    /// frame that follows samples the new pixels; it costs one dispatch and
+    /// one copy, and only when something asked for it.
+    private func renderPendingShaders() {
+        if textureShaders.values.contains(where: { $0.texture == nil }) {
+            // Nothing in flight uses these: every submit of theirs was waited on.
+            for (key, shader) in textureShaders where shader.texture == nil {
+                shader.destroy(engine)
+                textureShaders[key] = nil
+            }
+        }
+        var rendered = false
+        for texture in renderTextures.waitingForShader {
+            guard let request = texture.pendingShader,
+                  let image = texture.gpuImage,
+                  let canvasID = texture.canvasID,
+                  engine.readable.contains(canvasID)
+            else { continue }
+            texture.pendingShader = nil
+            guard let entryPoint = SpirvEntryPoints(request.words).compute else {
+                nucleantLogError("NucleantUI: render(into:) runs a compute module; this one has no compute entry point\n")
+                continue
+            }
+            guard let shader = textureShader(
+                for: texture,
+                words: request.words,
+                entryPoint: entryPoint,
+                width: image.width,
+                height: image.height,
+                argumentFloats: (request.bytes.count + 3) / 4
+            ) else { continue }
+
+            shader.pipeline.update(ShaderUniforms(
+                time: Float(Double(DispatchTime.now().uptimeNanoseconds - shader.started) / 1e9),
+                frame: Float(shader.frame),
+                resolutionX: Float(image.width),
+                resolutionY: Float(image.height)
+            ))
+            shader.pipeline.updateArguments(bytes: request.bytes)
+            shader.frame += 1
+            engine.oneTimeSubmit { cmd in
+                shader.container.needsRender = true
+                shader.node.update(engine, slot: shader.container, cmd: cmd)
+                copy(shader.node.image, into: image.image, width: image.width, height: image.height, cmd)
+            }
+            // `update` published the container, which is not composited.
+            engine.readable.remove(shader.container.id)
+            texture.shaderDidRender()
+            rendered = true
+        }
+        guard rendered else { return }
+        // A shader sampling one of those textures has new input, with no pass
+        // to tell it — the same check `endPass` makes.
+        for slot in slots.values {
+            if slot.textureGenerations != slot.textures.generations {
+                slot.textureGenerations = slot.textures.generations
+                slot.container.needsRender = true
+            }
+            if let texture = slot.contentTexture, slot.contentGeneration != texture.generation {
+                slot.contentGeneration = texture.generation
+                slot.container.needsRender = true
+            }
+        }
+    }
+
+    /// The texture's shader node, rebuilt if the module, the size or the
+    /// input's size outgrew what it was built for.
+    private func textureShader(
+        for texture: RenderTexture,
+        words: [UInt32],
+        entryPoint: String,
+        width: Int,
+        height: Int,
+        argumentFloats: Int
+    ) -> TextureShader? {
+        let key = ObjectIdentifier(texture)
+        if let existing = textureShaders[key] {
+            if existing.words == words,
+               existing.node.width == UInt32(width),
+               existing.node.height == UInt32(height),
+               existing.pipeline.argumentCapacity >= argumentFloats {
+                return existing
+            }
+            // Its last submit was waited on; nothing else uses it.
+            existing.destroy(engine)
+            textureShaders[key] = nil
+        }
+        do {
+            let image = try makeImage(width: width, height: height, usage: .storage)
+            let node = ComputeShaderNode<N>(
+                width: UInt32(width),
+                height: UInt32(height),
+                image: image.image,
+                imageView: image.view,
+                memory: image.memory
+            )
+            let pipeline: ShaderPipeline
+            do {
+                pipeline = try ShaderPipeline(
+                    engine: engine,
+                    imageView: image.view,
+                    source: .spirv(words),
+                    entryPoint: entryPoint,
+                    argumentCapacity: argumentFloats == 0 ? 0 : max(256, argumentFloats * 3 / 2)
+                )
+            } catch {
+                node.destroyResources(engine)
+                throw error
+            }
+            node.computePipeline = pipeline.pipeline
+            node.computeLayout = pipeline.pipelineLayout
+            node.computeDescriptorSet = pipeline.descriptorSet
+            let shader = TextureShader(
+                texture: texture,
+                words: words,
+                node: node,
+                pipeline: pipeline,
+                container: N(id: Int.random(in: Int.min...Int.max), context: .compute(node))
+            )
+            textureShaders[key] = shader
+            return shader
+        } catch {
+            nucleantLogError("NucleantUI: render(into:) build (\(width)x\(height)) failed: \(error)\n")
+            return nil
+        }
+    }
+
+    /// The shader's output into the texture's image, both left where their
+    /// owners expect them: the output where the node's next dispatch starts
+    /// from, the texture's where its placements and samplers read it.
+    /// Both RGBA8, so a straight copy; both stored top-down.
+    private func copy(_ source: VkImage, into destination: VkImage, width: Int, height: Int, _ cmd: VkCommandBuffer) {
+        engineImageBarrier(
+            cmd, image: source,
+            srcLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_TRANSFER_READ_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_TRANSFER_BIT
+        )
+        engineImageBarrier(
+            cmd, image: destination,
+            srcLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_TRANSFER_BIT
+        )
+        let layers = VkImageSubresourceLayers(
+            aspectMask: VkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT.rawValue),
+            mipLevel: 0, baseArrayLayer: 0, layerCount: 1
+        )
+        var region = VkImageCopy()
+        region.srcSubresource = layers
+        region.dstSubresource = layers
+        region.extent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
+        vkCmdCopyImage(
+            cmd,
+            source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            destination, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &region
+        )
+        engineImageBarrier(
+            cmd, image: destination,
+            srcLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_TRANSFER_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+        )
+        engineImageBarrier(
+            cmd, image: source,
+            srcLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            srcAccess: VkAccessFlags(VK_ACCESS_TRANSFER_READ_BIT.rawValue),
+            srcStage: VK_PIPELINE_STAGE_TRANSFER_BIT,
+            dstLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            dstAccess: VkAccessFlags(VK_ACCESS_SHADER_READ_BIT.rawValue),
+            dstStage: VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+        )
     }
 
     // MARK: - Building

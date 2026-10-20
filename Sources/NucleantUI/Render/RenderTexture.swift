@@ -95,6 +95,12 @@ public final class RenderTexture {
     /// is keyed by, and so how `image()` knows the GPU has drawn it.
     var canvasID: Int? { canvas?.container.id }
 
+    /// A shader asked to render into this texture (`shader.render(into:)`):
+    /// its module and its input's bytes as they were when it was asked. Run
+    /// at the top of the next frame its canvas has been drawn by — see
+    /// `ShaderSlotRegistry.renderPendingShaders`.
+    var pendingShader: (words: [UInt32], bytes: [UInt8])?
+
     public init<Content: View>(
         size: Size,
         scale: Double = 1,
@@ -141,6 +147,8 @@ public final class RenderTexture {
     }
 
     private func drawNow() {
+        // The view is what was asked for last, over any shader before it.
+        pendingShader = nil
         content = draw()
         // Counted here, not after the canvas draw: the content is what a
         // shader reading this texture is behind, and a texture rendered
@@ -172,6 +180,14 @@ public final class RenderTexture {
         canvas.render(content, at: [OffscreenRender.rootIndex])
         hasContent = !content.commands.isEmpty
         generation += 1
+    }
+
+    /// A shader's output was copied into the image: it holds pixels, and
+    /// whatever shows or samples it has new ones to show.
+    func shaderDidRender() {
+        hasContent = true
+        generation += 1
+        ShaderHost.attached?.renderTextures.textureDidRender(self)
     }
 
     /// Take a canvas from the registry the first time there is one to take.
