@@ -44,9 +44,8 @@ struct DemoApp: NucleantApp {
 and `import NucleantUI`. `swift build` at this package's root builds the
 library and the demo (`.build/debug/NucleantUIDemo`), which is a
 runnable tour of everything below. The Nucleant packages this depends on are
-resolved from GitHub automatically; when they are checked out as siblings
-of this directory they are used from there instead (`NUCLEANT_LOCAL_DEV=0|1`
-overrides).
+resolved from GitHub; set `NUCLEANT_LOCAL_DEV=1` in the environment to use
+sibling checkouts of this directory instead.
 
 [Examples/](Examples) has eighteen standalone apps built on the library — a
 calculator, a task list, a drawing pad, a dashboard, 2048, a pomodoro

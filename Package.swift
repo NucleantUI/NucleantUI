@@ -36,22 +36,16 @@ let skiaMode: Bool = {
 
 // MARK: - Dependency source
 
-/// Build against the sibling checkouts (`../NucleantVulkan` etc.) or against
+/// Build against the sibling checkouts (`../NucleantVulkan` etc.) or
 /// each repo's releases on GitHub (`nucleantDependencies()`).
 ///
-/// Decided the same way in every Nucleant package, so one setting covers the
-/// whole chain: `NUCLEANT_LOCAL_DEV=1|0` in the environment wins; otherwise
-/// local when the sibling checkouts exist next to this package — true in a
-/// development tree, false for a clone SwiftPM made under `.build/checkouts`.
-/// (A package fetched by revision may not have path dependencies, so the
-/// upstream packages must make the same choice, and do.)
-let localDev: Bool = {
-    if let flag = ProcessInfo.processInfo.environment["NUCLEANT_LOCAL_DEV"] {
-        return ["1", "true", "yes"].contains(flag.lowercased())
-    }
-    let siblings = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-    return FileManager.default.fileExists(atPath: siblings.appendingPathComponent("NucleantVulkan").path)
-}()
+/// GitHub unless `NUCLEANT_LOCAL_DEV=1` is in the environment: the sibling
+/// checkouts are used only when that turns them on, never just because they
+/// are there. Every Nucleant package reads the same variable, so one setting
+/// covers the whole chain.
+let localDev: Bool = ["1", "true", "yes"].contains(
+    (ProcessInfo.processInfo.environment["NUCLEANT_LOCAL_DEV"] ?? "").lowercased()
+)
 
 /// The Nucleant packages this one is built on, from wherever
 /// `localDev` says. Product names and `package:` identities are the same
