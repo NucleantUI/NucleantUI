@@ -24,7 +24,7 @@ let package = Package(
         .package(path: "../.."),
         localDev
             ? .package(path: "../../../PyShader")
-            : .package(url: "https://github.com/NucleantUI/PyShader.git", .upToNextMinor(from: "0.0.3")),
+            : .package(url: "https://github.com/NucleantUI/PyShader.git", .upToNextMinor(from: "0.0.4")),
     ],
     targets: [
         .executableTarget(
