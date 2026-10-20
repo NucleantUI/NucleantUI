@@ -12,6 +12,11 @@
 //  the screen holding the backdrop never reads the model, so it is never
 //  rebuilt for it.
 //
+//  The same shader also renders into textures with no view at all: a
+//  thumbnail per preset (`renderTexture`), and a still of the current look
+//  that is rendered again whenever the look changes (`observe` +
+//  `render(into:)`) — see `Studio`.
+//
 
 import NucleantUI
 
@@ -24,14 +29,14 @@ enum Theme {
 
 @View
 struct RootView {
-    @State private var look = Look(Preset.all[0])
+    @State private var studio = Studio()
 
     var body: some View {
         HStack(spacing: 0) {
-            Shader(SpirvFunction(spirv: auroraModule, input: look))
+            Shader(SpirvFunction(spirv: auroraModule, input: studio.look))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            ControlsPanel(look: look)
+            ControlsPanel(studio: studio)
                 .frame(width: 280)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .background(Theme.panel)

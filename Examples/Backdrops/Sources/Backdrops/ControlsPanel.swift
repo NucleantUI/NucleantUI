@@ -9,17 +9,33 @@ import NucleantUI
 /// what rebuilds when the model changes — the backdrop beside it is not.
 @View
 struct ControlsPanel {
-    let look: Look
+    let studio: Studio
 
     var body: some View {
+        let look = studio.look
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 18) {
+                Text("Still")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    studio.still.view()
+                        .cornerRadius(8)
+                    Text("The look as a still wallpaper shows it, rendered again as you change it.")
+                        .font(.footnote)
+                        .foregroundColor(Theme.faint)
+                }
+
                 Text("Presets")
                     .font(.headline)
 
                 VStack(spacing: 8) {
                     ForEach(Preset.all) { preset in
-                        PresetRow(preset: preset, isCurrent: look.preset == preset) {
+                        PresetRow(
+                            preset: preset,
+                            thumbnail: studio.thumbnails[preset.name],
+                            isCurrent: look.preset == preset
+                        ) {
                             look.apply(preset)
                         }
                     }
@@ -62,13 +78,16 @@ struct ControlsPanel {
 @View
 struct PresetRow {
     let preset: Preset
+    let thumbnail: RenderTexture?
     let isCurrent: Bool
     let action: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            Swatch(color: preset.colorA)
-            Swatch(color: preset.colorB)
+            if let thumbnail {
+                thumbnail.view()
+                    .cornerRadius(4)
+            }
             Text(preset.name)
             Spacer()
         }
