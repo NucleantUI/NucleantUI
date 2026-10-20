@@ -1,0 +1,5 @@
+# The shaders this app's build compiles to SPIR-V (PyShader's build plugin).
+
+[aurora]
+source = "Shaders/aurora.py"
+target = "compute"
