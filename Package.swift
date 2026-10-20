@@ -102,7 +102,7 @@ func platformProviders() -> [Target.Dependency] {
 
 func nucleantDependencies() -> [Package.Dependency] {
     if localDev {
-        return ["NucleantVulkan", "NucleantThorVG", "NucleantApplication", "PyShader", "NucleantSkia"]
+        return ["NucleantVulkan", "NucleantThorVG", "NucleantApplication", "NucleantSkia"]
             .map { .package(path: "../\($0)") }
     }
     // Each by version, up to its next minor: its new 0.0.x releases are
@@ -113,7 +113,6 @@ func nucleantDependencies() -> [Package.Dependency] {
         .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMinor(from: "0.0.1")),
         .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMinor(from: "0.0.1")),
         .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMinor(from: "0.0.1")),
-        .package(url: "https://github.com/NucleantUI/PyShader.git", .upToNextMinor(from: "0.0.1")),
         .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMinor(from: "0.0.1")),
     ]
 }
@@ -170,7 +169,6 @@ let package = Package(
                 "CNucleantPreview",
                 .product(name: "NucleantVulkan", package: "NucleantVulkan"),
                 .product(name: "NucleantShader", package: "NucleantVulkan"),
-                .product(name: "PyShader", package: "PyShader"),
                 .product(name: "NucleantThorVG", package: "NucleantThorVG"),
                 .product(name: "NucleantApplication", package: "NucleantApplication"),
                 .product(name: "NucleantWindow", package: "NucleantApplication"),
@@ -189,11 +187,17 @@ let package = Package(
         .target(name: "NucleantAudio"),
         .executableTarget(
             name: "NucleantUIDemo",
-            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]
+            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")],
+            // PyShader sources and the `.spv` each was compiled to (the
+            // command is in its header): the demo runs SPIR-V, as NucleantUI
+            // does, with no compiler in it.
+            resources: [.copy("Shaders")]
         ),
         .testTarget(
             name: "NucleantUITests",
             dependencies: ["NucleantUI", .product(name: "NucleantSkia", package: "NucleantSkia")],
+            // Precompiled modules beside the `.py` each was compiled from.
+            resources: [.copy("Fixtures")],
             // NUCLEANT_PREVIEW: the tests' `@Preview` functions leave their
             // records, as an app's do in a preview build (PreviewTests).
             swiftSettings: skiaModeSettings + [.define("NUCLEANT_PREVIEW")]

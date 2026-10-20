@@ -7,7 +7,6 @@
 //
 
 import Observation
-import PyShader
 import Testing
 @testable import NucleantUI
 
@@ -19,28 +18,9 @@ private final class Tint {
 @MainActor
 struct ShaderProtocolModules {
 
-    private let compute = """
-        def main(uv: float2) -> float4:
-            return float4(uv.x, uv.y, 0.0, 1.0)
-        """
-
-    private let graphics = """
-        class V:
-            position: float4
-            uv: float2
-
-        def vertex(vertex_index: int) -> V:
-            corner = float2(float(vertex_index & 1), float(vertex_index >> 1))
-            return V(position=float4(corner * 2.0 - 1.0, 0.0, 1.0), uv=corner)
-
-        def fragment(uv: float2) -> float4:
-            return float4(uv.x, uv.y, 0.0, 1.0)
-        """
-
     @Test
-    func aComputeModuleIsDispatched() throws {
-        let words = try PyShader.compile(compute, target: .nucleantUI).spirv
-        let stages = SpirvEntryPoints(words)
+    func aComputeModuleIsDispatched() {
+        let stages = SpirvEntryPoints(Fixture.compute)
         #expect(stages.compute == "main")
         #expect(stages.vertex == nil && stages.fragment == nil)
         #expect(!stages.isGraphics)
@@ -49,12 +29,11 @@ struct ShaderProtocolModules {
     /// Both stages in one module, each under its own name — nothing has to
     /// grep the source for a `def vertex`.
     @Test
-    func aVertexAndFragmentModuleIsDrawn() throws {
-        let compiled = try PyShader.compile(graphics, target: .nucleantUIGraphics)
-        let stages = SpirvEntryPoints(compiled.spirv)
+    func aVertexAndFragmentModuleIsDrawn() {
+        let stages = SpirvEntryPoints(Fixture.graphics)
         #expect(stages.isGraphics)
-        #expect(stages.vertex == compiled.vertexEntryPoint)
-        #expect(stages.fragment == compiled.entryPoint)
+        #expect(stages.vertex == "vertex_main")
+        #expect(stages.fragment == "fragment_main")
         #expect(stages.compute == nil)
     }
 
@@ -67,8 +46,8 @@ struct ShaderProtocolModules {
     /// Same words and the same input object; the values the input holds
     /// are not part of it.
     @Test
-    func aSpirvFunctionIsItsWordsAndItsInputObject() throws {
-        let words = try PyShader.compile(compute, target: .nucleantUI).spirv
+    func aSpirvFunctionIsItsWordsAndItsInputObject() {
+        let words = Fixture.compute
         let input = ShaderNoArguments()
         #expect(SpirvFunction(spirv: words, input: input) == SpirvFunction(spirv: words, input: input))
         #expect(SpirvFunction(spirv: words, input: input) != SpirvFunction(spirv: words, input: ShaderNoArguments()))
@@ -90,15 +69,6 @@ struct ShaderProtocolModules {
         bytes = []
         function.input.pack(into: &bytes)
         #expect(bytes.withUnsafeBytes { $0.load(as: Float.self) } == 0.5)
-    }
-
-    /// The same module the plain `Shader` path compiles it to.
-    @Test
-    func aPyShaderFunctionIsItsCompiledModule() throws {
-        let function = ShaderFunction(pyshader: compute)
-        let words = function.spirv
-        #expect(words == (try PyShader.compile(compute, target: .nucleantUI).spirv))
-        #expect(SpirvEntryPoints(words).compute == "main")
     }
 
     @Test

@@ -22,12 +22,13 @@
 /// the bindings the wrapper would have (0: `writeonly image2D`, 1: the
 /// `Uniforms` block).
 ///
-/// The same shader in Python syntax goes through `ShaderFunction(pyshader:)`
-/// and PyShader, which emits the SPIR-V directly — no GLSL, no shaderc.
+/// A shader in Python syntax is PyShader's: compiled when the app is built by
+/// its build plugin and run with `SpirvFunction`, or compiled while it runs
+/// with `PyShaderFunction` from NucleantUI_PyShader. NucleantUI itself knows
+/// only SPIR-V.
 ///
 /// A function may also place its own geometry: `ShaderFunction(varyings:vertex:fragment:)`
-/// — or a PyShader module defining `vertex` as well as `fragment` — is a
-/// vertex + fragment pair, and `isGraphics` says so. It is the same type
+/// is a vertex + fragment pair, and `isGraphics` says so. It is the same type
 /// either way, so it goes into the same `.shader(_:)` and the same
 /// `ShaderArgument`s; what changes is only which pixels the body runs over.
 public struct ShaderFunction: Hashable, Sendable {
@@ -36,8 +37,6 @@ public struct ShaderFunction: Hashable, Sendable {
     public enum Language: Hashable, Sendable {
         /// GLSL 450, wrapped by `ShaderSource` and compiled by shaderc.
         case glsl
-        /// PyShader's Python subset, compiled to SPIR-V by the PyShader package.
-        case pyshader
         /// SPIR-V already, compiled by something else — no source to wrap and
         /// nothing left to run through a compiler. See `init(spirv:)`.
         case spirv
@@ -49,21 +48,15 @@ public struct ShaderFunction: Hashable, Sendable {
     /// constants, structs. GLSL has no nested function definitions, so
     /// anything a body *calls* has to live here rather than in the body.
     /// TouchBay's shader library splits its sources the same way
-    /// (`FragShaderFunction(functions:main:)`). Always empty for PyShader,
-    /// whose source is one Python module.
+    /// (`FragShaderFunction(functions:main:)`).
     public let functions: String
 
-    /// The per-pixel body, inlined into `main` — or, for PyShader, the whole
-    /// Python module, both stages included.
+    /// The per-pixel body, inlined into `main`.
     public let body: String
 
     /// GLSL only: a stage that places the geometry `body` then shades, and
     /// the varyings between them. GLSL is two shaders, so a pair needs two
     /// sources.
-    ///
-    /// `nil` for every PyShader function, whatever it does: one module holds
-    /// both stages there, so `body` is the whole of it and there is nothing
-    /// to carry beside it.
     public let glslVertexStage: VertexStage?
 
     /// A module compiled somewhere other than here — `nil` for every source
@@ -147,51 +140,6 @@ public struct ShaderFunction: Hashable, Sendable {
         self.precompiled = nil
     }
 
-    /// A shader written in Python syntax, compiled by PyShader.
-    ///
-    /// The module defines `def main(...) -> float4` and takes what it needs by
-    /// parameter name: `uv`, `frag_coord`, `pixel`, `time`, `time_delta`,
-    /// `frame`, `resolution`, `mouse`, `mouse_click`, plus every
-    /// `ShaderArgument` by its name (a `.floatArray` arrives as a `FloatArray`,
-    /// a `.float2Array` as a `Float2Array` and so on — `a[i]` and `len(a)`).
-    /// Under `.shader(_:)`, `layer(uv)` reads the
-    /// view's own pixels as it does in GLSL. Helper functions, module
-    /// constants and lambdas live in the same source:
-    ///
-    /// ```swift
-    /// let plasma = ShaderFunction(pyshader: """
-    ///     def main(uv: float2, time: float) -> float4:
-    ///         v = sin(uv.x * 10.0 + time) + sin((uv.y * 10.0 + time) * 0.5)
-    ///         return float4(float3(0.5 + 0.5 * sin(3.14159 * v)), 1.0)
-    /// """)
-    /// ```
-    /// A PyShader module defining both `vertex` and `fragment` is a vertex +
-    /// fragment pair instead: `vertex` returns a `class` whose first field is
-    /// the `float4` position and whose other fields are the varyings, taken by
-    /// `fragment` by name.
-    ///
-    /// ```swift
-    /// let glow = ShaderFunction(pyshader: """
-    ///     class V:
-    ///         position: float4
-    ///         local: float2
-    ///         seed: float
-    ///
-    ///     def vertex(vertex_index: int, instance_index: int, touches: Float4Array) -> V:
-    ///         ...
-    ///
-    ///     def fragment(local: float2, seed: float, time: float) -> float4:
-    ///         ...
-    /// """)
-    /// ```
-    public init(pyshader source: String) {
-        self.language = .pyshader
-        self.functions = ""
-        self.body = source
-        self.glslVertexStage = nil
-        self.precompiled = nil
-    }
-
     /// Wraps an unmodified ShaderToy shader.
     ///
     /// Paste the whole thing — helper functions and its
@@ -240,7 +188,8 @@ public struct ShaderFunction: Hashable, Sendable {
     ///
     /// It is a compute function. A vertex + fragment pair is two modules and
     /// two entry points, which this does not carry, so `isGraphics` is always
-    /// `false` — pass a graphics shader as PyShader or GLSL.
+    /// `false` — run a vertex + fragment module with `SpirvFunction`, which
+    /// reads both entry points from it.
     ///
     /// - Parameter isAnimated: whether the module reads the clock or the
     ///   pointer. There is no source to tell from, so the caller says; the
@@ -279,34 +228,18 @@ public struct ShaderFunction: Hashable, Sendable {
         return text
     }
 
-    /// Whether this function places its own geometry — a `glslVertexStage`,
-    /// or a `def vertex` beside a `def fragment` in one PyShader module. The
-    /// host draws it with a graphics pipeline rather than a compute dispatch,
+    /// Whether this function places its own geometry — a `glslVertexStage`.
+    /// The host draws it with a graphics pipeline rather than a compute dispatch,
     /// and it is the same `ShaderFunction` either way, so `.shader(_:)` takes
     /// it as it takes any other.
     public var isGraphics: Bool {
         switch language {
         case .glsl:
             return glslVertexStage != nil
-        case .pyshader:
-            return Self.definesStage("vertex", in: body) && Self.definesStage("fragment", in: body)
         case .spirv:
             // One module, one entry point — see `init(spirv:)`.
             return false
         }
-    }
-
-    /// `def <name>(` at the start of a line of PyShader source.
-    static func definesStage(_ name: String, in source: String) -> Bool {
-        for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
-            let text = line.drop(while: { $0 == " " || $0 == "\t" })
-            guard text.hasPrefix("def ") else { continue }
-            let rest = text.dropFirst(4).drop(while: { $0 == " " })
-            if rest.hasPrefix(name), rest.dropFirst(name.count).drop(while: { $0 == " " }).hasPrefix("(") {
-                return true
-            }
-        }
-        return false
     }
 
     /// Identity for the compiled-pipeline cache: both halves, since either
@@ -317,7 +250,6 @@ public struct ShaderFunction: Hashable, Sendable {
         let text = ([functions] + stage + [body]).filter { !$0.isEmpty }.joined(separator: "\n")
         switch language {
         case .glsl:     return text
-        case .pyshader: return "#pyshader\n" + text
         // `body` is the module, encoded — the whole of it, so two different
         // modules are two different identities rather than two that merely
         // hash apart.
