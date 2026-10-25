@@ -180,15 +180,16 @@ struct ShaderFunctionAsAModule {
         #expect(packed(ShaderFunction("fragColor = vec4(1.0);")).isEmpty)
     }
 
-    /// A dynamic color reaches the shader as the view's scheme draws it.
+    /// A color reaches the shader as it was given — a dynamic one as its
+    /// light components. The dark one is what the caller resolves and
+    /// passes.
     @Test
-    func aColorIsPackedForTheViewsScheme() {
-        let tint = Color.dynamic(light: Color(red: 1, green: 0, blue: 0), dark: Color(red: 0, green: 0, blue: 1))
-        let function = ShaderFunction("fragColor = tint;").reading([.color("tint", tint)], textures: [], content: false)
-        #expect(Array(floats(packed(function)).suffix(4)) == [1, 0, 0, 1])
-        Color.packingScheme = .dark
-        defer { Color.packingScheme = .light }
-        #expect(Array(floats(packed(function)).suffix(4)) == [0, 0, 1, 1])
+    func aColorIsPackedAsItWasGiven() {
+        let tint = Color.dynamic(light: Color(red: 1, green: 0, blue: 0), dark: Color(red: 0, green: 0, blue: 1, opacity: 0.5))
+        let given = ShaderFunction("fragColor = tint;").reading([.color("tint", tint)], textures: [], content: false)
+        #expect(Array(floats(packed(given)).suffix(4)) == [1, 0, 0, 1])
+        let resolved = ShaderFunction("fragColor = tint;").reading([.color("tint", tint.resolved(for: .dark))], textures: [], content: false)
+        #expect(Array(floats(packed(resolved)).suffix(4)) == [0, 0, 1, 0.5])
     }
 
     /// What it was handed is declared, so it is in what it compiles to: a

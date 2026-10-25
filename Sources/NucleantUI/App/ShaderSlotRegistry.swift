@@ -106,13 +106,11 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         var height: Int
         /// The module it was built from; a different one rebuilds.
         var words: [UInt32]
-        /// Its input: which object, how to pack it, the color scheme it is
-        /// packed for, and the bytes last uploaded. A change to anything
-        /// `pack` reads is noticed by observation and uploaded at the next
-        /// `tick`, with no pass.
+        /// Its input: which object, how to pack it, and the bytes last
+        /// uploaded. A change to anything `pack` reads is noticed by
+        /// observation and uploaded at the next `tick`, with no pass.
         var inputID: ObjectIdentifier?
         var pack: (() -> [UInt8])?
-        var colorScheme: ColorScheme = .light
         var packedBytes: [UInt8] = []
         /// The named textures compiled in, and every image the descriptor set
         /// was written with (content first, then the textures in binding
@@ -265,8 +263,8 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     ///
     /// The input is packed under observation here only when it is new or
     /// changed; otherwise a change to it is noticed by observation and
-    /// uploaded by `tick`, without the view tree. It is packed for
-    /// `colorScheme`, the view's: a `Color` in it resolves for that.
+    /// uploaded by `tick`, without the view tree. Its values are packed as
+    /// they are: a `Color` in it is the color it was given.
     func useModule<Input: ShaderInput>(
         path: [Int],
         words: [UInt32],
@@ -274,7 +272,6 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         isAnimated: Bool,
         draw: ShaderDraw,
         textures: ShaderTextures,
-        colorScheme: ColorScheme,
         rect: Rect,
         clip: Rect?,
         layer content: DisplayList? = nil,
@@ -287,14 +284,12 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         let inputID = ObjectIdentifier(input)
         let pack = {
             var bytes: [UInt8] = []
-            Color.packingScheme = colorScheme
-            defer { Color.packingScheme = .light }
             input.pack(into: &bytes)
             return bytes
         }
         var bytes = existing?.packedBytes ?? []
         let repack = existing == nil || existing?.inputID != inputID
-            || existing?.words != words || existing?.colorScheme != colorScheme
+            || existing?.words != words
             || changedInputs.contains(path)
         if repack {
             changedInputs.remove(path)
@@ -315,7 +310,6 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         ) else { return }
         slot.inputID = inputID
         slot.pack = pack
-        slot.colorScheme = colorScheme
         upload(bytes, to: slot)
         if stages.isGraphics {
             redraw(slot, covering: draw)

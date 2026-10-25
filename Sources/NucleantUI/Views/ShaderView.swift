@@ -205,6 +205,11 @@ public struct ShaderFunction: Hashable, Sendable {
 /// ])
 /// ```
 ///
+/// Every value reaches the shader as it was given. A color is its red,
+/// green, blue and alpha — a `Color.dynamic` its light components; where the
+/// shader should get the one the view's scheme shows, resolve it before
+/// passing it (`color.resolved(for: colorScheme)`).
+///
 /// Scalars and vectors are plain variables; an array is read through a
 /// function of its index, with its length beside it, because a storage
 /// buffer's contents cannot be aliased as a GLSL array variable. Reads
@@ -254,10 +259,9 @@ public enum ShaderArgument: Hashable, Sendable {
 
     /// Appends the value's floats to `data` and returns how many elements
     /// went in — one for a scalar or vector, the length for an array. A
-    /// color is resolved for `scheme` first, so a dynamic one reaches the
-    /// shader in the appearance the view is drawn under. Vectors and their
-    /// arrays are copied as the bytes they already are.
-    func pack(into data: inout [Float], for scheme: ColorScheme) -> Int {
+    /// color goes in as the red, green, blue and alpha it was given.
+    /// Vectors and their arrays are copied as the bytes they already are.
+    func pack(into data: inout [Float]) -> Int {
         switch self {
         case .float(_, let x):
             data.append(x)
@@ -269,8 +273,7 @@ public enum ShaderArgument: Hashable, Sendable {
         case .float4(_, let v):
             return Self.append(v, to: &data)
         case .color(_, let color):
-            let resolved = color.resolved(for: scheme)
-            data.append(contentsOf: [Float(resolved.red), Float(resolved.green), Float(resolved.blue), Float(resolved.alpha)])
+            data.append(contentsOf: [Float(color.red), Float(color.green), Float(color.blue), Float(color.alpha)])
             return 1
         case .floatArray(_, let array):
             data.append(contentsOf: array)
@@ -321,7 +324,7 @@ public final class ShaderArguments: ShaderInput {
         let base = arguments.count * 2
         for argument in arguments {
             header.append(Float(base + data.count))
-            header.append(Float(argument.pack(into: &data, for: Color.packingScheme)))
+            header.append(Float(argument.pack(into: &data)))
         }
         (header + data).withUnsafeBytes { bytes.append(contentsOf: $0) }
     }
@@ -499,8 +502,7 @@ extension Shader: BuiltinView {
             input: function.input,
             isAnimated: function.isAnimated,
             draw: draw,
-            textures: ShaderTextures(textures),
-            colorScheme: context.environment.colorScheme
+            textures: ShaderTextures(textures)
         ))
     }
 }
