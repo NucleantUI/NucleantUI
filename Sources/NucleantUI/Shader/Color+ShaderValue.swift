@@ -4,11 +4,11 @@
 //
 
 /// A `vec4` of the color's red, green, blue and alpha, exactly as they were
-/// given — nothing is resolved, converted or faded on the way. A
-/// `Color.dynamic` packs its light components; a view that wants the one
-/// its scheme shows resolves it first, with `resolved(for:)`.
+/// given — nothing is converted or faded on the way.
 extension Color: ShaderValue {
+    /// 16-aligned, as std430 places a `vec4`, and the color's own 16 bytes.
     public func pack(into bytes: inout [UInt8]) {
-        Float4(Float(red), Float(green), Float(blue), Float(alpha)).pack(into: &bytes)
+        Self.align(&bytes, to: 16)
+        withUnsafeBytes(of: self) { bytes.append(contentsOf: $0) }
     }
 }

@@ -109,7 +109,7 @@ where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
                         look: look
                     )
                     Rectangle()
-                        .fill(Color.separator)
+                        .fill(ShapeStyle.separator)
                         .frame(height: 1)
                 }
                 ZStack(alignment: .topLeading) {
@@ -128,7 +128,7 @@ where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
             // Columns that can't shrink to fit spill past the edge; they
             // are cut off there rather than drawn over what is beside.
             .clipped()
-            .border(look.kind == .bordered ? Color.separator : Color.clear, width: 1)
+            .border(look.kind == .bordered ? .separator : .color(.clear), width: 1)
         }
         .opacity(isEnabled ? 1 : 0.5)
     }
@@ -589,7 +589,7 @@ struct _TableRow<Value: Identifiable> {
         let isSelected = actions.selection.contains(id)
         let inverted = isSelected && isFocused
         let row = _TableRowCells(value: entry.value, cells: cells)
-            .foregroundColor(inverted ? Color.white : Color.primary)
+            .foregroundStyle(inverted ? .color(.white) : .primary)
             .environment(\.backgroundProminence, inverted ? .increased : .standard)
             .background(ZStack {
                 if look.alternates && entry.index % 2 == 1 {
@@ -722,7 +722,7 @@ struct _TableHeader {
             layout: layout
         )
         .padding(.horizontal, look.horizontalInset)
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
     }
 }
 
@@ -804,13 +804,13 @@ struct _TableHeaderCell {
         HStack(spacing: 4) {
             header
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(direction == nil ? .secondary : .primary)
+                .foregroundStyle(direction == nil ? .secondary : .primary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             if let direction {
                 Text("›")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(direction == .forward ? -90 : 90))
             }
         }
@@ -845,7 +845,7 @@ struct _TableColumnEdge {
         let start = $dragStart
         ZStack {
             Rectangle()
-                .fill(Color.separator)
+                .fill(ShapeStyle.separator)
                 .frame(width: 1)
                 .padding(.vertical, 4)
         }

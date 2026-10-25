@@ -82,9 +82,9 @@ let events = [
 ]
 
 struct Theme {
-    static let background = Color.background
-    static let card = Color.secondaryBackground
-    static let grid = Color.separator
+    static let background = ShapeStyle.background
+    static let card = ShapeStyle.secondaryBackground
+    static let grid = ShapeStyle.separator
     static let accent = Color(hex: 0x4C8DFF)
 }
 
@@ -107,7 +107,7 @@ struct LineChart {
                     path.move(to: Point(x: 0, y: y))
                     path.addLine(to: Point(x: size.width, y: y))
                 }
-                context.stroke(path, with: .color(Theme.grid), lineWidth: 1)
+                context.stroke(path, with: Theme.grid, lineWidth: 1)
             }
 
             PathShape { size in
@@ -246,7 +246,7 @@ struct StatTile {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.footnote).foregroundColor(.secondary)
+            Text(title).font(.footnote).foregroundStyle(.secondary)
             Text(value).font(.system(size: 26, weight: .semibold))
             Text(String(format: "%@%.1f%%", delta >= 0 ? "▲ " : "▼ ", abs(delta)))
                 .font(.system(size: 12, weight: .medium))
@@ -310,7 +310,7 @@ struct DashboardView {
                         ForEach(period.labels.indices, id: \.self) { i in
                             Text(period.labels[i])
                                 .font(.system(size: 10))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -328,7 +328,7 @@ struct DashboardView {
                                     Spacer()
                                     Text("\(Int(source.share * 100))%")
                                         .font(.system(size: 12, design: .monospaced))
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -356,7 +356,7 @@ struct DashboardView {
                                         Text(event.what).font(.footnote)
                                         Text(event.when)
                                             .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(.secondary)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -378,14 +378,14 @@ struct DashboardView {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Overview").font(.system(size: 24, weight: .bold))
-                Text("Last \(period.name)").font(.footnote).foregroundColor(.secondary)
+                Text("Last \(period.name)").font(.footnote).foregroundStyle(.secondary)
             }
             Spacer()
             HStack(spacing: 4) {
                 ForEach(Period.allCases, id: \.self) { p in
                     Text(p.name)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(period == p ? .white : .secondary)
+                        .foregroundStyle(period == p ? .color(.white) : .secondary)
                         .padding(horizontal: 12, vertical: 6)
                         .background(period == p ? Theme.accent : Color.clear)
                         .cornerRadius(8)

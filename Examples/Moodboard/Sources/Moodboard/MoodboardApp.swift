@@ -25,9 +25,9 @@
 import NucleantUI
 
 enum Theme {
-    static let sidebar = Color.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
-    static let bar = Color.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
-    static let canvas = Color.dynamic(light: Color(hex: 0xE4E1DA), dark: Color(hex: 0x2A2A2E))
+    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
+    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
+    static let canvas = ShapeStyle.dynamic(light: Color(hex: 0xE4E1DA), dark: Color(hex: 0x2A2A2E))
     static let accent = Color(hex: 0x2F7CF6)
 }
 
@@ -72,7 +72,7 @@ struct MoodboardView {
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
         .onAppear { focus = .board }
@@ -111,7 +111,7 @@ struct Toolbar {
                     .frame(minWidth: 160, maxWidth: 280)
                 Spacer()
                 Text("\(Int((board.zoom * 100).rounded()))%")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Button("Actual Size") {
                     withAnimation(.snappy) { board.resetZoom() }
@@ -248,7 +248,7 @@ struct Inspector {
             Text(card.kindName)
                 .font(.headline)
             Text("Caption")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             TextField("Caption", text: Binding(
                 get: { board.card(id)?.caption ?? "" },
                 set: { board.setCaption(id, $0) }
@@ -257,7 +257,7 @@ struct Inspector {
             .onSubmit { focus = .board }
             if case .note(let text, _) = card.kind {
                 Text("Note")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 TextField("Note", text: Binding(
                     get: { text },
                     set: { board.setNoteText(id, $0) }
@@ -266,10 +266,10 @@ struct Inspector {
                 .focused($focus, equals: .noteText)
             }
             Text("Size  \(Int((card.scale * 100).rounded()))%")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Slider(value: Binding(get: { card.scale }, set: { board.setScale(id, $0) }), in: 0.3...4)
             Text("Turn  \(Int(card.rotation.degrees.rounded()))°")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Slider(value: Binding(get: { card.rotation.degrees }, set: { board.setRotation(id, .degrees($0)) }), in: -180...180)
             Toggle("Pinned in place", isOn: Binding(get: { card.isPinned }, set: { board.setPinned(id, $0) }))
             HStack(spacing: 8) {

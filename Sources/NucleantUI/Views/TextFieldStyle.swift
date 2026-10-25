@@ -124,7 +124,7 @@ struct TextFieldChrome<Content: View, Placeholder: View> {
             .overlay(alignment: placeholderAlignment) {
                 if isEmpty {
                     placeholder
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .padding(.horizontal, decoration.inset)
                         .padding(.top, placeholderTopInset)
@@ -133,12 +133,12 @@ struct TextFieldChrome<Content: View, Placeholder: View> {
         switch decoration {
         case .roundedBorder:
             decorated
-                .background(RoundedRectangle(cornerRadius: 6).fill(.color(.secondaryBackground)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(.secondaryBackground))
                 .border(isFocused ? tint : .separator, width: isFocused ? 2 : 1, cornerRadius: 6)
                 .opacity(isEnabled ? 1 : 0.5)
         case .squareBorder:
             decorated
-                .background(Rectangle().fill(.color(.secondaryBackground)))
+                .background(Rectangle().fill(.secondaryBackground))
                 .border(isFocused ? tint : .separator, width: isFocused ? 2 : 1)
                 .opacity(isEnabled ? 1 : 0.5)
         case .plain:

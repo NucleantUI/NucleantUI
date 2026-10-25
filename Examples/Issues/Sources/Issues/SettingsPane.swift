@@ -23,7 +23,7 @@ struct SettingsPane {
                     Text("Settings")
                         .font(.system(size: 22, weight: .semibold))
                     Text("For this tracker, on this Mac.")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 Form {
                     Section("Account:") {
@@ -68,6 +68,6 @@ struct SettingsPane {
             .frame(maxWidth: 620, alignment: .topLeading)
             .frame(maxWidth: .infinity)
         }
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
     }
 }

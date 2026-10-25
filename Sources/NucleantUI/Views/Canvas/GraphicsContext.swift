@@ -219,8 +219,9 @@ public struct GraphicsContext {
 
     private func apply(_ style: ShapeStyle, to paint: SkPaint) {
         let bounds = Rect(origin: .zero, size: size)
-        switch style {
-        case .color(let color):
+        // Resolved here, so a dynamic style is its color by the switch.
+        switch style.resolved(for: colorScheme) {
+        case .color(let color), .dynamic(light: let color, dark: _):
             paint.clearShader()
             paint.setColor(rgba(color))
         case .linearGradient(let gradient, let startPoint, let endPoint):
@@ -257,7 +258,7 @@ public struct GraphicsContext {
     private var alpha: UInt8 { UInt8((min(max(opacity, 0), 1) * 255).rounded()) }
 
     private func rgba(_ color: Color) -> SIMD4<UInt8> {
-        let (r, g, b, a) = color.resolved(for: colorScheme).rgba8
+        let (r, g, b, a) = color.rgba8
         return SIMD4(r, g, b, UInt8((Double(a) * min(max(opacity, 0), 1)).rounded()))
     }
 
@@ -265,7 +266,7 @@ public struct GraphicsContext {
         var colors: [SIMD4<Float>] = []
         var positions: [Float] = []
         for stop in gradient.stops {
-            let (r, g, b, a) = stop.color.resolved(for: colorScheme).rgba8
+            let (r, g, b, a) = stop.color.rgba8
             colors.append(SIMD4<Float>(Float(r), Float(g), Float(b), Float(a)) / 255)
             positions.append(Float(stop.location))
         }

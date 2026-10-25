@@ -69,9 +69,23 @@ struct ShaderValuePacking {
     }
 
     @Test
-    func aColorIsAVec4OfItsLightComponents() {
-        let color = Color.dynamic(light: Color(red: 1, green: 0.5, blue: 0, opacity: 0.25), dark: .black)
+    func aColorIsAVec4OfItsComponents() {
+        let color = Color(red: 1, green: 0.5, blue: 0, opacity: 0.25)
         #expect(floats(bytes { color.pack(into: &$0) }) == [1, 0.5, 0, 0.25])
+        #expect(bytes { color.pack(into: &$0) } == withUnsafeBytes(of: color) { Array($0) })
+    }
+
+    /// std430: `float a; vec4 b;` puts `b` at 16, and a `vec4[]` of colors
+    /// is their lanes back to back.
+    @Test
+    func aColorIsSixteenAlignedAndSixteenLong() {
+        let packed = bytes {
+            Float(1).pack(into: &$0)
+            Color(red: 2, green: 3, blue: 4, opacity: 5).pack(into: &$0)
+        }
+        #expect(floats(packed) == [1, 0, 0, 0, 2, 3, 4, 5])
+        let colors: [Color] = [[1, 2, 3, 4], [5, 6, 7, 8]]
+        #expect(floats(bytes { colors.pack(into: &$0) }) == [1, 2, 3, 4, 5, 6, 7, 8])
     }
 
     /// The value alone — the name is not part of the bytes.

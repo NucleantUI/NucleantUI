@@ -17,7 +17,7 @@ public struct Text: View {
     /// Set by `.font(_:)` on the `Text` itself; `nil` inherits from the
     /// environment, which is what `.font(_:)` applied further up sets.
     var explicitFont: Font?
-    var explicitColor: Color?
+    var explicitStyle: ShapeStyle?
     var explicitWeight: FontWeight?
     var isItalic = false
     var alignment: TextAlignment?
@@ -45,7 +45,13 @@ extension Text {
 
     public func foregroundColor(_ color: Color) -> Text {
         var copy = self
-        copy.explicitColor = color
+        copy.explicitStyle = .color(color)
+        return copy
+    }
+
+    public func foregroundStyle(_ style: ShapeStyle) -> Text {
+        var copy = self
+        copy.explicitStyle = style
         return copy
     }
 
@@ -91,14 +97,14 @@ extension Text: BuiltinView {
         if let explicitWeight { font.weight = explicitWeight }
         if isItalic { font.isItalic = true }
 
-        let color = explicitColor ?? context.environment.foregroundColor
+        let style = explicitStyle ?? context.environment.foregroundStyle
         return ViewNode(content: TextContent(
             string: content,
             font: font,
-            color: color,
+            style: style,
             alignment: alignment ?? context.environment.multilineTextAlignment,
             lineLimit: explicitLineLimit ?? context.environment.lineLimit,
-            animatedColor: context.animatedValue(.textColor, color.animatableVector)
+            animatedColor: context.animatedValue(.textColor, style.animatableVector)
         ))
     }
 }

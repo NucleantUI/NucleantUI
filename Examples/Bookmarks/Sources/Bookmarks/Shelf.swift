@@ -90,7 +90,7 @@ struct Shelf {
                 Spacer()
                 Text("Card size")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Button("−") { zoom(by: -60) }
                     .disabled(mode != .cards || columnWidth <= Self.columnWidths.lowerBound)
                 Button("+") { zoom(by: 60) }
@@ -103,10 +103,10 @@ struct Shelf {
                 VStack(spacing: 6) {
                     Text(query.isEmpty ? "Nothing here yet" : "No matches")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text(query.isEmpty ? "Bookmarks you save or tag land here." : "Try another word, or another tag.")
                         .font(.system(size: 12))
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -186,14 +186,14 @@ struct StatusBar {
         let reading = hours > 0 ? "\(hours) h \(minutes) min" : "\(minutes) min"
         HStack(spacing: 6) {
             Text("\(totals.count) \(totals.count == 1 ? "bookmark" : "bookmarks")")
-            Text("·").foregroundColor(.tertiary)
+            Text("·").foregroundStyle(.tertiary)
             Text("\(totals.unread) unread")
-            Text("·").foregroundColor(.tertiary)
+            Text("·").foregroundStyle(.tertiary)
             Text("\(reading) of reading")
             Spacer()
         }
         .font(.system(size: 12))
-        .foregroundColor(.secondary)
+        .foregroundStyle(.secondary)
         .padding(.horizontal, 20)
         .padding(.vertical, 7)
         .background(Theme.bar)
@@ -227,7 +227,7 @@ struct BookmarkCard: Animatable {
             SiteBadge(bookmark: bookmark, size: blend(20, 24, p))
             Text(bookmark.host)
                 .font(.system(size: blend(12, 11, p)))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
             Star()
                 .fill(Theme.accent)
@@ -240,7 +240,7 @@ struct BookmarkCard: Animatable {
                 .lineLimit(p < 0.99 ? nil : 1)
             Text(bookmark.summary)
                 .font(.system(size: 13))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 // Only there in the last quarter of the way to the card,
                 // when the pieces around it are nearly in place — earlier,
                 // the tags would still be sliding through where it goes.
@@ -252,7 +252,7 @@ struct BookmarkCard: Animatable {
             }
             Text("\(bookmark.readingMinutes) min read")
                 .font(.system(size: 11))
-                .foregroundColor(.tertiary)
+                .foregroundStyle(.tertiary)
             UnreadMark(isRead: bookmark.isRead)
         }
         .background(
@@ -261,7 +261,7 @@ struct BookmarkCard: Animatable {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? Theme.accent : Color.separator, lineWidth: isSelected ? 2 : 1)
+                .stroke(isSelected ? .color(Theme.accent) : .separator, lineWidth: isSelected ? 2 : 1)
         )
     }
 

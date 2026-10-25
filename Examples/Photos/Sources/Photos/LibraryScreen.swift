@@ -29,7 +29,7 @@ struct PhotoGridScreen {
             if months.isEmpty {
                 Text("No Photos")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -67,7 +67,7 @@ struct MonthHeader {
                 .font(.system(size: 17, weight: .bold))
             Text("\(month.photos.count) photos")
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
@@ -84,12 +84,12 @@ struct ZoomControl {
     var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(Color.secondary)
+                .fill(ShapeStyle.secondary)
                 .frame(width: 8, height: 8)
             Slider(value: $library.tileSize, in: 60...260)
                 .frame(width: 140)
             RoundedRectangle(cornerRadius: 2.5)
-                .fill(Color.secondary)
+                .fill(ShapeStyle.secondary)
                 .frame(width: 14, height: 14)
         }
     }
@@ -117,7 +117,7 @@ struct ScreenBar<Controls: View> {
                     .font(.system(size: 20, weight: .bold))
                 Text(subtitle)
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             controls

@@ -104,18 +104,18 @@ final class StudySession {
 }
 
 struct Theme {
-    static let background = Color.background
-    static let panel = Color.secondaryBackground
-    static let card = Color.dynamic(light: Color.white, dark: Color(hex: 0x262B35))
-    static let cardBehind = Color.dynamic(light: Color(hex: 0xDADDE4), dark: Color(hex: 0x1D2129))
+    static let background = ShapeStyle.background
+    static let panel = ShapeStyle.secondaryBackground
+    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x262B35))
+    static let cardBehind = ShapeStyle.dynamic(light: Color(hex: 0xDADDE4), dark: Color(hex: 0x1D2129))
     static let answerCard = Color(hex: 0x4C6FFF)
     static let onAnswer = Color.white
     static let good = Color(hex: 0x2FBF71)
     static let bad = Color(hex: 0xFF5C5C)
     static let hot = Color(hex: 0xFFA41B)
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
     /// A card not reached yet — a dot, a ring's track.
-    static let pending = Color.dynamic(light: Color(white: 0, opacity: 0.18), dark: Color(white: 1, opacity: 0.2))
+    static let pending = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.18), dark: Color(white: 1, opacity: 0.2))
 }
 
 // MARK: - Studying
@@ -174,7 +174,7 @@ struct StudyView {
                     }
                 }
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -188,9 +188,9 @@ struct StudyView {
         let isHot = session.streak >= 3
         return Text("\(session.streak) in a row")
             .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(isHot ? .white : .secondary)
+            .foregroundStyle(isHot ? .color(.white) : .secondary)
             .padding(horizontal: 12, vertical: 6)
-            .background(isHot ? Theme.hot : Color.fill)
+            .background(isHot ? .color(Theme.hot) : .fill)
             .cornerRadius(14)
             .scaleEffect(1 + Double(min(session.streak, 5)) * 0.05)
     }
@@ -281,11 +281,11 @@ struct StudyView {
         .frame(height: 16)
     }
 
-    func dotColor(_ card: Card) -> Color {
+    func dotColor(_ card: Card) -> ShapeStyle {
         switch session.grades[card.id] {
-        case .knew: return Theme.good
-        case .missed: return Theme.bad
-        case nil: return card.id == session.current?.id ? Theme.answerCard : Theme.pending
+        case .knew: return .color(Theme.good)
+        case .missed: return .color(Theme.bad)
+        case nil: return card.id == session.current?.id ? .color(Theme.answerCard) : Theme.pending
         }
     }
 
@@ -359,13 +359,13 @@ struct ResultsView {
 
             Text("\(session.knew) of \(session.deck.count) known · best streak \(session.bestStreak) · \(elapsed(since: session.started, at: finishedAt))")
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             if !session.missed.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("To review")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     ForEach(Array(session.missed.enumerated()), id: \.element.id) { entry in
                         HStack(spacing: 10) {
                             Circle().fill(Theme.bad).frame(width: 8, height: 8)

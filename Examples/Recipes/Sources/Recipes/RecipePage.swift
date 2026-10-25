@@ -159,14 +159,14 @@ struct Summary {
             VStack(alignment: .leading, spacing: 4) {
                 Text("SERVES")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Theme.faint)
+                    .foregroundStyle(Theme.faint)
                 Stepper(
                     value: Binding(get: { servings }, set: { cookbook.setServings($0, for: recipe) }),
                     in: Cookbook.servingRange
                 ) {
                     Text("\(servings)")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(Theme.ink)
+                        .foregroundStyle(Theme.ink)
                 }
             }
             Spacer()
@@ -185,10 +185,10 @@ struct Fact {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Theme.faint)
+                .foregroundStyle(Theme.faint)
             Text(value)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Theme.ink)
+                .foregroundStyle(Theme.ink)
         }
     }
 }
@@ -202,11 +202,11 @@ struct SectionHeader {
         HStack(alignment: .bottom) {
             Text(title)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundColor(Theme.ink)
+                .foregroundStyle(Theme.ink)
             Spacer()
             Text(detail)
                 .font(.footnote)
-                .foregroundColor(Theme.faint)
+                .foregroundStyle(Theme.faint)
         }
     }
 }
@@ -253,7 +253,7 @@ struct IngredientRow {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             ZStack {
-                Circle().stroke(isGathered ? tint : Theme.track, lineWidth: 2)
+                Circle().stroke(isGathered ? .color(tint) : Theme.track, lineWidth: 2)
                 if isGathered {
                     Circle().fill(tint).padding(5)
                 }
@@ -261,10 +261,10 @@ struct IngredientRow {
             .frame(width: 18, height: 18)
             Text(quantity)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(isGathered ? Theme.faint : Theme.ink)
+                .foregroundStyle(isGathered ? Theme.faint : Theme.ink)
             Text(name)
                 .font(.system(size: 15))
-                .foregroundColor(isGathered ? Theme.faint : Theme.ink)
+                .foregroundStyle(isGathered ? Theme.faint : Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .contentShape(Rectangle())
@@ -374,17 +374,17 @@ struct StepRow {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             ZStack {
-                Circle().fill(isDone ? tint : Theme.paper)
-                Circle().stroke(isDone || isCurrent ? tint : Theme.track, lineWidth: 2)
+                Circle().fill(isDone ? .color(tint) : Theme.paper)
+                Circle().stroke(isDone || isCurrent ? .color(tint) : Theme.track, lineWidth: 2)
                 Text("\(number)")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(isDone ? Color.white : isCurrent ? tint : Theme.faint)
+                    .foregroundStyle(isDone ? .color(.white) : isCurrent ? .color(tint) : Theme.faint)
             }
             .frame(width: Self.badgeSize, height: Self.badgeSize)
             VStack(alignment: .leading, spacing: 8) {
                 Text(step.text)
                     .font(.system(size: 16))
-                    .foregroundColor(isDone ? Theme.faint : Theme.ink)
+                    .foregroundStyle(isDone ? Theme.faint : Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let minutes = step.minutes {
                     Text("\(minutes) min")
@@ -420,7 +420,7 @@ struct CompactBar {
                     .frame(width: 10, height: 10)
                 Text(recipe.title)
                     .font(.headline)
-                    .foregroundColor(Theme.ink)
+                    .foregroundStyle(Theme.ink)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Step \(current + 1) of \(recipe.steps.count)")

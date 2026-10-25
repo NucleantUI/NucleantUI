@@ -151,22 +151,22 @@ struct PreviewBrowser {
                         picked = index
                         PreviewRuntime.selectionChanged(previews[index].id)
                     }
-                    .tint(index == selection ? Color(hex: 0x4C8DFF) : Color.fill)
+                    .tint(index == selection ? .color(Color(hex: 0x4C8DFF)) : .fill)
                 }
                 Spacer()
             }
             .padding(horizontal: 10, vertical: 8)
-            .background(Color.secondaryBackground)
+            .background(ShapeStyle.secondaryBackground)
 
             if previews.isEmpty {
                 Text(file.map { "No @Preview functions in \($0.split(separator: "/").last ?? "")" } ?? "No @Preview functions in this app")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 previews[selection].make()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color.background)
+        .background(ShapeStyle.background)
     }
 }

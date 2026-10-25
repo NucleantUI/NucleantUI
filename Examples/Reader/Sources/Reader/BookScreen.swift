@@ -71,7 +71,7 @@ struct BookScreen {
         VStack(alignment: .leading, spacing: 18) {
             Text(book.blurb)
                 .font(.system(size: 16, design: .serif))
-                .foregroundColor(Theme.ink)
+                .foregroundStyle(Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             NavigationLink(value: ReadingRoute(book: book.id, chapter: library.resumeChapter(of: book))) {
@@ -132,11 +132,11 @@ struct ChapterRow {
         HStack(spacing: 12) {
             Text("\(number)")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 22, alignment: .leading)
             Text(name)
                 .font(.system(size: 15, design: .serif))
-                .foregroundColor(Theme.ink)
+                .foregroundStyle(Theme.ink)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if isOpen {
@@ -146,12 +146,12 @@ struct ChapterRow {
             }
             Text(secondsRead > 0 ? "\(clockTime(secondsRead)) of \(minutes) min" : "\(minutes) min")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(horizontal: 14, vertical: 12)
         .overlay(alignment: .bottom) {
             if !isLast {
-                Color.separator.frame(height: 1).padding(.leading, 48)
+                Rectangle().fill(.separator).frame(height: 1).padding(.leading, 48)
             }
         }
     }

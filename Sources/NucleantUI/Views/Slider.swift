@@ -294,7 +294,7 @@ extension Slider where ValueLabel == EmptyView {
 @View
 struct _SliderTrack {
     let fraction: Double
-    let fill: Color
+    let fill: ShapeStyle
     let knobDiameter: Double
 
     var body: Never { bodyUnavailable() }
@@ -308,7 +308,7 @@ extension _SliderTrack: BuiltinView {
             buildNode(
                 Circle()
                     .fill(Color.white)
-                    .overlay(Circle().stroke(Color.separator, lineWidth: 1)),
+                    .overlay(Circle().stroke(ShapeStyle.separator, lineWidth: 1)),
                 &ctx
             )
         }

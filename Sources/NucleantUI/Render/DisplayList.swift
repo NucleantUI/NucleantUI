@@ -399,18 +399,20 @@ public struct DrawContext: Sendable {
         self.colorScheme = colorScheme
     }
 
-    /// `color` under this scheme, faded by the inherited opacity — every leaf
-    /// applies this rather than the renderer setting per-paint opacity, so
-    /// gradients fade too.
+    /// `color` faded by the inherited opacity — every leaf applies this
+    /// rather than the renderer setting per-paint opacity, so gradients fade
+    /// too.
     func resolve(_ color: Color) -> Color {
-        let resolved = color.resolved(for: colorScheme)
-        return opacity >= 1 ? resolved : resolved.opacity(opacity)
+        opacity >= 1 ? color : color.opacity(opacity)
     }
 
+    /// `style` under this scheme, faded the same way.
     func resolve(_ style: ShapeStyle) -> ShapeStyle {
         switch style {
         case .color(let color):
             return .color(resolve(color))
+        case .dynamic(let light, let dark):
+            return .color(resolve(colorScheme == .dark ? dark : light))
         case .linearGradient(let gradient, let start, let end):
             return .linearGradient(faded(gradient), startPoint: start, endPoint: end)
         case .radialGradient(let gradient, let center, let startRadius, let endRadius):

@@ -15,7 +15,7 @@ import NucleantUI
 struct Stroke: Identifiable {
     let id: Int
     var points: [Point]
-    let color: Color
+    let color: ShapeStyle
     let width: Double
 
     /// The polyline through the points — a dot for a single tap.
@@ -36,19 +36,19 @@ struct Stroke: Identifiable {
 }
 
 /// The first swatch is "ink": near-white on dark paper, near-black on light.
-let swatches: [Color] = [
-    Color.dynamic(light: Color(hex: 0x1C1F26), dark: Color(hex: 0xF5F5F7)),
-    Color(hex: 0xFF5C5C), Color(hex: 0xFF9F0A), Color(hex: 0xFFD60A),
-    Color(hex: 0x3DD68C), Color(hex: 0x4C8DFF), Color(hex: 0xB57BFF), Color(hex: 0x6C7A89),
+let swatches: [ShapeStyle] = [
+    ShapeStyle.dynamic(light: Color(hex: 0x1C1F26), dark: Color(hex: 0xF5F5F7)),
+    .color(Color(hex: 0xFF5C5C)), .color(Color(hex: 0xFF9F0A)), .color(Color(hex: 0xFFD60A)),
+    .color(Color(hex: 0x3DD68C)), .color(Color(hex: 0x4C8DFF)), .color(Color(hex: 0xB57BFF)), .color(Color(hex: 0x6C7A89)),
 ]
 
 let brushSizes: [Double] = [2, 5, 10, 18]
 
 struct Theme {
-    static let background = Color.background
-    static let paper = Color.dynamic(light: Color.white, dark: Color(hex: 0x20232B))
-    static let panel = Color.secondaryBackground
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let background = ShapeStyle.background
+    static let paper = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x20232B))
+    static let panel = ShapeStyle.secondaryBackground
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
 }
 
 // MARK: - Canvas
@@ -57,7 +57,7 @@ struct Theme {
 struct Canvas {
     @Binding var strokes: [Stroke]
     @Binding var current: Stroke?
-    let color: Color
+    let color: ShapeStyle
     let width: Double
 
     var body: some View {
@@ -115,13 +115,13 @@ extension Stroke: Equatable {}
 
 @View
 struct Swatch {
-    let color: Color
+    let color: ShapeStyle
     let isSelected: Bool
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? .primary : .color(.clear), lineWidth: 2)
                 .frame(width: 30, height: 30)
             Circle()
                 .fill(color)
@@ -138,10 +138,10 @@ struct BrushDot {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.fill : Color.clear)
+                .fill(isSelected ? .fill : .color(.clear))
                 .frame(width: 34, height: 34)
             Circle()
-                .fill(Color.primary)
+                .fill(ShapeStyle.primary)
                 .frame(width: size + 2, height: size + 2)
         }
     }

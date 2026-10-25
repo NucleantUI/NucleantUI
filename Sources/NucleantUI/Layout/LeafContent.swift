@@ -9,10 +9,11 @@
 struct TextContent: NodeContent {
     let string: String
     let font: Font
-    let color: Color
+    /// Drawn as one flat color: a gradient gives its first stop.
+    let style: ShapeStyle
     let alignment: TextAlignment
     let lineLimit: Int?
-    /// `color`, animated — a change of foreground color fades across.
+    /// `style`, animated — a change of foreground color fades across.
     var animatedColor: AnimatedVector? = nil
 
     /// Laid out at its final size throughout, never reflowed mid-way.
@@ -48,7 +49,7 @@ struct TextContent: NodeContent {
             string: drawn,
             frame: rect,
             font: font,
-            color: context.resolve(animatedColor.map { $0.current(of: .color(color)).flatColor } ?? color),
+            color: context.resolve(animatedColor?.current(of: style) ?? style).flatColor,
             alignment: alignment,
             lineLimit: lineLimit,
             // Only a single-line label can be ellipsised, and only when it

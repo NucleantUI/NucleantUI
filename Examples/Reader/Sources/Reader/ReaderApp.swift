@@ -25,14 +25,14 @@
 import NucleantUI
 
 enum Theme {
-    static let shelf = Color.dynamic(light: Color(hex: 0xF3EFE7), dark: Color(hex: 0x141518))
-    static let card = Color.dynamic(light: Color.white, dark: Color(hex: 0x212329))
-    static let page = Color.dynamic(light: Color(hex: 0xFBF7EF), dark: Color(hex: 0x1B1B1E))
-    static let ink = Color.dynamic(light: Color(hex: 0x2A2621), dark: Color(hex: 0xDCD6CB))
-    static let faint = Color.dynamic(light: Color(white: 0, opacity: 0.42), dark: Color(white: 1, opacity: 0.4))
-    static let track = Color.dynamic(light: Color(white: 0, opacity: 0.1), dark: Color(white: 1, opacity: 0.12))
+    static let shelf = ShapeStyle.dynamic(light: Color(hex: 0xF3EFE7), dark: Color(hex: 0x141518))
+    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x212329))
+    static let page = ShapeStyle.dynamic(light: Color(hex: 0xFBF7EF), dark: Color(hex: 0x1B1B1E))
+    static let ink = ShapeStyle.dynamic(light: Color(hex: 0x2A2621), dark: Color(hex: 0xDCD6CB))
+    static let faint = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.42), dark: Color(white: 1, opacity: 0.4))
+    static let track = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.1), dark: Color(white: 1, opacity: 0.12))
     static let accent = Color(hex: 0xB4532A)
-    static let control = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.32))
+    static let control = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.32))
 }
 
 /// A book's cover, drawn: a shaded field, the title, a rule, the author.
@@ -77,7 +77,7 @@ struct ChapterProgress {
         HStack(spacing: 3) {
             ForEach(0..<count) { index in
                 Rectangle()
-                    .fill(index < current ? Theme.accent : index == current ? Theme.accent.opacity(0.45) : Theme.track)
+                    .fill(index < current ? .color(Theme.accent) : index == current ? .color(Theme.accent.opacity(0.45)) : Theme.track)
                     .frame(height: 4)
                     .cornerRadius(2)
             }

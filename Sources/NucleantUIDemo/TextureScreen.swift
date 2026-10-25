@@ -175,7 +175,7 @@ struct TextureCard {
         VStack(alignment: .leading, spacing: 8) {
             Text("CARD")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text("\(reading)%")
                 .font(.system(size: 34, weight: .bold))
             ZStack(alignment: .leading) {
@@ -245,7 +245,7 @@ struct TextureScreen {
                 twice.
                 """)
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 Section("tex.view()") {
                     HStack(alignment: .top, spacing: 14) {
@@ -275,9 +275,9 @@ struct TextureScreen {
                         Slider(value: $demo.blend, in: 0...1) {
                             Text("Blend")
                         } minimumValueLabel: {
-                            Text("card").font(.footnote).foregroundColor(.secondary)
+                            Text("card").font(.footnote).foregroundStyle(.secondary)
                         } maximumValueLabel: {
-                            Text("dial").font(.footnote).foregroundColor(.secondary)
+                            Text("dial").font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -321,7 +321,7 @@ private struct Section<Content: View> {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             content
         }
         .padding(horizontal: 14, vertical: 12)

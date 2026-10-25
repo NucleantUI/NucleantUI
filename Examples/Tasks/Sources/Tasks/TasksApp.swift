@@ -81,11 +81,11 @@ let backlog = [
 /// Surfaces are the framework's semantic colors, so the list follows the
 /// system's light or dark appearance; the accents are fixed.
 struct Theme {
-    static let background = Color.background
-    static let panel = Color.secondaryBackground
-    static let row = Color.tertiaryBackground
-    static let ring = Color.dynamic(light: Color(white: 0, opacity: 0.25), dark: Color(white: 1, opacity: 0.25))
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let background = ShapeStyle.background
+    static let panel = ShapeStyle.secondaryBackground
+    static let row = ShapeStyle.tertiaryBackground
+    static let ring = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.25), dark: Color(white: 1, opacity: 0.25))
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
     static let accent = Color(hex: 0x4C8DFF)
     static let done = Color(hex: 0x3DD68C)
 }
@@ -100,7 +100,7 @@ struct Checkbox {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(isDone ? Theme.done : Theme.ring, lineWidth: 2)
+                .stroke(isDone ? .color(Theme.done) : Theme.ring, lineWidth: 2)
             if isDone {
                 Circle().fill(Theme.done)
                 PathShape { size in
@@ -134,12 +134,12 @@ struct TaskRow {
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(task.isDone ? .secondary : .primary)
+                    .foregroundStyle(task.isDone ? .secondary : .primary)
                     .lineLimit(1)
                 if !task.notes.isEmpty {
                     Text(task.notes)
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -152,7 +152,7 @@ struct TaskRow {
             } label: {
                 Text("›")
                     .font(.system(size: 22))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 24)
             }
         }
@@ -188,22 +188,22 @@ struct TaskDetail {
                     .onTapGesture { task.isDone.toggle() }
                 Text(task.title)
                     .font(.title2)
-                    .foregroundColor(task.isDone ? .secondary : .primary)
+                    .foregroundStyle(task.isDone ? .secondary : .primary)
             }
 
             Text(task.notes.isEmpty ? "No notes." : task.notes)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(Theme.panel)
                 .cornerRadius(10)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Priority").font(.footnote).foregroundColor(.secondary)
+                Text("Priority").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     ForEach(Priority.allCases, id: \.self) { priority in
                         Button(priority.name) { task.priority = priority }
-                            .tint(task.priority == priority ? priority.color : Theme.muted)
+                            .tint(task.priority == priority ? .color(priority.color) : Theme.muted)
                     }
                 }
             }
@@ -247,7 +247,7 @@ struct TaskList {
                 Text("Today").font(.system(size: 26, weight: .bold))
                 Text("\(remaining) of \(live.count) left")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button("+ Add") { add() }
@@ -263,9 +263,9 @@ struct TaskList {
             ForEach(Filter.allCases, id: \.self) { f in
                 Text(f.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(filter == f ? .white : .secondary)
+                    .foregroundStyle(filter == f ? .color(.white) : .secondary)
                     .padding(horizontal: 12, vertical: 6)
-                    .background(filter == f ? Theme.accent : Theme.panel)
+                    .background(filter == f ? .color(Theme.accent) : Theme.panel)
                     .cornerRadius(14)
                     .onTapGesture { filter = f }
             }
@@ -281,7 +281,7 @@ struct TaskList {
                 }
                 if visibleIndices.isEmpty {
                     Text(filter == .done ? "Nothing done yet." : "All clear.")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(30)
                 }
             }

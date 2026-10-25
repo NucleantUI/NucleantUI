@@ -27,13 +27,13 @@
 import NucleantUI
 
 enum Theme {
-    static let paper = Color.dynamic(light: Color(hex: 0xFAF7F2), dark: Color(hex: 0x17181B))
-    static let sidebar = Color.dynamic(light: Color(hex: 0xF0EBE3), dark: Color(hex: 0x1F2024))
-    static let card = Color.dynamic(light: Color.white, dark: Color(hex: 0x24262B))
-    static let ink = Color.dynamic(light: Color(hex: 0x2B2723), dark: Color(hex: 0xE3DED6))
-    static let faint = Color.dynamic(light: Color(white: 0, opacity: 0.45), dark: Color(white: 1, opacity: 0.45))
-    static let track = Color.dynamic(light: Color(hex: 0xE3DED6), dark: Color(hex: 0x34363B))
-    static let bar = Color.dynamic(light: Color(hex: 0xFAF7F2, opacity: 0.97), dark: Color(hex: 0x17181B, opacity: 0.97))
+    static let paper = ShapeStyle.dynamic(light: Color(hex: 0xFAF7F2), dark: Color(hex: 0x17181B))
+    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xF0EBE3), dark: Color(hex: 0x1F2024))
+    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x24262B))
+    static let ink = ShapeStyle.dynamic(light: Color(hex: 0x2B2723), dark: Color(hex: 0xE3DED6))
+    static let faint = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.45), dark: Color(white: 1, opacity: 0.45))
+    static let track = ShapeStyle.dynamic(light: Color(hex: 0xE3DED6), dark: Color(hex: 0x34363B))
+    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xFAF7F2, opacity: 0.97), dark: Color(hex: 0x17181B, opacity: 0.97))
 }
 
 @main
@@ -102,7 +102,7 @@ struct RecipeList {
         VStack(alignment: .leading, spacing: 0) {
             Text("Recipes")
                 .font(.system(size: 22, weight: .bold))
-                .foregroundColor(Theme.ink)
+                .foregroundStyle(Theme.ink)
                 .padding(.horizontal, 20)
                 .padding(.top, 22)
                 .padding(.bottom, 12)
@@ -133,17 +133,17 @@ struct RecipeRow {
             VStack(alignment: .leading, spacing: 3) {
                 Text(recipe.title)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Theme.ink)
+                    .foregroundStyle(Theme.ink)
                     .lineLimit(1)
                 Text("\(recipe.cuisine) · \(recipe.minutes) min")
                     .font(.footnote)
-                    .foregroundColor(Theme.faint)
+                    .foregroundStyle(Theme.faint)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
-        .background(isSelected ? Theme.card : Color.clear)
+        .background(isSelected ? Theme.card : .color(.clear))
         .cornerRadius(10)
         .contentShape(Rectangle())
     }
@@ -178,10 +178,10 @@ struct RecipeChip {
     var body: some View {
         Text(recipe.title)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(isSelected ? Color.white : Theme.ink)
+            .foregroundStyle(isSelected ? .color(.white) : Theme.ink)
             .padding(.horizontal, 14)
             .frame(height: 34)
-            .background(isSelected ? recipe.tint : Theme.card)
+            .background(isSelected ? .color(recipe.tint) : Theme.card)
             .cornerRadius(17)
     }
 }

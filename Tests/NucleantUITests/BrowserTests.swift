@@ -123,7 +123,7 @@ struct BrowserTests {
     }
 
     @Test func windowFollowsThePagesColorScheme() async throws {
-        let window = HostingWindow<NucleantRenderNode>(title: "appearance", width: 120, height: 80, root: Color.background)
+        let window = HostingWindow<NucleantRenderNode>(title: "appearance", width: 120, height: 80, root: Rectangle().fill(.background))
         try window.present()
         defer { window.platformWindow?.close() }
         let engine = try #require(window.renderEngine)
@@ -133,18 +133,18 @@ struct BrowserTests {
         // scripts/run_wasm_tests.py starts Chrome with a dark page.
         #expect(window.host.environment.colorScheme == .dark)
         try await Task.sleep(for: .milliseconds(300))
-        expectCenter(engine, is: Color.background.resolved(for: .dark))
+        expectCenter(engine, is: ShapeStyle.background.resolved(for: .dark).flatColor)
 
         // The page's media-query listener reports a switch to light, then back.
         nucleantColorSchemeChanged(0)
         #expect(window.host.environment.colorScheme == .light)
         try await Task.sleep(for: .milliseconds(300))
-        expectCenter(engine, is: Color.background.resolved(for: .light))
+        expectCenter(engine, is: ShapeStyle.background.resolved(for: .light).flatColor)
 
         nucleantColorSchemeChanged(1)
         #expect(window.host.environment.colorScheme == .dark)
         try await Task.sleep(for: .milliseconds(300))
-        expectCenter(engine, is: Color.background.resolved(for: .dark))
+        expectCenter(engine, is: ShapeStyle.background.resolved(for: .dark).flatColor)
     }
 
     /// The window canvas's center pixel is `color`, to within 8-bit rounding.

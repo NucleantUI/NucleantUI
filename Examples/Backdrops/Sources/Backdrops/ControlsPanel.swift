@@ -23,7 +23,7 @@ struct ControlsPanel {
                         .cornerRadius(8)
                     Text("The look as a still wallpaper shows it, rendered again as you change it.")
                         .font(.footnote)
-                        .foregroundColor(Theme.faint)
+                        .foregroundStyle(Theme.faint)
                 }
 
                 Text("Presets")
@@ -126,7 +126,7 @@ struct LabeledSlider {
                 Spacer()
                 Text(String(format: "%.2f", value.wrappedValue))
                     .font(.footnote)
-                    .foregroundColor(Theme.faint)
+                    .foregroundStyle(Theme.faint)
             }
             Slider(value: value, in: range)
         }

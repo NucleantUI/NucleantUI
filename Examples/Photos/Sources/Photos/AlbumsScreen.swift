@@ -71,7 +71,7 @@ struct AlbumSection {
                     .font(.system(size: 13, weight: .semibold))
                 Text("\(albums.count)")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -94,7 +94,7 @@ struct AlbumCard {
                 if let cover = photos.first {
                     PhotoArt(scenery: cover.scenery)
                 } else {
-                    Rectangle().fill(Color.fill)
+                    Rectangle().fill(ShapeStyle.fill)
                 }
             }
             .frame(width: 150, height: 150)
@@ -104,7 +104,7 @@ struct AlbumCard {
                 .lineLimit(1)
             Text("\(photos.count) photos")
                 .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(width: 150, alignment: .leading)
     }
@@ -123,7 +123,7 @@ struct AlbumRow {
                 if let cover = photos.first {
                     PhotoArt(scenery: cover.scenery)
                 } else {
-                    Rectangle().fill(Color.fill)
+                    Rectangle().fill(ShapeStyle.fill)
                 }
             }
             .frame(width: 44, height: 44)
@@ -133,15 +133,15 @@ struct AlbumRow {
                     .font(.system(size: 13, weight: .medium))
                 Text("\(photos.count) photos" + (album.isShared ? " · Shared" : ""))
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text("›")
                 .font(.system(size: 16))
-                .foregroundColor(.tertiary)
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
     }
 }

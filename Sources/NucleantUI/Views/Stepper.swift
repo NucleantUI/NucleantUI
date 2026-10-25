@@ -66,11 +66,11 @@ public struct Stepper<Label: View>: View {
             }
             HStack(spacing: 0) {
                 button("−", direction: .decrement, isAvailable: actions.storage.canDecrement)
-                Color.separator
+                Rectangle().fill(.separator)
                     .frame(width: 1, height: 16)
                 button("+", direction: .increment, isAvailable: actions.storage.canIncrement)
             }
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.tertiaryBackground))
+            .background(RoundedRectangle(cornerRadius: 8).fill(ShapeStyle.tertiaryBackground))
         }
         .opacity(isEnabled ? 1 : 0.4)
     }
@@ -82,11 +82,11 @@ public struct Stepper<Label: View>: View {
         let onEditingChanged = self.onEditingChanged
         return Text(glyph)
             .font(.system(size: 17, weight: .medium))
-            .foregroundColor(isAvailable ? .primary : .tertiary)
+            .foregroundStyle(isAvailable ? .primary : .tertiary)
             .frame(width: 40, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isHeld ? controlTrackColor : Color.clear)
+                    .fill(isHeld ? controlTrackColor : .color(.clear))
             )
             ._hitTarget(HitTarget(
                 isEnabled: isEnabled && isAvailable,

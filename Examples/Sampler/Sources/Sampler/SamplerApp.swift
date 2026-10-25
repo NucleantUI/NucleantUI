@@ -24,14 +24,14 @@ import Foundation
 import NucleantUI
 
 struct Theme {
-    static let background = Color.background
-    static let panel = Color.secondaryBackground
-    static let pad = Color.tertiaryBackground
+    static let background = ShapeStyle.background
+    static let panel = ShapeStyle.secondaryBackground
+    static let pad = ShapeStyle.tertiaryBackground
     /// Behind the waveform — resolved for the scheme in effect by the
     /// waveform view, which hands the result to the shader as a `.color`
     /// argument: a shader gets a color as it is given.
-    static let wave = Color.dynamic(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x14161C))
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let wave = ShapeStyle.dynamic(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x14161C))
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
 }
 
 // MARK: - Waveform
@@ -109,7 +109,7 @@ struct WaveformView {
                 .float("trimEnd", Float(sample.trimEnd)),
                 .float("playhead", Float(playhead ?? -1)),
                 .color("tint", sample.color),
-                .color("paper", Theme.wave.resolved(for: colorScheme)),
+                .color("paper", Theme.wave.resolved(for: colorScheme).flatColor),
             ])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .gesture(
@@ -147,7 +147,7 @@ struct Fader {
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 44, alignment: .leading)
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.fill).frame(height: 8)
+                Capsule().fill(ShapeStyle.fill).frame(height: 8)
                 Capsule()
                     .fill(.linearGradient(colors: [color.opacity(0.6), color], startPoint: .leading, endPoint: .trailing))
                     .relativeSize(width: max(0.01, fraction))
@@ -163,7 +163,7 @@ struct Fader {
             )
             Text(format(value))
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 76, alignment: .trailing)
         }
     }
@@ -187,11 +187,11 @@ struct Pad {
                      ? String(format: "%.2fs · take %d", sample.duration, sample.variant)
                      : "analysing…")
                 .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(isTriggered ? sample.color.opacity(0.35) : Theme.pad)
+        .background(isTriggered ? .color(sample.color.opacity(0.35)) : Theme.pad)
         .cornerRadius(10)
         .border(isSelected ? sample.color : Color.clear, width: 2, cornerRadius: 10)
     }
@@ -219,7 +219,7 @@ struct SampleEditor {
                          ? String(format: "%.2fs of %.2fs", sample.trimmedDuration, sample.duration)
                          : "analysing…")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button("Play") { player.play(sample, in: bank) }
                     .tint(sample.color)
@@ -267,12 +267,12 @@ struct SamplerView {
                     Text("Sampler").font(.system(size: 26, weight: .bold))
                     Text("Tap a pad to select and play it. Drag on the waveform to trim.")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(bank.playhead.map { String(format: "playing %3.0f%%", $0 * 100) } ?? "stopped")
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             pads

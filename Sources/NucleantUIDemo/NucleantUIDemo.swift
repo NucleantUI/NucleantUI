@@ -13,11 +13,11 @@ import NucleantUI
 /// on both. `muted` is a button tint for secondary actions — white text
 /// needs a darker grey under it in light mode than in dark.
 struct Palette {
-    static let background = Color.background
-    static let panel = Color.secondaryBackground
-    static let panelHighlight = Color.tertiaryBackground
-    static let track = Color.fill
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let background = ShapeStyle.background
+    static let panel = ShapeStyle.secondaryBackground
+    static let panelHighlight = ShapeStyle.tertiaryBackground
+    static let track = ShapeStyle.fill
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
     static let accent = Color(hex: 0x4C8DFF)
     static let good = Color(hex: 0x3DD68C)
     static let warn = Color(hex: 0xFFB020)
@@ -81,7 +81,7 @@ struct TrackRow {
 
             Text("\(Int(level * 100))%")
                 .font(.system(size: 13, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
         }
         .padding(horizontal: 16, vertical: 10)
@@ -165,7 +165,7 @@ struct ShaderScreen {
         VStack(spacing: 12) {
             Text(entry.blurb)
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             Shader(entry.function)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -184,7 +184,7 @@ struct ShaderGalleryScreen {
             VStack(alignment: .leading, spacing: 10) {
                 Text("\(shaderGallery.count) shaders, each its own GPU node — all running at once.")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 ForEach(shaderGallery) { entry in
                     
@@ -200,14 +200,14 @@ struct ShaderGalleryScreen {
                                     .font(.system(size: 16, weight: .medium))
                                 Text(entry.blurb)
                                     .font(.footnote)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
 
                             Spacer()
 
                             Text("›")
                                 .font(.system(size: 20))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         .padding(horizontal: 14, vertical: 10)
                         .background(Palette.panelHighlight)
@@ -255,7 +255,7 @@ struct EffectPreviewCard {
             }
             Text("the view as a texture")
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(12)
         .frame(width: 200, height: 92, alignment: .leading)
@@ -275,7 +275,7 @@ struct EffectsScreen {
 
                 Text("\(effectGallery.count) effects over the same card — each row is its own canvas, sampled by its own shader.")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 ForEach(effectGallery) { entry in
                     NavigationLink(title: entry.name) {
@@ -290,14 +290,14 @@ struct EffectsScreen {
                                     .font(.system(size: 16, weight: .medium))
                                 Text(entry.blurb)
                                     .font(.footnote)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
 
                             Spacer()
 
                             Text("›")
                                 .font(.system(size: 20))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         .padding(horizontal: 14, vertical: 10)
                         .background(Palette.panelHighlight)
@@ -324,10 +324,10 @@ struct EffectScreen {
             HStack {
                 Text(entry.blurb)
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Button(isEnabled ? "Effect on" : "Effect off") { isEnabled.toggle() }
-                    .tint(isEnabled ? Palette.accent : Palette.muted)
+                    .tint(isEnabled ? .color(Palette.accent) : Palette.muted)
             }
 
             VStack(spacing: 8) {
@@ -413,13 +413,13 @@ struct Bus {
                 if !tracks.isEmpty {
                     Text("\(tracks.count)")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             if tracks.isEmpty {
                 Text("Drop tracks here")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             ForEach(tracks) { track in
                 TrackChip(item: track)
@@ -429,7 +429,7 @@ struct Bus {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(isTargeted ? Palette.accent.opacity(0.25) : Palette.panel)
+        .background(isTargeted ? .color(Palette.accent.opacity(0.25)) : Palette.panel)
         .border(isTargeted ? Palette.accent : Color.clear, width: 2, cornerRadius: 12)
         .cornerRadius(12)
         .dropDestination(for: TrackItem.self) { dropped, _ in
@@ -455,7 +455,7 @@ struct DragDropScreen {
         VStack(alignment: .leading, spacing: 14) {
             Text("Drag a track onto a bus. The tracks cross as JSON; the notes box takes plain text, which a track also is — and so is the label at the bottom.")
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -517,18 +517,18 @@ struct DragDropScreen {
                 if let lastDrop {
                     Text("last drop at \(Int(lastDrop.x)), \(Int(lastDrop.y))")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             Text(notes.isEmpty ? "Drop text here" : notes.joined(separator: " · "))
                 .font(.footnote)
-                .foregroundColor(notes.isEmpty ? .secondary : .primary)
+                .foregroundStyle(notes.isEmpty ? .secondary : .primary)
                 .lineLimit(3)
             Spacer()
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(notesTargeted ? Palette.good.opacity(0.25) : Palette.panel)
+        .background(notesTargeted ? .color(Palette.good.opacity(0.25)) : Palette.panel)
         .border(notesTargeted ? Palette.good : Color.clear, width: 2, cornerRadius: 12)
         .cornerRadius(12)
         .dropDestination(for: String.self) { strings, location in
@@ -547,7 +547,7 @@ struct AboutScreen {
         VStack(alignment: .leading, spacing: 12) {
             Text("NucleantUI").font(.title2)
             Text("SwiftUI-shaped views over NucleantApplication, NucleantVulkan and NucleantThorVG.")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Spacer()
         }
         .padding(20)
@@ -581,7 +581,7 @@ struct AppearancePicker {
             ForEach(Appearance.allCases, id: \.self) { choice in
                 Text(choice.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(appearance == choice ? .white : .secondary)
+                    .foregroundStyle(appearance == choice ? .color(.white) : .secondary)
                     .padding(horizontal: 10, vertical: 5)
                     .background(appearance == choice ? Palette.accent : Color.clear)
                     .cornerRadius(6)
@@ -660,7 +660,7 @@ struct ContentView {
                     Spacer()
                     Text("Mixer hidden")
                         .font(.title2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Spacer()
                 }
             }

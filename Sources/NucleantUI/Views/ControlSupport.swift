@@ -46,4 +46,4 @@ struct _ControlCheckmark: Shape {
 
 /// The track colour of a control that is off or empty — a switch turned
 /// off, the unfilled part of a slider.
-let controlTrackColor = Color.dynamic(light: Color(white: 0.84), dark: Color(white: 0.28))
+let controlTrackColor = ShapeStyle.dynamic(light: Color(white: 0.84), dark: Color(white: 0.28))
