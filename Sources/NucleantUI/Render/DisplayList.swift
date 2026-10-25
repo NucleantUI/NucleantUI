@@ -377,6 +377,11 @@ public struct DrawContext: Sendable {
     /// or follows motion, and no node's remembered rect is disturbed.
     var freezesMotion = false
 
+    /// The coordinate spaces named above this point — by `.coordinateSpace`
+    /// and by every scroll view — with where each was placed, innermost
+    /// last, for a `GeometryProxy` to measure in.
+    var coordinateSpaces: [CoordinateSpaceFrame] = []
+
     /// What a render node or shader slot placed here is cut to at the
     /// composite: every clip above it, whichever node took it over.
     var compositeClip: Rect? {

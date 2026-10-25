@@ -293,13 +293,17 @@ public final class ViewHost {
                 + (windowRedrawn ? " window" : ""))
         }
 
+        // A `GeometryReader` builds its content while it is placed, so a pass
+        // that only laid out can still have built views.
+        let builtDuringLayout = effects.takeBuiltDuringLayout()
+
         // Deferred to here so an `onAppear` body can read the state it was
         // built alongside. One that writes state just marks the next frame
         // dirty — it does not re-enter this pass.
         for action in effects.endPass() {
             action()
         }
-        if builds, let rootNode {
+        if builds || builtDuringLayout, let rootNode {
             if !arena.isIdle {
                 arena.refreshAttachments(from: rootNode)
             }
@@ -307,10 +311,12 @@ public final class ViewHost {
         }
         // Only a pass that built can have changed a preference: every value
         // is set by a view, not by layout.
-        if builds {
+        if builds || builtDuringLayout {
             for action in effects.preferenceObservers.changes() {
                 action()
             }
+        }
+        if builds {
             measureContentSizeLimits()
         }
         return windowRedrawn

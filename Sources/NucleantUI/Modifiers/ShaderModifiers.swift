@@ -75,8 +75,7 @@ extension View {
                 module: isEnabled ? (function.spirv, function.input, function.isAnimated) : nil,
                 draw: draw,
                 textures: ShaderTextures(textures),
-                backdrop: backdrop,
-                colorScheme: context.environment.colorScheme
+                backdrop: backdrop
             )
         }
     }
@@ -128,8 +127,7 @@ extension View {
                 module: isEnabled ? (words, input, isAnimated) : nil,
                 draw: draw,
                 textures: ShaderTextures(textures),
-                backdrop: backdrop,
-                colorScheme: context.environment.colorScheme
+                backdrop: backdrop
             )
         }
     }
@@ -160,8 +158,6 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
     let textures: ShaderTextures
     /// Seed the layer with what is already painted under the view.
     let backdrop: Bool
-    /// The view's, which a `Color` in the input is packed for.
-    let colorScheme: ColorScheme
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard let child = node.singleChild else { return }
@@ -197,7 +193,6 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
                 isAnimated: module.isAnimated,
                 draw: draw,
                 textures: textures,
-                colorScheme: colorScheme,
                 rect: rect,
                 clip: context.compositeClip,
                 canvas: canvas.node,
@@ -216,7 +211,6 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
                 isAnimated: module.isAnimated,
                 draw: draw,
                 textures: textures,
-                colorScheme: colorScheme,
                 rect: rect,
                 clip: context.compositeClip,
                 layer: content

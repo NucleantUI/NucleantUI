@@ -59,7 +59,6 @@ extension RenderTextureShaderView: BuiltinView {
             isAnimated: function.isAnimated,
             draw: draw,
             textures: ShaderTextures(textures),
-            colorScheme: context.environment.colorScheme,
             isResizable: isResizable
         ))
     }
@@ -75,8 +74,6 @@ struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
     let isAnimated: Bool
     let draw: ShaderDraw
     let textures: ShaderTextures
-    /// The view's, which a `Color` in the input is packed for.
-    let colorScheme: ColorScheme
     let isResizable: Bool
 
     /// The texture's size, as `tex.view()` is — the effect does not change
@@ -98,7 +95,6 @@ struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
             isAnimated: isAnimated,
             draw: draw,
             textures: textures,
-            colorScheme: colorScheme,
             rect: rect,
             clip: context.compositeClip,
             texture: texture

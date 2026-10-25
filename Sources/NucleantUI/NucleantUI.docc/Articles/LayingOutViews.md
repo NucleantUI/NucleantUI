@@ -102,6 +102,63 @@ struct Swatches {
 ``Grid`` lays out rows and columns that size to their content, and the
 ``Layout`` protocol lets you write your own container.
 
+## Reading size and position
+
+``GeometryReader`` builds its content from the space it is given. It takes
+everything it is offered and hands its content a ``GeometryProxy``: its
+size, and where it is. The content is built while the reader is laid out,
+so the first frame already shows it at the right size, and it is built
+again only when an answer it read changes — content that read only `size`
+is left alone while a scroll moves it.
+
+```swift
+GeometryReader { proxy in
+    if proxy.size.width >= 760 {
+        HStack(spacing: 0) {
+            RecipeList(cookbook: cookbook).frame(width: 290)
+            Divider()
+            OpenRecipe(cookbook: cookbook)
+        }
+    } else {
+        VStack(spacing: 0) {
+            RecipeStrip(cookbook: cookbook)
+            Divider()
+            OpenRecipe(cookbook: cookbook)
+        }
+    }
+}
+```
+
+`proxy.frame(in:)` answers in the window (`.global`), in the view itself
+(`.local`), in an ancestor named with `.coordinateSpace(.named(_:))`, or in
+the nearest scroll view (`.scrollView`, `.scrollView(axis:)`), and
+`proxy.bounds(of:)` gives a named space's rect as seen from the view. A
+header whose artwork slides up slower than the page reads its own frame in
+the scroll view:
+
+```swift
+GeometryReader { proxy in
+    let scrolled = max(0, -proxy.frame(in: .scrollView).minY)
+    Artwork().offset(y: scrolled * 0.5)
+}
+```
+
+To act on geometry rather than draw from it, `.onGeometryChange(for:of:action:)`
+works out a value from a proxy each time the view is placed, and runs the
+action the first time and whenever the value comes out different:
+
+```swift
+StepRow(step)
+    .onGeometryChange(for: Bool.self) { proxy in
+        proxy.frame(in: .scrollView).minY < 300
+    } action: { isPast in
+        reading.mark(step, past: isPast)
+    }
+```
+
+`safeAreaInsets` is zero — there are no safe areas yet — and a proxy does
+not resolve anchors yet.
+
 ## Shapes, text and images
 
 ``Rectangle``, ``RoundedRectangle``, ``Circle``, ``Ellipse``, ``Capsule`` and

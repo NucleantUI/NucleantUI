@@ -32,6 +32,7 @@ change that adds the API.
 - [x] ForEach
 - [x] PreferenceKey / .preference / .transformPreference / .onPreferenceChange
 - [ ] .overlayPreferenceValue / .backgroundPreferenceValue
+- [ ] Anchor / .anchorPreference / GeometryProxy[anchor]
 - [ ] EquatableView / .equatable
 - [ ] .id
 
@@ -70,9 +71,11 @@ change that adds the API.
 - [x] Layout protocol / LayoutValueKey / .layoutValue / ViewSpacing
 - [x] AnyLayout / HStackLayout / VStackLayout / ZStackLayout
 - [ ] GridLayout
-- [ ] GeometryReader
+- [x] GeometryReader / GeometryProxy — size, frame(in:), bounds(of:);
+      safeAreaInsets is zero
+- [x] CoordinateSpace — .global, .local, .named, .scrollView / .coordinateSpace(_:)
 - [ ] ViewThatFits
-- [ ] .onGeometryChange
+- [x] .onGeometryChange
 
 ## Text & fonts
 - [x] Text
@@ -203,6 +206,7 @@ change that adds the API.
 - [x] DragGesture / .gesture
 - [x] TapGesture / LongPressGesture / MagnifyGesture / RotateGesture
 - [ ] SpatialTapGesture
+- [ ] DragGesture(coordinateSpace:)
 - [ ] Gesture .simultaneously / .sequenced / .exclusively
 - [x] .simultaneousGesture / .highPriorityGesture
 - [x] .onHover

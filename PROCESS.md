@@ -1245,10 +1245,12 @@ the semantic colors — `.primary`, `.secondary`, `.tertiary`,
 applying opacity (gradient stops too), and `EnvironmentContent` — the
 node behind every `.environment` modifier — sets it on the way down, so
 `.colorScheme(_:)` on a subtree is honoured by leaves that never read the
-environment themselves. The root context takes the host's value. A
-`.color` shader argument is resolved when the argument list is packed,
-under the environment the view was built with, so the Sampler's shader
-paper follows too.
+environment themselves. The root context takes the host's value. A color
+handed to a shader is never resolved: a `.color` argument, or a `Color`
+in a `ShaderInput`, reaches the shader as the components it was given —
+a `Color.dynamic` its light ones. A view that wants the scheme's variant
+in its shader resolves it itself, with `resolved(for:)`, as the Sampler's
+waveform does for its paper.
 
 Why draw time and not build time: the alternative — every leaf reading
 `\.colorScheme` at build and baking the variant in — would have touched

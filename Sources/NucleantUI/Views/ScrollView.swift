@@ -73,6 +73,15 @@ struct ScrollContent: NodeContent {
         contentSize.size = size
         contentSize.viewport = rect.size
 
+        // The visible rect is the scroll view's own space: `.scrollView`, and
+        // `.scrollView(axis:)` for each axis it scrolls along.
+        var inner = context.clipped(to: rect)
+        for name in [ScrollViewSpaceName(axis: nil)]
+            + (axes.contains(.horizontal) ? [ScrollViewSpaceName(axis: .horizontal)] : [])
+            + (axes.contains(.vertical) ? [ScrollViewSpaceName(axis: .vertical)] : []) {
+            inner.coordinateSpaces.append(CoordinateSpaceFrame(name: name, rect: rect, transform: context.transform))
+        }
+
         let clamped = clamp(offset.wrappedValue, content: size, viewport: rect.size)
         child.place(
             in: Rect(
@@ -82,7 +91,7 @@ struct ScrollContent: NodeContent {
                 height: axes.contains(.vertical) ? size.height : rect.height
             ),
             proposal: contentProposal,
-            context: context.clipped(to: rect),
+            context: inner,
             into: &list
         )
     }

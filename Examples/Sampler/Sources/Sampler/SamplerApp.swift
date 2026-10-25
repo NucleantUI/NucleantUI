@@ -27,8 +27,9 @@ struct Theme {
     static let background = Color.background
     static let panel = Color.secondaryBackground
     static let pad = Color.tertiaryBackground
-    /// Behind the waveform — handed to the shader as a `.color` argument,
-    /// which resolves it for the scheme in effect like any other color.
+    /// Behind the waveform — resolved for the scheme in effect by the
+    /// waveform view, which hands the result to the shader as a `.color`
+    /// argument: a shader gets a color as it is given.
     static let wave = Color.dynamic(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x14161C))
     static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
 }
@@ -87,6 +88,9 @@ let envelopeShader = ShaderFunction("""
 struct WaveformView {
     @Bindable var sample: Sample
     let playhead: Double?
+    /// The shader gets colors as they are given, so the paper is resolved
+    /// for the scheme here.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         // Read here, in body, so the envelope filling in is a change this
@@ -105,7 +109,7 @@ struct WaveformView {
                 .float("trimEnd", Float(sample.trimEnd)),
                 .float("playhead", Float(playhead ?? -1)),
                 .color("tint", sample.color),
-                .color("paper", Theme.wave),
+                .color("paper", Theme.wave.resolved(for: colorScheme)),
             ])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .gesture(
