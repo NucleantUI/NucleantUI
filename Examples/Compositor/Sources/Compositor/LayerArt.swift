@@ -64,7 +64,7 @@ struct LayerPalette: Hashable {
             // there towards white — so a layer is dark-on-light or
             // light-on-dark depending only on where the slider is.
             let level = min(1, max(0, 0.06 + value * 0.46 + position * 0.52))
-            return Color(white: level, opacity: alpha)
+            return Color(white: Float(level), opacity: Float(alpha))
         }
     }
 
@@ -73,8 +73,8 @@ struct LayerPalette: Hashable {
     private static func wheel(_ hue: Double, alpha: Double) -> Color {
         let h = (hue - hue.rounded(.down)) * 6
         let section = Int(h) % 6
-        let f = h - Double(Int(h))
-        let (r, g, b): (Double, Double, Double)
+        let f = Float(h - Double(Int(h)))
+        let (r, g, b): (Float, Float, Float)
         switch section {
         case 0: (r, g, b) = (1, f, 0)
         case 1: (r, g, b) = (1 - f, 1, 0)
@@ -87,7 +87,7 @@ struct LayerPalette: Hashable {
             red: 0.15 + r * 0.85,
             green: 0.15 + g * 0.85,
             blue: 0.15 + b * 0.85,
-            opacity: alpha
+            opacity: Float(alpha)
         )
     }
 }

@@ -67,7 +67,7 @@ public struct Button<Label: View>: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(.color(tint.opacity(isPressed ? 0.65 : 1)))
+                    .fill(tint.opacity(isPressed ? 0.65 : 1))
             )
             .opacity(isEnabled ? 1 : 0.4)
             ._hitTarget(HitTarget(

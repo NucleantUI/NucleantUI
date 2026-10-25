@@ -54,7 +54,7 @@ struct Sidebar {
             HStack(spacing: 8) {
                 Text("TAGS")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 LayoutChoice(title: "Cloud", isChosen: !tagsAsList) {
                     withAnimation(.smooth(duration: 0.5)) { tagsAsList = false }
@@ -99,13 +99,13 @@ struct SidebarRow {
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("\(count)")
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Theme.accent.opacity(0.18) : (isHovered ? Color.fill : Color.clear))
+                .fill(isSelected ? .color(Theme.accent.opacity(0.18)) : (isHovered ? .fill : .color(.clear)))
         )
         .padding(.horizontal, 8)
         .onHover { isHovered = $0 }
@@ -123,7 +123,7 @@ struct LayoutChoice {
     var body: some View {
         Text(title)
             .font(.system(size: 11, weight: isChosen ? .semibold : .regular))
-            .foregroundColor(isChosen ? Theme.accent : .secondary)
+            .foregroundStyle(isChosen ? .color(Theme.accent) : .secondary)
             .onTapGesture { choose() }
     }
 }

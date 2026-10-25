@@ -27,7 +27,7 @@ import Foundation
 import NucleantUI
 
 /// The one colour the app picks out a selection with.
-let accent = Color.dynamic(light: Color(hex: 0x2A6DF0), dark: Color(hex: 0x6D9BFF))
+let accent = ShapeStyle.dynamic(light: Color(hex: 0x2A6DF0), dark: Color(hex: 0x6D9BFF))
 
 // MARK: - Root
 
@@ -57,7 +57,7 @@ struct CompositorView {
                 }
             }
         }
-        .background(Color.dynamic(light: Color(hex: 0xF2F3F5), dark: Color(hex: 0x16181C)))
+        .background(ShapeStyle.dynamic(light: Color(hex: 0xF2F3F5), dark: Color(hex: 0x16181C)))
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }
 }
@@ -74,7 +74,7 @@ private struct Toolbar {
                 .font(.system(size: 14, weight: .semibold))
             Text("\(document.stack.count) of \(document.layers.count) layers in the shader")
                 .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(ShapeStyle.secondary)
             Spacer(minLength: 12)
             Button("Add layer") { document.add() }
             Toggle("Source", isOn: $showsSource)
@@ -84,7 +84,7 @@ private struct Toolbar {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.dynamic(light: .white, dark: Color(hex: 0x1F2228)))
+        .background(ShapeStyle.dynamic(light: .white, dark: Color(hex: 0x1F2228)))
     }
 }
 
@@ -110,7 +110,7 @@ private struct StagePane {
                 if stack.isEmpty {
                     Text("Every layer is hidden")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(ShapeStyle.secondary)
                 } else {
                     Shader(composite.function, textures: composite.textures)
                 }
@@ -147,7 +147,7 @@ private struct SourcePane {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 190)
-        .background(Color.dynamic(light: .white, dark: Color(hex: 0x12141A)))
+        .background(ShapeStyle.dynamic(light: .white, dark: Color(hex: 0x12141A)))
         .cornerRadius(8)
     }
 }
@@ -204,15 +204,15 @@ private struct LayerThumbnail {
             )
             Text(layer.name)
                 .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? accent : Color.secondary)
+                .foregroundStyle(isSelected ? accent : ShapeStyle.secondary)
         }
         .onHover { isHovered = $0 }
         .onTapGesture { select() }
     }
 
-    private var ringColor: Color {
+    private var ringColor: ShapeStyle {
         if isSelected { return accent }
-        return isHovered ? accent.opacity(0.45) : Color.dynamic(
+        return isHovered ? accent.opacity(0.45) : ShapeStyle.dynamic(
             light: Color(hex: 0xC9CDD4),
             dark: Color(hex: 0x33373F)
         )
@@ -230,8 +230,8 @@ private struct Checkerboard {
                     ForEach(0..<12, id: \.self) { column in
                         Rectangle()
                             .fill((row + column).isMultiple(of: 2)
-                                  ? Color.dynamic(light: Color(hex: 0xE4E6EA), dark: Color(hex: 0x23262D))
-                                  : Color.dynamic(light: Color(hex: 0xD6D9DF), dark: Color(hex: 0x1B1E24)))
+                                  ? ShapeStyle.dynamic(light: Color(hex: 0xE4E6EA), dark: Color(hex: 0x23262D))
+                                  : ShapeStyle.dynamic(light: Color(hex: 0xD6D9DF), dark: Color(hex: 0x1B1E24)))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
@@ -262,7 +262,7 @@ private struct LayerSidebar {
             }
             .padding(12)
         }
-        .background(Color.dynamic(light: .white, dark: Color(hex: 0x1A1D23)))
+        .background(ShapeStyle.dynamic(light: .white, dark: Color(hex: 0x1A1D23)))
     }
 }
 
@@ -281,7 +281,7 @@ private struct LayerRow {
             // the only mark that survives both appearances and a row whose
             // layer is hidden and so drawn faint.
             Capsule()
-                .fill(isSelected ? accent : Color.clear)
+                .fill(isSelected ? accent : .color(.clear))
                 .frame(width: 3, height: 24)
             Toggle("", isOn: $layer.isVisible)
                 .labelsHidden()
@@ -290,7 +290,7 @@ private struct LayerRow {
                     .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
                 Text("\(layer.tone.name) · \(layer.blend.name) · \(Int(layer.mix * 100))%")
                     .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(ShapeStyle.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .opacity(layer.isVisible ? 1 : 0.5)
@@ -305,7 +305,7 @@ private struct LayerRow {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? accent.opacity(0.65) : Color.clear, lineWidth: 1)
+                .stroke(isSelected ? accent.opacity(0.65) : .color(.clear), lineWidth: 1)
         )
         .onHover { isHovered = $0 }
         .onTapGesture { document.selection = layer.id }
@@ -313,11 +313,11 @@ private struct LayerRow {
 
     /// Selected, hovered, neither — three steps, so the row says it can be
     /// pressed before it is pressed.
-    private var fill: Color {
+    private var fill: ShapeStyle {
         if isSelected { return accent.opacity(0.18) }
         return isHovered
-            ? Color.dynamic(light: Color(hex: 0xEDEFF3), dark: Color(hex: 0x23262D))
-            : Color.clear
+            ? ShapeStyle.dynamic(light: Color(hex: 0xEDEFF3), dark: Color(hex: 0x23262D))
+            : .color(.clear)
     }
 }
 
@@ -331,7 +331,7 @@ private struct LayerInspector {
         VStack(alignment: .leading, spacing: 10) {
             Text(layer.name.uppercased())
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(ShapeStyle.secondary)
 
             // Arguments: a slider drag uploads the mix array and
             // re-dispatches. No recompile, no redraw.
@@ -360,7 +360,7 @@ private struct LayerInspector {
             Divider()
             Text("TEXTURE")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(ShapeStyle.secondary)
 
             // Pixels: each of these re-renders the layer's tree into the same
             // image. The shader is untouched — it samples whatever is there.
@@ -418,7 +418,7 @@ private struct LayerInspector {
             }
             Text("\(layer.texture.pixelWidth)×\(layer.texture.pixelHeight) px, held by the document")
                 .font(.system(size: 10))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(ShapeStyle.secondary)
         }
     }
 }
@@ -438,7 +438,7 @@ private struct Row<Content: View> {
         HStack(spacing: 8) {
             Text(title)
                 .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(ShapeStyle.secondary)
                 .frame(width: 44, alignment: .leading)
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -473,7 +473,7 @@ private struct ExportPane {
                     .font(.system(size: 13, weight: .semibold))
                 Text("\(flattened.width)×\(flattened.height) px at \(Int(scale))×")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(ShapeStyle.secondary)
                 Spacer(minLength: 12)
                 ForEach([1.0, 2.0, 3.0], id: \.self) { choice in
                     Button("\(Int(choice))×") { document.exportScale = choice }
@@ -492,7 +492,7 @@ private struct ExportPane {
             as opacity — the blend modes are the GPU composite's.
             """)
                 .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(ShapeStyle.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

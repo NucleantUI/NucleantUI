@@ -37,7 +37,7 @@ extension Divider: BuiltinView {
         // 1 point thick along the stack's axis, filling the other. Outside a
         // stack it behaves as a horizontal rule, the same default SwiftUI has.
         let axis = context.stackAxis ?? .vertical
-        let color = context.environment.foregroundColor.opacity(0.25)
+        let color = context.environment.foregroundStyle.opacity(0.25)
         return ViewNode(content: DividerContent(axis: axis, color: color))
     }
 }
@@ -46,7 +46,7 @@ extension Divider: BuiltinView {
 /// the cross axis.
 struct DividerContent: NodeContent {
     let axis: Axis
-    let color: Color
+    let color: ShapeStyle
 
     func flexibility(along axis: Axis, node: ViewNode) -> LayoutPriorityClass {
         axis == self.axis ? .fixed : .content
@@ -65,7 +65,7 @@ struct DividerContent: NodeContent {
         list.append(.shape(ShapeDraw(
             path: path,
             bounds: rect,
-            fill: .color(context.resolve(color)),
+            fill: context.resolve(color),
             transform: context.transform,
             clip: context.clip,
             clipCornerRadius: context.clipCornerRadius,

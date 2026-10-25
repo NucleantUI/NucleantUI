@@ -37,7 +37,7 @@ struct MultilineTextArea {
     let onSubmit: @MainActor () -> Void
 
     @Environment(\.font) private var font
-    @Environment(\.foregroundColor) private var foreground
+    @Environment(\.foregroundStyle) private var foreground
     @Environment(\.tint) private var tint
     @Environment(\.isEnabled) private var isEnabled
 
@@ -631,8 +631,8 @@ final class TextAreaLayout {
 struct TextAreaLines {
     let text: String
     let font: Font
-    let color: Color
-    let selectionColor: Color
+    let color: ShapeStyle
+    let selectionColor: ShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -708,8 +708,8 @@ extension TextAreaLines: BuiltinView {
 struct TextAreaContent: NodeContent {
     let text: String
     let font: Font
-    let color: Color
-    let selectionColor: Color
+    let color: ShapeStyle
+    let selectionColor: ShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -803,7 +803,7 @@ struct TextAreaContent: NodeContent {
         guard firstRow <= lastRow else { return }
         let lower = min(caret, anchor)
         let upper = max(caret, anchor)
-        let resolvedColor = context.resolve(color)
+        let resolvedColor = context.resolve(color).flatColor
 
         for row in firstRow...lastRow {
             let line = lines[row]
@@ -824,7 +824,7 @@ struct TextAreaContent: NodeContent {
                     list.append(.shape(ShapeDraw(
                         path: path,
                         bounds: viewport,
-                        fill: context.resolve(.color(selectionColor)),
+                        fill: context.resolve(selectionColor),
                         transform: context.transform,
                         clip: clip
                     )))
@@ -864,7 +864,7 @@ struct TextAreaContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: viewport,
-                fill: context.resolve(.color(color)),
+                fill: context.resolve(color),
                 transform: context.transform,
                 clip: clip.insetBy(-1)
             )))

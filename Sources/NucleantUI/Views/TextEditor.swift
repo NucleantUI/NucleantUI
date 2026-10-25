@@ -8,7 +8,7 @@
 /// ```swift
 /// TextEditor(text: $note.body)
 ///     .font(.system(size: 14))
-///     .foregroundColor(.secondary)
+///     .foregroundStyle(.secondary)
 ///
 /// TextEditor(text: $draft, selection: $selection)
 /// ```
@@ -119,7 +119,7 @@ public struct AutomaticTextEditorStyle: TextEditorStyle {
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.editor(inset: 5)
-            .background(Rectangle().fill(.color(.secondaryBackground)))
+            .background(Rectangle().fill(.secondaryBackground))
             .border(.separator)
     }
 }

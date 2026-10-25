@@ -30,7 +30,7 @@ private struct Swatch {
     let level: Int
 
     var body: some View {
-        Color(red: Double(level) / 10, green: 0, blue: 0)
+        Color(red: Float(level) / 10, green: 0, blue: 0)
     }
 }
 

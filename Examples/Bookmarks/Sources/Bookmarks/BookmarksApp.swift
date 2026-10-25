@@ -29,10 +29,10 @@ import Foundation
 import NucleantUI
 
 enum Theme {
-    static let sidebar = Color.dynamic(light: Color(hex: 0xEFEDE8), dark: Color(hex: 0x17181C))
-    static let bar = Color.dynamic(light: Color(hex: 0xF8F7F4), dark: Color(hex: 0x1C1D22))
-    static let shelf = Color.dynamic(light: Color(hex: 0xF3F1EC), dark: Color(hex: 0x111215))
-    static let card = Color.dynamic(light: Color.white, dark: Color(hex: 0x22242A))
+    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEFEDE8), dark: Color(hex: 0x17181C))
+    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF8F7F4), dark: Color(hex: 0x1C1D22))
+    static let shelf = ShapeStyle.dynamic(light: Color(hex: 0xF3F1EC), dark: Color(hex: 0x111215))
+    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x22242A))
     static let accent = Color(hex: 0xE0663D)
 }
 
@@ -124,7 +124,7 @@ struct WindowBar {
                     .lineLimit(1)
                 Text(title.subtitle)
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -200,18 +200,18 @@ struct TagChip {
         HStack(spacing: 4) {
             Text("#\(name)")
                 .font(.system(size: size, weight: .medium))
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundStyle(isSelected ? .color(.white) : .primary)
             if let count {
                 Text("\(count)")
                     .font(.system(size: size - 1))
-                    .foregroundColor(isSelected ? Color.white.opacity(0.8) : .secondary)
+                    .foregroundStyle(isSelected ? .color(Color.white.opacity(0.8)) : .secondary)
             }
         }
         .padding(.horizontal, size * 0.7)
         .padding(.vertical, size * 0.3)
         .background(
             Capsule()
-                .fill(isSelected ? Theme.accent : Color.fill)
+                .fill(isSelected ? .color(Theme.accent) : .fill)
         )
     }
 }

@@ -568,10 +568,10 @@ struct ListLook: Equatable {
         !alternates && kind != .sidebar
     }
 
-    var background: Color {
+    var background: ShapeStyle {
         switch kind {
         case .plain, .inset, .bordered: return .secondaryBackground
-        case .sidebar: return .clear
+        case .sidebar: return .color(.clear)
         case .grouped, .insetGrouped: return .background
         }
     }
@@ -581,7 +581,7 @@ struct ListLook: Equatable {
     /// The chevron's column.
     static let chevronWidth: Double = 12
 
-    func selectionFill(isFocused: Bool, tint: Color) -> Color {
+    func selectionFill(isFocused: Bool, tint: ShapeStyle) -> ShapeStyle {
         if isSidebar { return isFocused ? SelectionColors.sidebarFocused : SelectionColors.sidebar }
         return isFocused ? tint : SelectionColors.unfocused
     }
@@ -714,7 +714,7 @@ struct _ListBody<SelectionValue: Hashable> {
                 .padding(look.contentInsets)
             }
         }
-        .border(look.kind == .bordered ? Color.separator : Color.clear, width: 1)
+        .border(look.kind == .bordered ? .separator : .color(.clear), width: 1)
     }
 }
 
@@ -770,7 +770,7 @@ struct _ListRow<SelectionValue: Hashable> {
             .overlay(alignment: .bottom) {
                 if entry.showsSeparator {
                     Rectangle()
-                        .fill(item.traits.separatorTint ?? Color.separator)
+                        .fill(item.traits.separatorTint.map { .color($0) } ?? .separator)
                         .frame(height: 1)
                         .padding(.leading, insets.leading)
                 }
@@ -821,7 +821,7 @@ struct _ListRowContent<SelectionValue: Hashable> {
                 Spacer(minLength: 8)
                 badge
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(inverted ? .white : .secondary)
+                    .foregroundStyle(inverted ? .color(.white) : .secondary)
             }
         }
     }
@@ -834,7 +834,7 @@ struct _ListRowBackground<SelectionValue: Hashable> {
     let item: ListItem<SelectionValue>
     let isSelected: Bool
     let isAlternate: Bool
-    let fill: Color
+    let fill: ShapeStyle
     let radius: Double
 
     var body: some View {
@@ -861,7 +861,7 @@ struct _ListChevron {
     var body: some View {
         Text("›")
             .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(inverted ? .white : .secondary)
+            .foregroundStyle(inverted ? .color(.white) : .secondary)
             .rotationEffect(.degrees(isExpanded ? 90 : 0))
             .frame(width: ListLook.chevronWidth)
             .animation(.snappy(duration: 0.2), value: isExpanded)
@@ -884,7 +884,7 @@ struct _ListSectionItem<SelectionValue: Hashable> {
             HStack(spacing: 4) {
                 item.label
                     .font(.system(size: look.isSidebar ? 11 : 12, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 4)
                 // A sidebar shows the chevron while the pointer is over the
                 // header, or while the section is closed; another list
@@ -904,7 +904,7 @@ struct _ListSectionItem<SelectionValue: Hashable> {
         } else {
             item.label
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, insets.leading)
                 .padding(.top, 4)
                 .padding(.bottom, 8)
@@ -971,13 +971,13 @@ struct _GroupedListBody<SelectionValue: Hashable> {
                                         _ListRow(entry: entry, look: look, actions: actions, isFocused: isFocused)
                                     }
                                 }
-                                .background(Color.secondaryBackground)
+                                .background(ShapeStyle.secondaryBackground)
                                 .cornerRadius(radius)
                             }
                             if let footer = group.footer {
                                 footer.label
                                     .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .padding(.horizontal, 16)
                             }
                         }
@@ -1000,7 +1000,7 @@ struct _GroupedSectionHeader<SelectionValue: Hashable> {
         HStack(spacing: 4) {
             item.label
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Spacer(minLength: 4)
             if let disclosure = item.disclosure {
                 _ListChevron(isExpanded: disclosure.isExpanded, inverted: false)

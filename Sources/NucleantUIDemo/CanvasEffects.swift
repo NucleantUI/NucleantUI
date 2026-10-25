@@ -120,7 +120,7 @@ struct CanvasEffectsSection {
         VStack(alignment: .leading, spacing: 8) {
             Text("A ThorCanvasRender under .shader — its own canvas image is the effect's input.")
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
                 CanvasCard(title: "Canvas") {
@@ -156,7 +156,7 @@ struct CanvasCard<Content: View> {
             content()
             Text(title)
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -88,7 +88,7 @@ struct PlanPanel {
                 Spacer()
                 Text(plan.remaining == 1 ? "1 to go" : "\(plan.remaining) to go")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 8) {
@@ -103,7 +103,7 @@ struct PlanPanel {
             if plan.tasks.isEmpty {
                 Text("Write down what the next sessions are for.")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             } else {
                 ScrollView(.vertical) {
@@ -113,7 +113,7 @@ struct PlanPanel {
                                 get: { task.isDone },
                                 set: { plan.setDone(task.id, $0) }
                             ))
-                            .foregroundColor(task.isDone ? .secondary : .primary)
+                            .foregroundStyle(task.isDone ? .secondary : .primary)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

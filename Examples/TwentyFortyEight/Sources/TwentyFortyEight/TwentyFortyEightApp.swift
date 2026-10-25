@@ -101,31 +101,31 @@ struct Board: Equatable {
 /// ones are the game's classic beige — while the warm high tiles are the
 /// same in both.
 struct Theme {
-    static let background = Color.background
-    static let board = Color.dynamic(light: Color(hex: 0xBBADA0), dark: Color(hex: 0x2A2E38))
-    static let empty = Color.dynamic(light: Color(hex: 0xCDC1B4), dark: Color(hex: 0x363B47))
+    static let background = ShapeStyle.background
+    static let board = ShapeStyle.dynamic(light: Color(hex: 0xBBADA0), dark: Color(hex: 0x2A2E38))
+    static let empty = ShapeStyle.dynamic(light: Color(hex: 0xCDC1B4), dark: Color(hex: 0x363B47))
     static let accent = Color(hex: 0xFF9F0A)
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
 
-    static func tile(_ value: Int) -> Color {
+    static func tile(_ value: Int) -> ShapeStyle {
         switch value {
-        case 2:    return Color.dynamic(light: Color(hex: 0xEEE4DA), dark: Color(hex: 0x4A5568))
-        case 4:    return Color.dynamic(light: Color(hex: 0xEDE0C8), dark: Color(hex: 0x5A6A85))
-        case 8:    return Color(hex: 0xF2B179)
-        case 16:   return Color(hex: 0xF59563)
-        case 32:   return Color(hex: 0xF67C5F)
-        case 64:   return Color(hex: 0xF65E3B)
-        case 128:  return Color(hex: 0xEDCF72)
-        case 256:  return Color(hex: 0xEDCC61)
-        case 512:  return Color(hex: 0xEDC850)
-        case 1024: return Color(hex: 0xEDC53F)
-        case 2048: return Color(hex: 0xEDC22E)
-        default:   return Color(hex: 0x3C3A32)
+        case 2:    return ShapeStyle.dynamic(light: Color(hex: 0xEEE4DA), dark: Color(hex: 0x4A5568))
+        case 4:    return ShapeStyle.dynamic(light: Color(hex: 0xEDE0C8), dark: Color(hex: 0x5A6A85))
+        case 8:    return .color(Color(hex: 0xF2B179))
+        case 16:   return .color(Color(hex: 0xF59563))
+        case 32:   return .color(Color(hex: 0xF67C5F))
+        case 64:   return .color(Color(hex: 0xF65E3B))
+        case 128:  return .color(Color(hex: 0xEDCF72))
+        case 256:  return .color(Color(hex: 0xEDCC61))
+        case 512:  return .color(Color(hex: 0xEDC850))
+        case 1024: return .color(Color(hex: 0xEDC53F))
+        case 2048: return .color(Color(hex: 0xEDC22E))
+        default:   return .color(Color(hex: 0x3C3A32))
         }
     }
 
-    static func tileText(_ value: Int) -> Color {
-        value <= 4 ? Color.dynamic(light: Color(hex: 0x776E65), dark: Color(hex: 0xE6E9EF)) : Color(hex: 0x1C1F26)
+    static func tileText(_ value: Int) -> ShapeStyle {
+        value <= 4 ? ShapeStyle.dynamic(light: Color(hex: 0x776E65), dark: Color(hex: 0xE6E9EF)) : .color(Color(hex: 0x1C1F26))
     }
 }
 
@@ -140,7 +140,7 @@ struct Tile {
             if value != 0 {
                 Text("\(value)")
                     .font(.system(size: value < 100 ? 30 : (value < 1000 ? 26 : 22), weight: .bold))
-                    .foregroundColor(Theme.tileText(value))
+                    .foregroundStyle(Theme.tileText(value))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -190,7 +190,7 @@ struct ScoreBox {
         VStack(spacing: 2) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text("\(value)")
                 .font(.system(size: 20, weight: .bold, design: .monospaced))
         }
@@ -217,7 +217,7 @@ struct GameView {
                 ScoreBox(title: "BEST", value: board.best)
             }
             HStack {
-                Text(status).font(.footnote).foregroundColor(.secondary)
+                Text(status).font(.footnote).foregroundStyle(.secondary)
                 Spacer()
             }
             .frame(width: 400)

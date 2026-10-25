@@ -336,7 +336,7 @@ extension View {
 /// @Environment(\.backgroundProminence) private var prominence
 ///
 /// Text(issue.key)
-///     .foregroundColor(prominence == .increased ? .white : .secondary)
+///     .foregroundStyle(prominence == .increased ? .color(.white) : .secondary)
 /// ```
 public struct BackgroundProminence: Hashable, Sendable {
     let isIncreased: Bool
@@ -361,11 +361,11 @@ extension EnvironmentValues {
 /// The colours a selected row is drawn in.
 enum SelectionColors {
     /// Behind a selected row of a list or table that doesn't have the keys.
-    static let unfocused = Color.dynamic(light: Color(white: 0.86), dark: Color(white: 0.3))
+    static let unfocused = ShapeStyle.dynamic(light: Color(white: 0.86), dark: Color(white: 0.3))
     /// Behind a selected sidebar row.
-    static let sidebar = Color.dynamic(light: Color(white: 0, opacity: 0.1), dark: Color(white: 1, opacity: 0.16))
+    static let sidebar = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.1), dark: Color(white: 1, opacity: 0.16))
     /// Behind a selected sidebar row while the sidebar has the keys.
-    static let sidebarFocused = Color.dynamic(light: Color(white: 0, opacity: 0.16), dark: Color(white: 1, opacity: 0.24))
+    static let sidebarFocused = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.16), dark: Color(white: 1, opacity: 0.24))
     /// Every other row, when rows alternate.
-    static let alternate = Color.dynamic(light: Color(white: 0, opacity: 0.035), dark: Color(white: 1, opacity: 0.04))
+    static let alternate = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.035), dark: Color(white: 1, opacity: 0.04))
 }

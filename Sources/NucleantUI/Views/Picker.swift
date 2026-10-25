@@ -494,14 +494,14 @@ struct _MenuPicker<SelectionValue: Hashable> {
             // The chevron turned to point down — the bundled face has no
             // "▾" of its own.
             Text("›")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .rotationEffect(.degrees(90))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isPressed ? controlTrackColor : Color.tertiaryBackground)
+                .fill(isPressed ? controlTrackColor : ShapeStyle.tertiaryBackground)
         )
         .border(.separator, width: 1, cornerRadius: 6)
         .opacity(isEnabled ? 1 : 0.4)
@@ -549,7 +549,7 @@ struct _PickerMenuItems<SelectionValue: Hashable> {
 /// the row is lit.
 @View
 struct _PickerMenuCheck {
-    @Environment(\.foregroundColor) private var foreground
+    @Environment(\.foregroundStyle) private var foreground
 
     var body: some View {
         _ControlCheckmark()
@@ -578,19 +578,19 @@ struct _SegmentedPicker<SelectionValue: Hashable> {
                 let isSelected = option.tag == selection
                 option.label
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .foregroundStyle(isSelected ? .color(.white) : .primary)
                     .lineLimit(1)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(isSelected ? tint : Color.clear)
+                            .fill(isSelected ? tint : .color(.clear))
                     )
                     .onTapGesture { selection = option.tag }
             }
         }
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.tertiaryBackground))
+        .background(RoundedRectangle(cornerRadius: 8).fill(ShapeStyle.tertiaryBackground))
         .opacity(isEnabled ? 1 : 0.4)
     }
 }
@@ -651,14 +651,14 @@ struct _RadioGroupPicker<SelectionValue: Hashable> {
                     HStack(spacing: 6) {
                         ZStack {
                             Circle()
-                                .fill(isSelected ? tint : Color.secondaryBackground)
+                                .fill(isSelected ? tint : ShapeStyle.secondaryBackground)
                             if isSelected {
                                 Circle()
                                     .fill(Color.white)
                                     .frame(width: 6, height: 6)
                             } else {
                                 Circle()
-                                    .stroke(Color.separator, lineWidth: 1)
+                                    .stroke(ShapeStyle.separator, lineWidth: 1)
                             }
                         }
                         .frame(width: 16, height: 16)

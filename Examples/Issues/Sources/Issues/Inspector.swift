@@ -28,13 +28,13 @@ struct Inspector {
             VStack(spacing: 6) {
                 Text("No Issue Selected")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text("Select an issue to see its details.")
                     .font(.system(size: 12))
-                    .foregroundColor(.tertiary)
+                    .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.background)
+            .background(ShapeStyle.background)
         }
     }
 }
@@ -202,7 +202,7 @@ struct IssueDetail {
                 if let issue = tracker.issue(id) {
                     Text(issue.key)
                         .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
             }
@@ -219,7 +219,7 @@ struct IssueDetail {
                             .lineLimit(1...3)
                         Text("Notes")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         TextEditor(text: tracker.binding(id, \.notes, default: ""))
                             .frame(maxHeight: .infinity)
                     }
@@ -232,7 +232,7 @@ struct IssueDetail {
                 }
             } else {
                 Text("This issue was deleted.")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }

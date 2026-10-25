@@ -191,7 +191,9 @@ public final class ThorDisplayRenderer {
 
     private func apply(_ style: ShapeStyle, to shape: Tvg_Paint, bounds: Rect, stroke: Bool) {
         switch style {
-        case .color(let color):
+        // A display list holds styles resolved for their scheme as they were
+        // recorded; a dynamic one that got past that draws its light color.
+        case .color(let color), .dynamic(light: let color, dark: _):
             let (r, g, b, a) = color.rgba8
             if stroke {
                 _ = tvg_shape_set_stroke_color(shape, r, g, b, a)

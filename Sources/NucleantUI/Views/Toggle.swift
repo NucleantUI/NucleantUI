@@ -255,8 +255,8 @@ struct _CheckboxToggle {
         HStack(spacing: 6) {
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(isOn ? tint.opacity(isPressed ? 0.7 : 1) : (isPressed ? Color.tertiaryBackground : Color.secondaryBackground))
-                    .border(isOn ? Color.clear : Color.separator, width: 1, cornerRadius: 4)
+                    .fill(isOn ? tint.opacity(isPressed ? 0.7 : 1) : (isPressed ? ShapeStyle.tertiaryBackground : ShapeStyle.secondaryBackground))
+                    .border(isOn ? .color(.clear) : .separator, width: 1, cornerRadius: 4)
                 if isOn {
                     _ControlCheckmark()
                         .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -292,12 +292,12 @@ struct _ButtonToggle {
     var body: some View {
         let isOn = configuration.isOn
         configuration.label
-            .foregroundColor(isOn ? .white : .primary)
+            .foregroundStyle(isOn ? .color(.white) : .primary)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isOn ? tint.opacity(isPressed ? 0.65 : 1) : (isPressed ? controlTrackColor : Color.tertiaryBackground))
+                    .fill(isOn ? tint.opacity(isPressed ? 0.65 : 1) : (isPressed ? controlTrackColor : ShapeStyle.tertiaryBackground))
             )
             .opacity(isEnabled ? 1 : 0.4)
             ._hitTarget(HitTarget(

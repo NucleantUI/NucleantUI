@@ -110,11 +110,11 @@ struct Session: Equatable {
 }
 
 struct Theme {
-    static let background = Color.background
-    static let panel = Color.secondaryBackground
-    static let face = Color.dynamic(light: Color(hex: 0xE6E8EE), dark: Color(hex: 0x22262F))
-    static let ticks = Color.dynamic(light: Color(white: 0, opacity: 0.35), dark: Color(white: 1, opacity: 0.35))
-    static let muted = Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let background = ShapeStyle.background
+    static let panel = ShapeStyle.secondaryBackground
+    static let face = ShapeStyle.dynamic(light: Color(hex: 0xE6E8EE), dark: Color(hex: 0x22262F))
+    static let ticks = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.35), dark: Color(white: 1, opacity: 0.35))
+    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
 }
 
 // MARK: - Drawing
@@ -151,7 +151,7 @@ struct Hand {
     let turns: Double
     let length: Double
     let width: Double
-    let color: Color
+    let color: ShapeStyle
 
     var body: some View {
         PathShape { size in
@@ -196,7 +196,7 @@ struct ClockFace {
 
             Hand(turns: hours / 12, length: 0.55, width: 5, color: .primary)
             Hand(turns: minutes / 60, length: 0.8, width: 4, color: .primary)
-            Hand(turns: seconds / 60, length: 0.9, width: 1.5, color: Color(hex: 0xFF5C5C))
+            Hand(turns: seconds / 60, length: 0.9, width: 1.5, color: .color(Color(hex: 0xFF5C5C)))
             Circle().fill(Color(hex: 0xFF5C5C)).frame(width: 8, height: 8)
         }
     }
@@ -218,7 +218,7 @@ struct ProgressRing {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.fill, lineWidth: 10)
+            Circle().stroke(ShapeStyle.fill, lineWidth: 10)
             PathShape { size in
                 let c = Point(x: size.width / 2, y: size.height / 2)
                 let r = min(size.width, size.height) / 2 - 5
@@ -286,7 +286,7 @@ struct PomodoroView {
                         .font(.system(size: 52, weight: .light, design: .monospaced))
                     Text(session.isRunning ? "running" : "paused")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(width: 260, height: 260)
@@ -303,12 +303,12 @@ struct PomodoroView {
             HStack(spacing: 6) {
                 ForEach(0..<4) { i in
                     Circle()
-                        .fill(i < session.completed % 4 ? Phase.focus.color : Color.fill)
+                        .fill(i < session.completed % 4 ? .color(Phase.focus.color) : .fill)
                         .frame(width: 10, height: 10)
                 }
                 Text("\(session.completed) done")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .padding(.leading, 6)
             }
         }
@@ -325,7 +325,7 @@ struct PomodoroView {
                 .font(.system(size: 22, weight: .medium, design: .monospaced))
             Text(dayText)
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.panel)

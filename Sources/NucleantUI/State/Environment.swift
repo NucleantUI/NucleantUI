@@ -56,7 +56,7 @@ public struct EnvironmentValues: @unchecked Sendable {
 /// Reads one environment value.
 ///
 /// ```swift
-/// @Environment(\.foregroundColor) private var foreground
+/// @Environment(\.foregroundStyle) private var foreground
 /// ```
 @propertyWrapper
 @MainActor
@@ -90,8 +90,8 @@ public struct Environment<Value>: DynamicProperty {
 
 // MARK: - Built-in keys
 
-private struct ForegroundColorKey: EnvironmentKey {
-    static let defaultValue = Color.primary
+private struct ForegroundStyleKey: EnvironmentKey {
+    static let defaultValue = ShapeStyle.primary
 }
 
 private struct FontKey: EnvironmentKey {
@@ -99,7 +99,7 @@ private struct FontKey: EnvironmentKey {
 }
 
 private struct TintKey: EnvironmentKey {
-    static let defaultValue = Color.blue
+    static let defaultValue = ShapeStyle.color(.blue)
 }
 
 private struct IsEnabledKey: EnvironmentKey {
@@ -123,9 +123,9 @@ private struct ColorSchemeKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    public var foregroundColor: Color {
-        get { self[ForegroundColorKey.self] }
-        set { self[ForegroundColorKey.self] = newValue }
+    public var foregroundStyle: ShapeStyle {
+        get { self[ForegroundStyleKey.self] }
+        set { self[ForegroundStyleKey.self] = newValue }
     }
 
     public var font: Font {
@@ -133,7 +133,7 @@ extension EnvironmentValues {
         set { self[FontKey.self] = newValue }
     }
 
-    public var tint: Color {
+    public var tint: ShapeStyle {
         get { self[TintKey.self] }
         set { self[TintKey.self] = newValue }
     }

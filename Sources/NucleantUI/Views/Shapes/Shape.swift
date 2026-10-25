@@ -45,6 +45,10 @@ extension Shape {
         )
     }
 
+    public func stroke(_ style: ShapeStyle, style strokeStyle: StrokeStyle) -> some View {
+        _ShapeView(shape: self, fill: nil, stroke: style, strokeStyle: strokeStyle)
+    }
+
     public func stroke(_ color: Color, lineWidth: Double = 1) -> some View {
         stroke(.color(color), lineWidth: lineWidth)
     }
@@ -72,7 +76,7 @@ public struct _ShapeView<S: Shape>: View {
 extension _ShapeView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let drawn = context.drawnShape(shape)
-        let fill = fillsWithForeground ? .color(context.environment.foregroundColor) : self.fill
+        let fill = fillsWithForeground ? context.environment.foregroundStyle : self.fill
         return ViewNode(content: ShapeContent(
             makePath: { rect in drawn().path(in: rect) },
             fill: fill,

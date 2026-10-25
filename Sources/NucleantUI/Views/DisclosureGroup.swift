@@ -232,7 +232,7 @@ struct _AutomaticDisclosureGroup: View {
                 // The same "›" `Menu` uses. A fixed width so the label does
                 // not shift as it turns.
                 Text("›")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .frame(width: 12)
                 configuration.label

@@ -376,7 +376,7 @@ func hsb(_ hue: Double, _ saturation: Double, _ brightness: Double) -> Color {
     case 4:  (r, g, b) = (t, p, v)
     default: (r, g, b) = (v, p, q)
     }
-    return Color(red: r, green: g, blue: b)
+    return Color(red: Float(r), green: Float(g), blue: Float(b))
 }
 
 /// SplitMix64: the same library from the same seed, every launch.

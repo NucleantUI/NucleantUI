@@ -21,9 +21,9 @@
 import NucleantUI
 
 enum Theme {
-    static let panel = Color.dynamic(light: Color(hex: 0xF4F4F6), dark: Color(hex: 0x1A1B1F))
-    static let card = Color.dynamic(light: Color.white, dark: Color(hex: 0x24252B))
-    static let faint = Color.dynamic(light: Color(white: 0, opacity: 0.45), dark: Color(white: 1, opacity: 0.45))
+    static let panel = ShapeStyle.dynamic(light: Color(hex: 0xF4F4F6), dark: Color(hex: 0x1A1B1F))
+    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x24252B))
+    static let faint = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.45), dark: Color(white: 1, opacity: 0.45))
     static let accent = Color(hex: 0x4C8DFF)
 }
 

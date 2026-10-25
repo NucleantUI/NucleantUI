@@ -235,7 +235,7 @@ public final class SkiaDisplayRenderer {
                     wraps: false
                 ), on: canvas)
             case .image(let image, let rect):
-                emit(ImageDraw(image: image, frame: rect, opacity: color.alpha), on: canvas)
+                emit(ImageDraw(image: image, frame: rect, opacity: Double(color.alpha)), on: canvas)
             default:
                 break
             }
@@ -275,7 +275,9 @@ public final class SkiaDisplayRenderer {
 
     private func apply(_ style: ShapeStyle, to paint: SkPaint, bounds: Rect) {
         switch style {
-        case .color(let color):
+        // A display list holds styles resolved for their scheme as they were
+        // recorded; a dynamic one that got past that draws its light color.
+        case .color(let color), .dynamic(light: let color, dark: _):
             let (r, g, b, a) = color.rgba8
             paint.clearShader()
             paint.setColor(SIMD4(r, g, b, a))

@@ -206,9 +206,9 @@ public struct ShaderFunction: Hashable, Sendable {
 /// ```
 ///
 /// Every value reaches the shader as it was given. A color is its red,
-/// green, blue and alpha — a `Color.dynamic` its light components; where the
-/// shader should get the one the view's scheme shows, resolve it before
-/// passing it (`color.resolved(for: colorScheme)`).
+/// green, blue and alpha. A light/dark pair is a `ShapeStyle.dynamic`;
+/// resolve it for the view's scheme and pass its color
+/// (`style.resolved(for: colorScheme).flatColor`).
 ///
 /// Scalars and vectors are plain variables; an array is read through a
 /// function of its index, with its length beside it, because a storage
@@ -273,8 +273,7 @@ public enum ShaderArgument: Hashable, Sendable {
         case .float4(_, let v):
             return Self.append(v, to: &data)
         case .color(_, let color):
-            data.append(contentsOf: [Float(color.red), Float(color.green), Float(color.blue), Float(color.alpha)])
-            return 1
+            return Self.append(color, to: &data)
         case .floatArray(_, let array):
             data.append(contentsOf: array)
             return array.count

@@ -22,8 +22,8 @@
 import NucleantUI
 
 enum Theme {
-    static let sidebar = Color.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
-    static let bar = Color.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
+    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
+    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
     static let accent = Color(hex: 0x2F7CF6)
 }
 
@@ -62,7 +62,7 @@ struct PhotosView {
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }

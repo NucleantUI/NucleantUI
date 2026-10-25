@@ -52,7 +52,7 @@ public struct TextField<Label: View> {
     let onCommit: (() -> Void)?
 
     @Environment(\.font) private var font
-    @Environment(\.foregroundColor) private var foreground
+    @Environment(\.foregroundStyle) private var foreground
     @Environment(\.tint) private var tint
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.submitActions) private var submitActions
@@ -1082,8 +1082,8 @@ enum TextFieldPasteboard {
 struct TextFieldLine {
     let text: String
     let font: Font
-    let color: Color
-    let selectionColor: Color
+    let color: ShapeStyle
+    let selectionColor: ShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -1169,8 +1169,8 @@ extension TextFieldLine: BuiltinView {
 struct TextFieldLineContent: NodeContent {
     let text: String
     let font: Font
-    let color: Color
-    let selectionColor: Color
+    let color: ShapeStyle
+    let selectionColor: ShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -1222,7 +1222,7 @@ struct TextFieldLineContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: lineRect,
-                fill: context.resolve(.color(selectionColor)),
+                fill: context.resolve(selectionColor),
                 transform: context.transform,
                 clip: clip
             )))
@@ -1232,7 +1232,7 @@ struct TextFieldLineContent: NodeContent {
                 string: text,
                 frame: Rect(x: originX, y: lineRect.minY, width: textWidth + 1, height: lineHeight),
                 font: font,
-                color: context.resolve(color),
+                color: context.resolve(color).flatColor,
                 lineLimit: 1,
                 wraps: false,
                 transform: context.transform,
@@ -1245,7 +1245,7 @@ struct TextFieldLineContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: lineRect,
-                fill: context.resolve(.color(color)),
+                fill: context.resolve(color),
                 transform: context.transform,
                 clip: clip.insetBy(-1)
             )))

@@ -45,11 +45,23 @@ extension View {
         self.overlay(overlay(), alignment: alignment)
     }
 
+    /// `style` filling a rectangle behind this view, stretched to its size.
+    public func background(_ style: ShapeStyle) -> some View {
+        background(Rectangle().fill(style))
+    }
+
     /// A stroked outline just inside this view's bounds.
     public func border(_ color: Color, width: Double = 1, cornerRadius: Double = 0) -> some View {
         overlay(
             RoundedRectangle(cornerRadius: cornerRadius)
                 .stroke(color, lineWidth: width)
+        )
+    }
+
+    public func border(_ style: ShapeStyle, width: Double = 1, cornerRadius: Double = 0) -> some View {
+        overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(style, lineWidth: width)
         )
     }
 

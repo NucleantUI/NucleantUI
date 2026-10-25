@@ -35,17 +35,25 @@ extension View {
     }
 
     public func foregroundColor(_ color: Color) -> some View {
-        environment(\.foregroundColor, color)
+        environment(\.foregroundStyle, .color(color))
     }
 
-    /// Alias for `foregroundColor` — `foregroundStyle` is the name SwiftUI
-    /// moved to, and only its flat-color form applies here.
+    /// The foreground for text and shapes below — a semantic style such as
+    /// `.secondary`, a light/dark pair, a gradient.
+    public func foregroundStyle(_ style: ShapeStyle) -> some View {
+        environment(\.foregroundStyle, style)
+    }
+
     public func foregroundStyle(_ color: Color) -> some View {
-        foregroundColor(color)
+        environment(\.foregroundStyle, .color(color))
     }
 
     public func tint(_ color: Color) -> some View {
-        environment(\.tint, color)
+        environment(\.tint, .color(color))
+    }
+
+    public func tint(_ style: ShapeStyle) -> some View {
+        environment(\.tint, style)
     }
 
     public func disabled(_ isDisabled: Bool = true) -> some View {

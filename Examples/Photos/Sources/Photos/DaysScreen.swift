@@ -58,11 +58,11 @@ struct DayHeader {
                 .font(.system(size: 12))
             Text(day.place)
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Spacer()
             Text("\(day.photos.count) photos")
                 .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

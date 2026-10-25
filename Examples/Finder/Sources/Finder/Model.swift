@@ -35,18 +35,18 @@ enum FileKind: Equatable {
     }
 
     /// The band across the bottom of a document icon, or an app's tile.
-    var color: Color {
+    var color: ShapeStyle {
         switch self {
         case .folder:      return Theme.folder
-        case .application: return Color(hex: 0x5E5CE6)
-        case .swift:       return Color(hex: 0xF05138)
-        case .markdown:    return Color(hex: 0x6C7A89)
-        case .image:       return Color(hex: 0x34C759)
-        case .pdf:         return Color(hex: 0xE5484D)
-        case .audio:       return Color(hex: 0xFF2D55)
-        case .archive:     return Color(hex: 0xA2845E)
-        case .text:        return Color(hex: 0x8E8E93)
-        case .font:        return Color(hex: 0x30B0C7)
+        case .application: return .color(Color(hex: 0x5E5CE6))
+        case .swift:       return .color(Color(hex: 0xF05138))
+        case .markdown:    return .color(Color(hex: 0x6C7A89))
+        case .image:       return .color(Color(hex: 0x34C759))
+        case .pdf:         return .color(Color(hex: 0xE5484D))
+        case .audio:       return .color(Color(hex: 0xFF2D55))
+        case .archive:     return .color(Color(hex: 0xA2845E))
+        case .text:        return .color(Color(hex: 0x8E8E93))
+        case .font:        return .color(Color(hex: 0x30B0C7))
         }
     }
 }

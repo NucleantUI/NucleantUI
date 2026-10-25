@@ -203,8 +203,8 @@ struct PopoverPanel: View {
     var body: some View {
         content
             .padding(Self.inset)
-            .background(Color.secondaryBackground)
-            .border(Color.separator, cornerRadius: Self.cornerRadius)
+            .background(ShapeStyle.secondaryBackground)
+            .border(ShapeStyle.separator, cornerRadius: Self.cornerRadius)
             .cornerRadius(Self.cornerRadius)
     }
 }
@@ -346,7 +346,7 @@ struct PopoverPlacementContent: NodeContent {
                 $0.closeSubpath()
             },
             bounds: bounds,
-            fill: .color(context.resolve(Color.secondaryBackground)),
+            fill: context.resolve(.secondaryBackground),
             transform: context.transform,
             clip: context.clip,
             clipCornerRadius: context.clipCornerRadius,
@@ -359,7 +359,7 @@ struct PopoverPlacementContent: NodeContent {
                 $0.addLine(to: baseB)
             },
             bounds: bounds,
-            stroke: .color(context.resolve(Color.separator)),
+            stroke: context.resolve(.separator),
             strokeStyle: StrokeStyle(lineWidth: 1, lineJoin: .round),
             transform: context.transform,
             clip: context.clip,

@@ -25,7 +25,7 @@ public struct SecureField<Label: View> {
     let onCommit: (() -> Void)?
 
     @Environment(\.font) private var font
-    @Environment(\.foregroundColor) private var foreground
+    @Environment(\.foregroundStyle) private var foreground
     @Environment(\.tint) private var tint
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.submitActions) private var submitActions

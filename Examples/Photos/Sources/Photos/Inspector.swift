@@ -33,7 +33,7 @@ struct Inspector {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("✕")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .padding(4)
                     .onTapGesture { library.select(nil) }
             }
@@ -105,7 +105,7 @@ struct Inspector {
                 GridRow(alignment: .top) {
                     DetailLabel("Albums")
                     Text(albums.isEmpty ? "None" : albums.joined(separator: ", "))
-                        .foregroundColor(albums.isEmpty ? .secondary : .primary)
+                        .foregroundStyle(albums.isEmpty ? .secondary : .primary)
                         .gridCellColumns(3)
                 }
             }
@@ -137,7 +137,7 @@ struct DetailLabel {
 
     var body: some View {
         Text(text)
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
     }
 }
 
@@ -156,7 +156,7 @@ struct ExposureValue {
             .font(.system(size: 12))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.fill)
+            .background(ShapeStyle.fill)
             .cornerRadius(4)
     }
 }

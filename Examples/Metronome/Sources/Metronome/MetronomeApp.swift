@@ -19,11 +19,11 @@
 import NucleantUI
 
 struct Theme {
-    static let background = Color.background
-    static let panel = Color.secondaryBackground
+    static let background = ShapeStyle.background
+    static let panel = ShapeStyle.secondaryBackground
     static let accent = Color(hex: 0x4C8DFF)
     static let downbeat = Color(hex: 0xFF9F43)
-    static let flash = Color.dynamic(light: Color(hex: 0xDCE8FF), dark: Color(hex: 0x1F2B45))
+    static let flash = ShapeStyle.dynamic(light: Color(hex: 0xDCE8FF), dark: Color(hex: 0x1F2B45))
 }
 
 // MARK: - Tempo
@@ -41,7 +41,7 @@ struct TempoPanel {
                     .font(.system(size: 84, weight: .light, design: .monospaced))
                 Text("BPM · \(tempoMarking(metronome.tempo))")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             BeatLights(
@@ -53,9 +53,9 @@ struct TempoPanel {
             Slider(value: $metronome.tempoValue, in: 30...300, step: 1) {
                 Text("Tempo")
             } minimumValueLabel: {
-                Text("30").font(.footnote).foregroundColor(.secondary)
+                Text("30").font(.footnote).foregroundStyle(.secondary)
             } maximumValueLabel: {
-                Text("300").font(.footnote).foregroundColor(.secondary)
+                Text("300").font(.footnote).foregroundStyle(.secondary)
             }
             .labelsHidden()
             .padding(.horizontal, 24)
@@ -69,7 +69,7 @@ struct TempoPanel {
                 .toggleStyle(.button)
 
                 Button("Tap") { metronome.tap() }
-                    .tint(Color.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3)))
+                    .tint(ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3)))
             }
         }
         .padding(24)
@@ -93,7 +93,7 @@ struct BeatLights {
                 let isDownbeat = index == 0 && accentsFirstBeat
                 let color = isDownbeat ? Theme.downbeat : Theme.accent
                 Circle()
-                    .fill(current == index ? color : Color.fill)
+                    .fill(current == index ? .color(color) : .fill)
                     .frame(width: isDownbeat ? 22 : 18, height: isDownbeat ? 22 : 18)
                     .frame(width: 22, height: 22)
             }
@@ -115,7 +115,7 @@ struct SettingsPanel {
                     Text("Tempo")
                     Text("\(metronome.tempo)")
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 Picker("Time", selection: $metronome.meter) {
@@ -142,9 +142,9 @@ struct SettingsPanel {
                 Slider(value: $metronome.volume) {
                     Text("Volume")
                 } minimumValueLabel: {
-                    Text("0%").font(.footnote).foregroundColor(.secondary)
+                    Text("0%").font(.footnote).foregroundStyle(.secondary)
                 } maximumValueLabel: {
-                    Text("100%").font(.footnote).foregroundColor(.secondary)
+                    Text("100%").font(.footnote).foregroundStyle(.secondary)
                 }
 
                 Divider()
@@ -163,7 +163,7 @@ struct SettingsPanel {
                                 .frame(width: 104, alignment: .leading)
                             Text("\(preset.bpm) BPM")
                                 .font(.system(size: 13, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }

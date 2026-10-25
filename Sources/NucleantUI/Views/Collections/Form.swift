@@ -393,7 +393,7 @@ func formLines(_ items: [ListItem<Never>]) -> [FormLine] {
             lines.append(FormLine(
                 id: item.id,
                 label: nil,
-                control: AnyView(item.label.font(.system(size: 12)).foregroundColor(.secondary)),
+                control: AnyView(item.label.font(.system(size: 12)).foregroundStyle(.secondary)),
                 gap: gap
             ))
             gap = 0
@@ -632,13 +632,13 @@ struct _GroupedForm {
                                     _GroupedFormRow(item: entry.item, showsSeparator: entry.showsSeparator)
                                 }
                             }
-                            .background(Color.secondaryBackground)
+                            .background(ShapeStyle.secondaryBackground)
                             .cornerRadius(10)
                         }
                         if let footer = group.footer {
                             footer.label
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 16)
                         }
                     }
@@ -646,7 +646,7 @@ struct _GroupedForm {
             }
             .padding(look.contentInsets)
         }
-        .background(Color.background)
+        .background(ShapeStyle.background)
     }
 
     private func items() -> [ListItem<Never>] {
@@ -698,7 +698,7 @@ struct _GroupedFormRow {
         .overlay(alignment: .bottom) {
             if showsSeparator {
                 Rectangle()
-                    .fill(item.traits.separatorTint ?? Color.separator)
+                    .fill(item.traits.separatorTint.map { .color($0) } ?? .separator)
                     .frame(height: 1)
                     .padding(.leading, insets.leading)
             }
@@ -827,7 +827,7 @@ public struct LabeledContent<Label: View, Content: View>: View {
                 label
             } control: {
                 content
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }

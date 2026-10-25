@@ -39,7 +39,7 @@ struct IssueBrowser {
                         .font(.system(size: 15, weight: .semibold))
                     Text(issues.count == 1 ? "1 issue" : "\(issues.count) issues")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 TextField("Filter", text: $filter, prompt: Text("Filter by title, key or person"))
@@ -59,7 +59,7 @@ struct IssueBrowser {
                     Text(filter.isEmpty ? "No issues here" : "No issues match “\(filter)”")
                         .font(.system(size: 15, weight: .medium))
                     Text(filter.isEmpty ? "New Issue files one." : "Try a shorter filter.")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -154,7 +154,7 @@ struct CellDetail {
     var body: some View {
         Text(text)
             .font(monospaced ? .system(size: 12, design: .monospaced) : .system(size: 13))
-            .foregroundColor(prominence == .increased ? Color.white.opacity(0.85) : .secondary)
+            .foregroundStyle(prominence == .increased ? .color(Color.white.opacity(0.85)) : .secondary)
     }
 }
 

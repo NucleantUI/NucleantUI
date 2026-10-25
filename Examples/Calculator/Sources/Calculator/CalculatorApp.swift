@@ -117,12 +117,12 @@ struct Calculator {
 
 /// Dynamic where the surface is, fixed where the accent is: the keys have a
 /// light and a dark face each, the orange operator keys are the same in
-/// both. `Color.dynamic` is the framework's light/dark pair; `.background`
+/// both. `ShapeStyle.dynamic` is the framework's light/dark pair; `.background`
 /// and `.primary` are its semantic colors, which already are.
 struct Theme {
-    static let background = Color.background
-    static let digit = Color.dynamic(light: Color(hex: 0xE2E4EA), dark: Color(hex: 0x2B2F38))
-    static let function = Color.dynamic(light: Color(hex: 0xC9CCD4), dark: Color(hex: 0x3D424D))
+    static let background = ShapeStyle.background
+    static let digit = ShapeStyle.dynamic(light: Color(hex: 0xE2E4EA), dark: Color(hex: 0x2B2F38))
+    static let function = ShapeStyle.dynamic(light: Color(hex: 0xC9CCD4), dark: Color(hex: 0x3D424D))
     static let operation = Color(hex: 0xFF9F0A)
     static let operationActive = Color(hex: 0xFFD08A)
 }
@@ -144,7 +144,7 @@ struct Key {
     var body: some View {
         Text(label)
             .font(.system(size: 26, weight: style == .operation ? .medium : .regular))
-            .foregroundColor(style == .operation ? (isActive ? Theme.operation : .white) : .primary)
+            .foregroundStyle(style == .operation ? .color(isActive ? Theme.operation : .white) : .primary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 Capsule().fill(fill.opacity(isPressed ? 0.6 : 1))
@@ -164,11 +164,11 @@ struct Key {
             )
     }
 
-    private var fill: Color {
+    private var fill: ShapeStyle {
         switch style {
         case .digit:     return Theme.digit
         case .function:  return Theme.function
-        case .operation: return isActive ? Theme.operationActive : Theme.operation
+        case .operation: return .color(isActive ? Theme.operationActive : Theme.operation)
         }
     }
 }
@@ -221,7 +221,7 @@ struct CalculatorView {
         VStack(alignment: .trailing, spacing: 4) {
             Text(calc.history)
                 .font(.system(size: 18, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(minHeight: 22)
             Text(calc.display)
                 .font(.system(size: 52, weight: .light, design: .monospaced))

@@ -281,26 +281,25 @@ final class AnimatedVector {
 
 // MARK: - Vectors for the animatable kinds
 
-extension Color {
-    /// Both appearances' components, so a dynamic color animates as one.
+extension ShapeStyle {
+    /// Both appearances' components, so a flat color and a dynamic one
+    /// animate into each other; a gradient changes at once.
     var animatableVector: [Double] {
-        let dark = resolved(for: .dark)
-        return [red, green, blue, alpha, dark.red, dark.green, dark.blue, dark.alpha]
+        switch self {
+        case .color(let color):
+            return [color, color].flatMap { [$0.red, $0.green, $0.blue, $0.alpha].map { Double($0) } }
+        case .dynamic(let light, let dark):
+            return [light, dark].flatMap { [$0.red, $0.green, $0.blue, $0.alpha].map { Double($0) } }
+        case .linearGradient, .radialGradient:
+            return []
+        }
     }
 
     init(animatableVector v: [Double]) {
-        func clamp(_ x: Double) -> Double { min(max(x, 0), 1) }
+        func clamp(_ x: Double) -> Float { Float(Swift.min(Swift.max(x, 0), 1)) }
         let light = Color(red: clamp(v[0]), green: clamp(v[1]), blue: clamp(v[2]), opacity: clamp(v[3]))
         let dark = Color(red: clamp(v[4]), green: clamp(v[5]), blue: clamp(v[6]), opacity: clamp(v[7]))
-        self = light == dark ? light : .dynamic(light: light, dark: dark)
-    }
-}
-
-extension ShapeStyle {
-    /// Only a flat color animates; a gradient changes at once.
-    var animatableVector: [Double] {
-        if case .color(let color) = self { return color.animatableVector }
-        return []
+        self = light == dark ? .color(light) : .dynamic(light: light, dark: dark)
     }
 }
 
@@ -311,7 +310,8 @@ extension BuildContext {
         animations.value(at: path, slot: slot, target: target, animation: transaction.animation)
     }
 
-    /// The same for a paint: only a flat color has anything to animate.
+    /// The same for a paint: only a flat or dynamic color has anything to
+    /// animate.
     func animatedStyle(_ slot: AnimationStore.Slot, _ style: ShapeStyle?) -> AnimatedVector? {
         guard let style else { return nil }
         return animatedValue(slot, style.animatableVector)
@@ -321,9 +321,12 @@ extension BuildContext {
 extension AnimatedVector {
     /// `style` as drawn this pass: its color where one is animating.
     func current(of style: ShapeStyle) -> ShapeStyle {
-        guard case .color = style else { return style }
+        switch style {
+        case .color, .dynamic: break
+        case .linearGradient, .radialGradient: return style
+        }
         let vector = current()
         guard vector.count == 8 else { return style }
-        return .color(Color(animatableVector: vector))
+        return ShapeStyle(animatableVector: vector)
     }
 }

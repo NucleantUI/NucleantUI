@@ -21,14 +21,14 @@
 import NucleantUI
 
 enum Theme {
-    static let sidebar = Color.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
-    static let bar = Color.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
-    static let canvas = Color.dynamic(light: Color(hex: 0xF3F1EC), dark: Color(hex: 0x24252A))
-    static let bubble = Color.dynamic(light: Color(hex: 0xFFFFFF), dark: Color(hex: 0x33353C))
-    static let selection = Color.dynamic(light: Color(hex: 0x1F2329), dark: Color(hex: 0xFFFFFF))
+    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
+    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
+    static let canvas = ShapeStyle.dynamic(light: Color(hex: 0xF3F1EC), dark: Color(hex: 0x24252A))
+    static let bubble = ShapeStyle.dynamic(light: Color(hex: 0xFFFFFF), dark: Color(hex: 0x33353C))
+    static let selection = ShapeStyle.dynamic(light: Color(hex: 0x1F2329), dark: Color(hex: 0xFFFFFF))
     static let accent = Color(hex: 0x7A6FF0)
-    static let note = Color.dynamic(light: Color(hex: 0xFFF3B0), dark: Color(hex: 0x4A4426))
-    static let noteBar = Color.dynamic(light: Color(hex: 0xF5E27E), dark: Color(hex: 0x5E5630))
+    static let note = ShapeStyle.dynamic(light: Color(hex: 0xFFF3B0), dark: Color(hex: 0x4A4426))
+    static let noteBar = ShapeStyle.dynamic(light: Color(hex: 0xF5E27E), dark: Color(hex: 0x5E5630))
 }
 
 /// Where the keys can be.
@@ -61,13 +61,13 @@ struct MindMapView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Text("No map selected")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
         .onAppear { focus = .canvas }
@@ -105,7 +105,7 @@ struct Toolbar {
                     .frame(minWidth: 160, maxWidth: 300)
                 Spacer()
                 Text("\(map.topics.count) topics")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Button("Tidy Up") {
                     withAnimation(.smooth(duration: 0.6)) { map.tidy() }
@@ -218,7 +218,7 @@ struct ColorSwatch {
     var body: some View {
         ZStack {
             Circle().fill(color)
-            Circle().stroke(isCurrent ? Theme.selection : Color.white, lineWidth: isCurrent ? 2.5 : 1.5)
+            Circle().stroke(isCurrent ? Theme.selection : .color(.white), lineWidth: isCurrent ? 2.5 : 1.5)
         }
         .frame(width: 22, height: 22)
         .contentShape(Circle())

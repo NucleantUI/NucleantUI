@@ -24,10 +24,10 @@ struct Inspector {
             VStack(spacing: 6) {
                 Text("No Bookmark Selected")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text("Choose a card to see and edit it.")
                     .font(.system(size: 12))
-                    .foregroundColor(.tertiary)
+                    .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -54,7 +54,7 @@ struct BookmarkEditor {
                             .font(.system(size: 13, weight: .semibold))
                         Text(bookmark.url)
                             .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -67,7 +67,7 @@ struct BookmarkEditor {
 
                 Text(bookmark.summary)
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Favorite", isOn: library.binding(id, \.isFavorite, default: false))
@@ -82,7 +82,7 @@ struct BookmarkEditor {
                     if bookmark.tags.isEmpty {
                         Text("No tags yet.")
                             .font(.system(size: 12))
-                            .foregroundColor(.tertiary)
+                            .foregroundStyle(.tertiary)
                     } else {
                         FlowLayout(spacing: 6, lineSpacing: 6) {
                             ForEach(bookmark.tags, id: \.self) { tag in
@@ -100,7 +100,7 @@ struct BookmarkEditor {
                     if !suggestions.isEmpty {
                         Text("Suggestions")
                             .font(.system(size: 11))
-                            .foregroundColor(.tertiary)
+                            .foregroundStyle(.tertiary)
                         FlowLayout(spacing: 5, lineSpacing: 5) {
                             ForEach(suggestions, id: \.self) { tag in
                                 TagChip(name: tag, size: 11)
@@ -127,7 +127,7 @@ struct BookmarkEditor {
 
                 Text("Saved \(bookmark.added.formatted(date: .abbreviated, time: .shortened)) · \(bookmark.readingMinutes) min read")
                     .font(.system(size: 11))
-                    .foregroundColor(.tertiary)
+                    .foregroundStyle(.tertiary)
             }
             .padding(18)
         }
@@ -171,7 +171,7 @@ struct InspectorSection<Content: View> {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             content
         }
     }
@@ -190,7 +190,7 @@ struct RemovableTag {
                 .font(.system(size: 12, weight: .medium))
             Text("×")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(isHovered ? Theme.accent : .secondary)
+                .foregroundStyle(isHovered ? .color(Theme.accent) : .secondary)
                 .onHover { isHovered = $0 }
                 .onTapGesture { remove() }
         }

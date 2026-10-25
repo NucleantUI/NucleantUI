@@ -55,9 +55,9 @@ struct ReadingScreen {
                 if isShowingTextSize {
                     Text("\(Int(library.textSize)) pt")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Theme.ink)
+                        .foregroundStyle(Theme.ink)
                         .padding(horizontal: 14, vertical: 6)
-                        .background(Color.secondaryBackground)
+                        .background(ShapeStyle.secondaryBackground)
                         .cornerRadius(13)
                         .padding(.top, 12)
                         .transition(.opacity)
@@ -67,7 +67,7 @@ struct ReadingScreen {
             if isImmersive {
                 Text("\(book.title) · \(chapter + 1) of \(book.chapters.count)")
                     .font(.caption)
-                    .foregroundColor(Theme.faint)
+                    .foregroundStyle(Theme.faint)
                     .lineLimit(1)
                     .padding(horizontal: 16, vertical: 10)
             } else {
@@ -107,13 +107,13 @@ struct ReadingScreen {
             VStack(spacing: 1) {
                 Text("Chapter \(chapter + 1) of \(book.chapters.count)")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 HStack(spacing: 4) {
                     ReadingClock(library: library, book: book, chapter: chapter)
                     Text("· tap the page to hide")
                 }
                 .font(.system(size: 10))
-                .foregroundColor(Theme.faint)
+                .foregroundStyle(Theme.faint)
             }
             .frame(maxWidth: .infinity)
 
@@ -130,9 +130,9 @@ struct ReadingScreen {
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(maxWidth: .infinity, minHeight: 52, maxHeight: 52)
-        .background(Color.secondaryBackground)
+        .background(ShapeStyle.secondaryBackground)
         .overlay(alignment: .top) {
-            Color.separator.frame(height: 1)
+            Rectangle().fill(.separator).frame(height: 1)
         }
     }
 
@@ -144,13 +144,13 @@ struct ReadingScreen {
             if index + 1 < book.chapters.count {
                 Text("Next")
                     .font(.caption)
-                    .foregroundColor(Theme.faint)
+                    .foregroundStyle(Theme.faint)
                 Button("\(book.name(ofChapter: index + 1)) ›") { turn(to: index + 1) }
                     .tint(Theme.accent)
             } else {
                 Text("End of the sample")
                     .font(.system(size: 15, design: .serif).italic())
-                    .foregroundColor(Theme.faint)
+                    .foregroundStyle(Theme.faint)
                 Button("Mark as Finished") { finish() }
                     .tint(Theme.accent)
             }
@@ -195,16 +195,16 @@ struct ChapterPage {
         VStack(alignment: .leading, spacing: textSize * 0.8) {
             Text("CHAPTER \(index + 1)")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Theme.faint)
+                .foregroundStyle(Theme.faint)
             if let title = book.chapters[index].title {
                 Text(title)
                     .font(.system(size: textSize * 1.5, weight: .bold, design: .serif))
-                    .foregroundColor(Theme.ink)
+                    .foregroundStyle(Theme.ink)
             }
             ForEach(0..<book.chapters[index].paragraphs.count) { paragraph in
                 Text(book.chapters[index].paragraphs[paragraph])
                     .font(.system(size: textSize, design: .serif))
-                    .foregroundColor(Theme.ink)
+                    .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
