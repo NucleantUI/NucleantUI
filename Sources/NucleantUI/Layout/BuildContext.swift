@@ -138,6 +138,18 @@ final class EffectQueue {
     /// built, and forgotten with the views that attached them.
     let preferenceObservers = PreferenceObservers()
 
+    /// The value each `.onGeometryChange` with a new-value action worked
+    /// out when it was last placed.
+    private var geometryValues: [StateKey: OpaqueValue] = [:]
+
+    /// The same, for each `.onGeometryChange` with an old-and-new action.
+    private var geometryTransitions: [StateKey: OpaqueValue] = [:]
+
+    /// Whether placement built views this pass — a `GeometryReader`'s
+    /// content — so that a pass that only laid out still gets the work that
+    /// follows a build.
+    private var builtDuringLayout = false
+
     func onAppear(_ key: StateKey, _ action: @escaping () -> Void) {
         guard !appeared.contains(key) else { return }
         appeared.insert(key)
@@ -167,6 +179,46 @@ final class EffectQueue {
         pending.append { action(previous, value) }
     }
 
+    /// Queue `action` with `value` if it differs from the value worked out
+    /// at the last placement — or if there was none. Called from placement,
+    /// which comes before the queued actions run.
+    func onGeometryChange<V: Equatable>(
+        _ key: StateKey,
+        to value: V,
+        _ action: @escaping @MainActor (V) -> Void
+    ) {
+        if let previous = geometryValues[key]?.value(as: V.self), previous == value { return }
+        geometryValues[key] = OpaqueValue(value)
+        pending.append { action(value) }
+    }
+
+    /// Queue `action` with the value worked out at the last placement and
+    /// `value`, if they differ — or with `value` twice, the first time.
+    func onGeometryTransition<V: Equatable>(
+        _ key: StateKey,
+        to value: V,
+        _ action: @escaping @MainActor (V, V) -> Void
+    ) {
+        guard let previous = geometryTransitions[key]?.value(as: V.self) else {
+            geometryTransitions[key] = OpaqueValue(value)
+            pending.append { action(value, value) }
+            return
+        }
+        guard previous != value else { return }
+        geometryTransitions[key] = OpaqueValue(value)
+        pending.append { action(previous, value) }
+    }
+
+    func noteBuiltDuringLayout() {
+        builtDuringLayout = true
+    }
+
+    /// Whether placement built views since this was last asked.
+    func takeBuiltDuringLayout() -> Bool {
+        defer { builtDuringLayout = false }
+        return builtDuringLayout
+    }
+
     /// Hand back the actions queued this pass.
     func endPass() -> [() -> Void] {
         defer { pending.removeAll(keepingCapacity: true) }
@@ -182,6 +234,12 @@ final class EffectQueue {
         }
         if !observed.isEmpty {
             observed = observed.filter { !paths.contains($0.key.path) }
+        }
+        if !geometryValues.isEmpty {
+            geometryValues = geometryValues.filter { !paths.contains($0.key.path) }
+        }
+        if !geometryTransitions.isEmpty {
+            geometryTransitions = geometryTransitions.filter { !paths.contains($0.key.path) }
         }
         guard !disappearing.isEmpty else { return }
         for (key, action) in disappearing where paths.contains(key.path) {
@@ -438,7 +496,7 @@ final class RebuildRecords {
         let stateKeys: [StateKey]
         /// State this view read while its body ran; each slot has this
         /// view's path among its readers.
-        let reads: [any AnyStateStorage]
+        var reads: [any AnyStateStorage]
         /// Whether this view draws into a render node of its own — see
         /// `RenderBoundaryContent`. Sticky: carried over every rebuild of
         /// the same view at this position.
@@ -526,6 +584,17 @@ final class RebuildRecords {
     }
 
     func entry(for path: [Int]) -> Entry? { live.value(at: path) }
+
+    /// State the view at `path` read after its entry was filed — a
+    /// `GeometryReader`'s content, built again during placement — added to
+    /// that entry, so the reader registrations go when the view does.
+    func addReads(_ reads: [any AnyStateStorage], at path: [Int]) {
+        guard !reads.isEmpty, let node = live.node(at: path), var entry = node.value else { return }
+        for storage in reads where !entry.reads.contains(where: { $0 === storage }) {
+            entry.reads.append(storage)
+        }
+        node.value = entry
+    }
 
     /// A scoped rebuild put `replacement` where `old` stood at `path`. Every
     /// ancestor that recorded `old` as its own node — a wrapper whose

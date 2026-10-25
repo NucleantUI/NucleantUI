@@ -32,9 +32,8 @@ public struct DragGesture {
         /// The gesture view's own rect.
         ///
         /// Not a SwiftUI field — there, a control that needs its own width
-        /// reads it through `GeometryReader`, which this framework doesn't have
-        /// yet. Carrying it on the value is what lets a fader convert a
-        /// position into a fraction without being told its width up front.
+        /// reads it through `GeometryReader`. Carrying it on the value lets a
+        /// fader convert a position into a fraction without one.
         public var bounds: Rect
     }
 
