@@ -24,7 +24,7 @@
 /// filled part of the track is the tint. The label sits before the track,
 /// the value labels at either end of it.
 @View
-public struct Slider<Label: View, ValueLabel: View>: View {
+public struct Slider<Label: View, ValueLabel: View> {
     /// The caller's value, as a `Double` — the value type is only generic in
     /// the initializers, as in SwiftUI.
     @Binding var value: Double
@@ -125,6 +125,7 @@ public struct Slider<Label: View, ValueLabel: View>: View {
 
 // MARK: - Initializers
 
+@MainActor
 extension Slider {
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
@@ -160,6 +161,7 @@ extension Slider {
     }
 }
 
+@MainActor
 extension Slider where ValueLabel == EmptyView {
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
@@ -191,6 +193,7 @@ extension Slider where ValueLabel == EmptyView {
     }
 }
 
+@MainActor
 extension Slider where Label == EmptyView, ValueLabel == EmptyView {
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
@@ -220,6 +223,7 @@ extension Slider where Label == EmptyView, ValueLabel == EmptyView {
     }
 }
 
+@MainActor
 extension Slider {
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
@@ -255,6 +259,7 @@ extension Slider {
     }
 }
 
+@MainActor
 extension Slider where ValueLabel == EmptyView {
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,

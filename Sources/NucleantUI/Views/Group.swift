@@ -6,7 +6,7 @@
 /// Collects views without affecting layout — its children behave as siblings
 /// of whatever contains the group.
 @View
-public struct Group<Content: View>: View {
+public struct Group<Content: View> {
     public let content: Content
 
     public init(_viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {

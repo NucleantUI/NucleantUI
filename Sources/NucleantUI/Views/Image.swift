@@ -15,7 +15,7 @@
 /// stretches it to whatever it is offered — pair that with
 /// `.aspectRatio(contentMode:)` / `.scaledToFit()` to keep its proportions.
 @View
-public struct Image: View {
+public struct Image {
     public let image: RasterImage
     var isResizable = false
 

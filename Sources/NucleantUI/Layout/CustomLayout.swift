@@ -331,13 +331,14 @@ struct LayoutValues {
 /// `.layoutValue(key:value:)`: the view's own node, marked. A group's value
 /// goes on each view in it, since each is a subview.
 @View
-struct _LayoutValueModifier<K: LayoutValueKey, Content: View>: View {
+struct _LayoutValueModifier<K: LayoutValueKey, Content: View> {
     let content: Content
     let value: K.Value
 
     var body: Never { bodyUnavailable() }
 }
 
+@MainActor
 extension _LayoutValueModifier: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let node = context.child(0) { ctx in buildNode(content, &ctx) }
@@ -360,7 +361,7 @@ extension _LayoutValueModifier: BuiltinView {
 
 /// A `Layout` applied to content: `MyLayout { … }`.
 @View
-struct _LayoutView<L: Layout, Content: View>: View {
+struct _LayoutView<L: Layout, Content: View> {
     let layout: L
     let content: Content
 

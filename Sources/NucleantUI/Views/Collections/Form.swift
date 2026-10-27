@@ -37,7 +37,7 @@ import Foundation
 ///   scrolling page, each row a label on the leading edge and its control
 ///   on the trailing one; toggles are switches.
 @View
-public struct Form<Content: View>: View {
+public struct Form<Content: View> {
     let content: Content
 
     public init(_viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {
@@ -52,6 +52,7 @@ public struct Form<Content: View>: View {
     }
 }
 
+@MainActor
 extension Form where Content == FormStyleConfiguration.Content {
     /// A form for a style's configuration — how a style that only adjusts
     /// another one draws the form it was handed.
@@ -92,7 +93,7 @@ public struct FormStyleConfiguration {
     /// The form's content — as written, when a style places it; row by
     /// row, when a style of the framework's lays it out.
     @View
-    public struct Content: View {
+    public struct Content {
         let builder: FormContentBuilder
 
         init(_ builder: FormContentBuilder, _viewID: ViewID = #viewID) {
@@ -807,7 +808,7 @@ struct LabeledRowContent: NodeContent {
 /// label is on the leading edge and the content, in the secondary colour,
 /// on the trailing one.
 @View
-public struct LabeledContent<Label: View, Content: View>: View {
+public struct LabeledContent<Label: View, Content: View> {
     let label: Label
     let content: Content
 
@@ -833,12 +834,14 @@ public struct LabeledContent<Label: View, Content: View>: View {
     }
 }
 
+@MainActor
 extension LabeledContent where Label == Text {
     public init<S: StringProtocol>(_ title: S, _viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {
         self.init(_viewID: _viewID, content: content) { Text(title) }
     }
 }
 
+@MainActor
 extension LabeledContent where Label == Text, Content == Text {
     public init<S: StringProtocol, V: StringProtocol>(_ title: S, value: V, _viewID: ViewID = #viewID) {
         self.init(_viewID: _viewID) { Text(value) } label: { Text(title) }

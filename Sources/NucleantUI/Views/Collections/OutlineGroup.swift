@@ -24,7 +24,7 @@
 /// its element's id (`List(data, children:)` is the shorthand). Anywhere
 /// else each element with children is a `DisclosureGroup` of its own.
 @View
-public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Parent: View, Leaf: View, Subgroup: View>: View {
+public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Parent: View, Leaf: View, Subgroup: View> {
     let data: Data
     let identify: (Data.Element) -> ID
     let children: (Data.Element) -> Data?
@@ -45,6 +45,7 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Parent: V
     }
 }
 
+@MainActor
 extension OutlineGroup where Parent == Leaf, Subgroup == DisclosureGroup<Leaf, OutlineSubgroupChildren> {
 
     public init<DataElement>(
@@ -81,6 +82,7 @@ extension OutlineGroup where Parent == Leaf, Subgroup == DisclosureGroup<Leaf, O
     }
 }
 
+@MainActor
 extension OutlineGroup where Parent == Leaf, Subgroup == DisclosureGroup<Leaf, OutlineSubgroupChildren>, Data.Element: Identifiable, ID == Data.Element.ID {
 
     public init<DataElement>(
@@ -102,6 +104,7 @@ extension OutlineGroup where Parent == Leaf, Subgroup == DisclosureGroup<Leaf, O
     }
 }
 
+@MainActor
 extension OutlineGroup {
     /// Outside a list: a leaf as its content, an element with children as
     /// a disclosure group over its subtree.
@@ -141,7 +144,7 @@ struct OutlineElement<ID: Hashable, Element> {
 /// another outline group. It erases that group's type, which is the same
 /// as the one it is in: a type can't hold itself.
 @View
-public struct OutlineSubgroupChildren: View {
+public struct OutlineSubgroupChildren {
     let subtree: AnyView
 
     init(_ subtree: AnyView, _viewID: ViewID = #viewID) {
@@ -158,6 +161,7 @@ public struct OutlineSubgroupChildren: View {
 
 // MARK: - In a list
 
+@MainActor
 extension OutlineGroup: ListContentSource {
     func _listItems<SelectionValue: Hashable>(into walk: inout ListWalk<SelectionValue>) {
         addRows(data, into: &walk)

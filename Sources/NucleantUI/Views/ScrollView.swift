@@ -7,7 +7,7 @@
 /// scroll axes, then drawn shifted by the current offset and clipped to the
 /// scroll view's own bounds.
 @View
-public struct ScrollView<Content: View>: View {
+public struct ScrollView<Content: View> {
     public let axes: Axis.Set
     public let content: Content
 

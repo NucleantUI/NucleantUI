@@ -62,7 +62,7 @@ extension Shape {
 /// used bare, through its `body`, filled with the environment's foreground
 /// color.
 @View
-public struct _ShapeView<S: Shape>: View {
+public struct _ShapeView<S: Shape> {
     let shape: S
     let fill: ShapeStyle?
     let stroke: ShapeStyle?

@@ -146,7 +146,7 @@ public typealias TimelineViewDefaultContext = TimelineView<EveryMinuteTimelineSc
 /// }
 /// ```
 @View
-public struct TimelineView<Schedule: TimelineSchedule, Content: View>: View {
+public struct TimelineView<Schedule: TimelineSchedule, Content: View> {
 
     /// What the content is built for.
     public struct Context {

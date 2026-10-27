@@ -22,7 +22,7 @@
 /// otherwise. The content closure is only called when the style places
 /// `configuration.content`, so a collapsed group builds none of it.
 @View
-public struct DisclosureGroup<Label: View, Content: View>: View {
+public struct DisclosureGroup<Label: View, Content: View> {
 
     let content: () -> Content
     let label: Label
@@ -80,6 +80,7 @@ struct ExpansionSource: ViewInput {
     }
 }
 
+@MainActor
 extension DisclosureGroup where Label == Text {
 
     public init(_ label: String, _viewID: ViewID = #viewID, @ViewBuilder content: @escaping () -> Content) {
@@ -151,7 +152,7 @@ public struct DisclosureGroupStyleConfiguration {
 
     /// The group's label.
     @View
-    public struct Label: View {
+    public struct Label {
         let build: @MainActor (inout BuildContext) -> ViewNode
 
         init(_viewID: ViewID = #viewID, _ build: @escaping @MainActor (inout BuildContext) -> ViewNode) {
@@ -164,7 +165,7 @@ public struct DisclosureGroupStyleConfiguration {
 
     /// The group's content. Only built if the style places it.
     @View
-    public struct Content: View {
+    public struct Content {
         let build: @MainActor (inout BuildContext) -> ViewNode
 
         init(_viewID: ViewID = #viewID, _ build: @escaping @MainActor (inout BuildContext) -> ViewNode) {
@@ -220,7 +221,7 @@ extension DisclosureGroupStyle where Self == AutomaticDisclosureGroupStyle {
 /// `AutomaticDisclosureGroupStyle`'s body — a view of its own so it can
 /// read the environment, and so a toggle rebuilds only this.
 @View
-struct _AutomaticDisclosureGroup: View {
+struct _AutomaticDisclosureGroup {
     let configuration: DisclosureGroupStyleConfiguration
 
     @Environment(\.isEnabled) private var isEnabled
@@ -252,7 +253,7 @@ struct _AutomaticDisclosureGroup: View {
 /// time, so it is chosen there — the one `.disclosureGroupStyle(_:)` set,
 /// or `.automatic`.
 @View
-struct _StyledDisclosureGroup: View {
+struct _StyledDisclosureGroup {
     let configuration: DisclosureGroupStyleConfiguration
 
     init(configuration: DisclosureGroupStyleConfiguration, _viewID: ViewID = #viewID) {

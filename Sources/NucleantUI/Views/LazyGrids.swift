@@ -47,7 +47,7 @@ public struct GridItem: Sendable, Hashable {
 /// take a row of their own, across every column, and stay at the edge with
 /// `pinnedViews`. See `LazyVStack` for what "lazy" means for a cell.
 @View
-public struct LazyVGrid<Content: View>: View {
+public struct LazyVGrid<Content: View> {
     public let columns: [GridItem]
     public let alignment: HorizontalAlignment
     public let spacing: Double?
@@ -102,7 +102,7 @@ extension LazyVGrid: BuiltinView {
 /// A grid that grows sideways: `rows` say how the height is divided, and
 /// the cells fill it column by column — `LazyVGrid` on its side.
 @View
-public struct LazyHGrid<Content: View>: View {
+public struct LazyHGrid<Content: View> {
     public let rows: [GridItem]
     public let alignment: VerticalAlignment
     public let spacing: Double?

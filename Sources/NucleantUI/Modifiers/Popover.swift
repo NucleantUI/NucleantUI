@@ -46,7 +46,7 @@ extension View {
 /// in step with the binding, and records the anchor's frame for the panel
 /// to hang off.
 @View
-struct PopoverModifier<Content: View>: View {
+struct PopoverModifier<Content: View> {
     let content: Content
     let isPresented: Binding<Bool>
     let popover: AnyView
@@ -171,7 +171,7 @@ extension EnvironmentValues {
 /// that closes the innermost on any press, and each popover's panel
 /// placed around the view it hangs off.
 @View
-struct PopoverOverlay: View {
+struct PopoverOverlay {
     let presenter: PopoverPresenter
 
     var body: some View {
@@ -194,7 +194,7 @@ struct PopoverOverlay: View {
 
 /// The content on a panel.
 @View
-struct PopoverPanel: View {
+struct PopoverPanel {
     let content: AnyView
 
     static let cornerRadius = 10.0

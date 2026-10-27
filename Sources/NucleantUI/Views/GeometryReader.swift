@@ -34,7 +34,7 @@
 /// }
 /// ```
 @View
-public struct GeometryReader<Content: View>: View {
+public struct GeometryReader<Content: View> {
 
     public var content: (GeometryProxy) -> Content
 

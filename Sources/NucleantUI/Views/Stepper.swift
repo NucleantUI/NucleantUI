@@ -26,7 +26,7 @@ import Observation
 /// moment. A button whose step would leave the range is disabled, as is one
 /// with no action.
 @View
-public struct Stepper<Label: View>: View {
+public struct Stepper<Label: View> {
     let label: Label
     let actions: StepperActions
     let onEditingChanged: (Bool) -> Void
@@ -114,6 +114,7 @@ public struct Stepper<Label: View>: View {
     }
 }
 
+@MainActor
 extension Stepper {
     public init<V: Strideable>(
         value: Binding<V>,
@@ -147,6 +148,7 @@ extension Stepper {
     }
 }
 
+@MainActor
 extension Stepper where Label == Text {
     public init<S: StringProtocol>(
         _ title: S,

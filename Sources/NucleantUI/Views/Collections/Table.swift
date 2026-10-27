@@ -32,7 +32,7 @@ import Foundation
 /// the rows and an action for a double click or Return;
 /// `.onDeleteCommand` runs on Delete.
 @View
-public struct Table<Value: Identifiable, Rows: TableRowContent, Columns: TableColumnContent>: View
+public struct Table<Value: Identifiable, Rows: TableRowContent, Columns: TableColumnContent>
 where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
     let rows: Rows
     let columns: Columns
@@ -184,6 +184,7 @@ struct TableSortSource: ViewInput {
 
 // MARK: - Initializers over data
 
+@MainActor
 extension Table {
     public init<Data: RandomAccessCollection>(
         _ data: Data,
@@ -261,6 +262,7 @@ extension Table {
 
 // MARK: - Initializers over rows
 
+@MainActor
 extension Table {
     public init(
         of valueType: Value.Type,
