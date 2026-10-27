@@ -27,7 +27,7 @@
 /// hangs off. The dropdown form opens its items under the control,
 /// dismissed like any menu.
 @View
-public struct Menu<Label: View, Content: View>: View {
+public struct Menu<Label: View, Content: View> {
 
     let content: Content
     let label: Label
@@ -105,6 +105,7 @@ public struct Menu<Label: View, Content: View>: View {
     }
 }
 
+@MainActor
 extension Menu where Label == Text {
     public init(_ title: String, @ViewBuilder content: () -> Content) {
         self.init(content: content) { Text(title) }

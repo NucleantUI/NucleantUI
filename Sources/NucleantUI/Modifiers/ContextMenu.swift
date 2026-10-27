@@ -198,7 +198,7 @@ extension EnvironmentValues {
 /// closes it on any press, the panel of items at the anchor, and a panel
 /// for each open submenu beside the row it hangs off.
 @View
-struct ContextMenuOverlay: View {
+struct ContextMenuOverlay {
     let anchor: Point
     let controller: ContextMenuController
 
@@ -230,7 +230,7 @@ struct ContextMenuOverlay: View {
 
 /// The items in a column, on a panel.
 @View
-struct ContextMenuPanel: View {
+struct ContextMenuPanel {
     let items: AnyView
     let level: Int
 

@@ -40,7 +40,7 @@
 /// default), `.plain`, `.sidebar`, `.bordered`, `.insetGrouped` (the phone
 /// default) or `.grouped`.
 @View
-public struct List<SelectionValue: Hashable, Content: View>: View {
+public struct List<SelectionValue: Hashable, Content: View> {
     let selection: CollectionSelection<SelectionValue>
     let content: Content
 
@@ -179,6 +179,7 @@ public struct List<SelectionValue: Hashable, Content: View>: View {
 
 // MARK: - Initializers over data
 
+@MainActor
 extension List {
     public init<Data: RandomAccessCollection, RowContent: View>(
         _ data: Data,
@@ -270,6 +271,7 @@ extension List {
 
 // MARK: - Initializers over a tree
 
+@MainActor
 extension List {
     public init<Data: RandomAccessCollection, RowContent: View>(
         _ data: Data,
@@ -342,6 +344,7 @@ extension List {
 
 // MARK: - Without a selection
 
+@MainActor
 extension List where SelectionValue == Never {
     public init(_viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {
         self.init(selection: CollectionSelection(storage: .none), content: content(), _viewID: _viewID)

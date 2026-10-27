@@ -11,7 +11,7 @@
 ///     .foregroundColor(.white)
 /// ```
 @View
-public struct Text: View {
+public struct Text {
     public let content: String
 
     /// Set by `.font(_:)` on the `Text` itself; `nil` inherits from the

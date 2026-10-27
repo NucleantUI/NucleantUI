@@ -261,7 +261,7 @@ extension EnvironmentValues {
 /// `title:` names the screen it pushes. `.navigationTitle` on a screen
 /// overrides either.
 @View
-public struct NavigationStack<Data, Root: View>: View {
+public struct NavigationStack<Data, Root: View> {
 
     let title: String?
     let externalPath: Binding<NavigationPath>?
@@ -335,6 +335,7 @@ public struct NavigationStack<Data, Root: View>: View {
     }
 }
 
+@MainActor
 extension NavigationStack where Data == NavigationPath {
     /// A stack that keeps its own path.
     public init(_ title: String? = nil, _viewID: ViewID = #viewID, @ViewBuilder root: () -> Root) {
@@ -347,6 +348,7 @@ extension NavigationStack where Data == NavigationPath {
     }
 }
 
+@MainActor
 extension NavigationStack
 where Data: MutableCollection, Data: RandomAccessCollection, Data: RangeReplaceableCollection, Data.Element: Hashable {
     /// A stack whose path the caller owns, as a collection of one type.
@@ -480,7 +482,7 @@ private struct NavigationBar {
 /// A value link's screen comes from the `.navigationDestination(for:)` for
 /// the value's type. A `nil` value makes the link do nothing.
 @View
-public struct NavigationLink<Label: View, Destination: View>: View {
+public struct NavigationLink<Label: View, Destination: View> {
 
     let title: String?
     let destination: (() -> Destination)?
@@ -525,6 +527,7 @@ public struct NavigationLink<Label: View, Destination: View>: View {
     }
 }
 
+@MainActor
 extension NavigationLink where Label == Text {
     /// A link whose label is its own title.
     public init(_ title: String, _viewID: ViewID = #viewID, @ViewBuilder destination: @escaping () -> Destination) {
@@ -532,6 +535,7 @@ extension NavigationLink where Label == Text {
     }
 }
 
+@MainActor
 extension NavigationLink where Destination == Never {
     /// A link that pushes `value`, shown by the `.navigationDestination(for:)`
     /// for its type.
@@ -540,6 +544,7 @@ extension NavigationLink where Destination == Never {
     }
 }
 
+@MainActor
 extension NavigationLink where Label == Text, Destination == Never {
     /// A value link whose label is `title`.
     public init<S: StringProtocol, P: Hashable>(_ title: S, value: P?, _viewID: ViewID = #viewID) {

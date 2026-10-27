@@ -15,6 +15,7 @@
 
 import Foundation
 import NucleantUI
+import Observation
 
 /// The textures this screen holds, and the readback report.
 ///

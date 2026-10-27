@@ -380,7 +380,7 @@ extension DisclosureGroup: ListContentSource {
 /// A row modifier: draws as its content, and sets a trait of the rows in it
 /// for the list around them.
 @View
-public struct _ListRowTraitView<Content: View>: View {
+public struct _ListRowTraitView<Content: View> {
     let content: Content
     let trait: ListRowTrait
 

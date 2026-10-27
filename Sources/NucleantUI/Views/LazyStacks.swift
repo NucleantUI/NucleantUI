@@ -27,7 +27,7 @@
 /// once they are well past it: a row's `@State` goes with it, and its
 /// `onAppear` runs each time it comes back. See `LazyLayout.swift`.
 @View
-public struct LazyVStack<Content: View>: View {
+public struct LazyVStack<Content: View> {
     public let alignment: HorizontalAlignment
     public let spacing: Double?
     public let pinnedViews: PinnedScrollableViews
@@ -78,7 +78,7 @@ extension LazyVStack: BuiltinView {
 /// Stacks its children horizontally, building only those near the visible
 /// part of the scroll view it is in — `LazyVStack` on its side.
 @View
-public struct LazyHStack<Content: View>: View {
+public struct LazyHStack<Content: View> {
     public let alignment: VerticalAlignment
     public let spacing: Double?
     public let pinnedViews: PinnedScrollableViews

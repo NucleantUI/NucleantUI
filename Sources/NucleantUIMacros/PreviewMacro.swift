@@ -82,6 +82,9 @@ public struct PreviewMacro: PeerMacro {
             #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
             @section("__DATA,nucleant_prev") @used
             private let \(record): NucleantUI._PreviewRecord = \(value)
+            #elseif os(Windows)
+            @section("nucleant_previews$m") @used
+            private let \(record): NucleantUI._PreviewRecord = \(value)
             #else
             @section("nucleant_previews") @used
             private let \(record): NucleantUI._PreviewRecord = \(value)

@@ -40,7 +40,7 @@
 /// checkmark on the chosen row (`.inline`) or radio buttons
 /// (`.radioGroup`).
 @View
-public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View {
+public struct Picker<Label: View, SelectionValue: Hashable, Content: View> {
     @Binding var selection: SelectionValue
     let content: Content
     let label: Label
@@ -109,6 +109,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
     }
 }
 
+@MainActor
 extension Picker where Label == Text {
     public init(
         _ title: String,
@@ -146,7 +147,7 @@ extension View {
 /// A view with a `.tag(_:)`. Draws as its content; the tag is only read by
 /// the picker around it.
 @View
-public struct _TagView<Content: View, V: Hashable>: View {
+public struct _TagView<Content: View, V: Hashable> {
     let content: Content
     let tag: V
     let includeOptional: Bool

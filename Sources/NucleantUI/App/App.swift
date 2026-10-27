@@ -17,6 +17,9 @@ import Platform_iOS
 #if os(Linux)
 import Glibc
 #endif
+#if os(Windows)
+import ucrt
+#endif
 
 /// The entry point of a NucleantUI app.
 ///
@@ -173,6 +176,17 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
             try appDelegate?.run()
         } catch {
             nucleantLogError("NucleantUI: no display server to open a window on: \(error)\n")
+            exit(1)
+        }
+        #elseif os(Windows)
+        // Linux's shape: the delegate makes the process DPI-aware and
+        // registers the window class, fires `onStart()`, and hands this
+        // thread to the Win32 message loop until the last window closes.
+        // Straight to the delegate for the reason Linux gives above.
+        do {
+            try appDelegate?.run()
+        } catch {
+            nucleantLogError("NucleantUI: could not start the Win32 app: \(error)\n")
             exit(1)
         }
         #elseif os(Android)

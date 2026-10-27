@@ -192,7 +192,7 @@ extension AnyView: BuiltinView {
 /// the root keeps its path (`[0]`) whether or not anything is over it, and
 /// a presentation coming and going only rebuilds slot `[1]`.
 @View
-struct _HostRoot: View {
+struct _HostRoot {
     let content: AnyView
     let overlay: AnyView?
     /// Where slot `[1]` paints — read by the host after the pass.
@@ -218,7 +218,7 @@ final class OverlayCapture {
 /// Slot `[1]`: the open popovers, and over them the context menu if one is
 /// open — a menu opened from a popover's content sits above it.
 @View
-struct _HostOverlay: View {
+struct _HostOverlay {
     let popovers: PopoverPresenter
     let contextMenu: ContextMenuOverlay?
 

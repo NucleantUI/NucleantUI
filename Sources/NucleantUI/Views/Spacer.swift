@@ -5,7 +5,7 @@
 
 /// Expands along the stack's axis, pushing its siblings apart.
 @View
-public struct Spacer: View {
+public struct Spacer {
     public let minLength: Double
 
     public init(minLength: Double = 0, _viewID: ViewID = #viewID) {
@@ -26,7 +26,7 @@ extension Spacer: BuiltinView {
 
 /// A hairline rule across the stack's cross axis.
 @View
-public struct Divider: View {
+public struct Divider {
     public init(_viewID: ViewID = #viewID) { self._viewID = _viewID }
 
     public var body: Never { bodyUnavailable() }

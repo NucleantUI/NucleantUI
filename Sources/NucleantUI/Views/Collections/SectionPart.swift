@@ -7,7 +7,7 @@
 /// stack or grid with `pinnedViews` can find it. Anywhere else it is
 /// invisible: the node it hands back is its content's own.
 @View
-struct _SectionPart<Content: View>: View {
+struct _SectionPart<Content: View> {
     let role: SectionTag.Role
     let content: Content
 

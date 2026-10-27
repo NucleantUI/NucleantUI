@@ -27,7 +27,7 @@
 /// section is just its header, content and footer, one after the other in
 /// whatever stack holds it.
 @View
-public struct Section<Parent: View, Content: View, Footer: View>: View {
+public struct Section<Parent: View, Content: View, Footer: View> {
     let header: Parent
     let content: Content
     let footer: Footer
@@ -76,6 +76,7 @@ public struct Section<Parent: View, Content: View, Footer: View>: View {
     }
 }
 
+@MainActor
 extension Section where Parent == EmptyView {
     public init(_viewID: ViewID = #viewID, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
         self.init(header: EmptyView(), content: content(), footer: footer(), isExpanded: nil, _viewID: _viewID)
@@ -86,6 +87,7 @@ extension Section where Parent == EmptyView {
     }
 }
 
+@MainActor
 extension Section where Footer == EmptyView {
     public init(_viewID: ViewID = #viewID, @ViewBuilder content: () -> Content, @ViewBuilder header: () -> Parent) {
         self.init(header: header(), content: content(), footer: EmptyView(), isExpanded: nil, _viewID: _viewID)
@@ -107,12 +109,14 @@ extension Section where Footer == EmptyView {
     }
 }
 
+@MainActor
 extension Section where Parent == EmptyView, Footer == EmptyView {
     public init(_viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {
         self.init(header: EmptyView(), content: content(), footer: EmptyView(), isExpanded: nil, _viewID: _viewID)
     }
 }
 
+@MainActor
 extension Section where Parent == Text, Footer == EmptyView {
     public init(_ title: String, _viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {
         self.init(header: Text(title), content: content(), footer: EmptyView(), isExpanded: nil, _viewID: _viewID)

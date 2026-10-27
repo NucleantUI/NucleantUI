@@ -38,6 +38,13 @@ import CVulkan
 #if os(WASI)
 import Platform_Wasm
 #endif
+#if os(Windows)
+import Platform_Windows
+// VkExtent2D, for the swapchain-size callback as on Linux; GetKeyState, for
+// the modifiers a press is made with.
+import CVulkan
+import WinSDK
+#endif
 
 public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @unchecked Sendable {
 
@@ -65,7 +72,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     private var delegateHasRightMouse = false
     private var delegateTouches: Set<Int> = []
 
-    #if os(macOS) || os(iOS) || os(Android) || os(Linux) || os(WASI)
+    #if os(macOS) || os(iOS) || os(Android) || os(Linux) || os(WASI) || os(Windows)
     /// Strongly held: `PlatformWindow` keeps only a weak `win_delegate` back
     /// here, so the window's lifetime is this object's to own.
     var platformWindow: PlatformWindow<HostingWindow>?
@@ -106,6 +113,16 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     deinit {
         if let appearanceObserver { BrowserAppearance.removeObserver(appearanceObserver) }
+    }
+    #endif
+
+    #if os(Windows)
+    /// Follows the app mode (light or dark) for as long as the window lives;
+    /// the id `WindowsAppearance` handed out for it.
+    private var appearanceObserver: Int?
+
+    deinit {
+        if let appearanceObserver { WindowsAppearance.removeObserver(appearanceObserver) }
     }
     #endif
 
@@ -163,6 +180,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             try presentLinux()
             #elseif os(WASI)
             try presentBrowser()
+            #elseif os(Windows)
+            try presentWindows()
             #else
             throw HostingWindowError.unsupportedPlatform
             #endif
@@ -187,6 +206,10 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         #elseif os(WASI)
         // The page's `prefers-color-scheme` — see BrowserAppearance.
         return BrowserAppearance.colorScheme() == .dark ? .dark : .light
+        #elseif os(Windows)
+        // The app mode, Settings › Personalization › Colors — see
+        // WindowsAppearance.
+        return WindowsAppearance.colorScheme() == .dark ? .dark : .light
         #else
         return .light
         #endif
@@ -498,6 +521,60 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     }
     #endif
 
+    #if os(Windows)
+    @MainActor
+    private func presentWindows() throws {
+        // 1. A Win32 window whose content is the size asked for, in points at
+        //    the DPI of the monitor it opens on. Its frame loop runs from init
+        //    and no-ops until `win_delegate` and the engine below are in
+        //    place, as the display link does on macOS.
+        let platformWindow = try PlatformWindow<HostingWindow>(
+            width: win_rect.z,
+            height: win_rect.w,
+            title: title
+        )
+
+        // 2. The engine renders through VK_KHR_win32_surface. As on Linux
+        //    there is no drawable to ask for a size, so the swapchain reads
+        //    the client area, in pixels, through this callback whenever it
+        //    recreates itself.
+        let engine = try VulkanRenderEngine<Node>(
+            win32Instance: platformWindow.win32Instance,
+            win32Window: platformWindow.win32Window,
+            getExtent: { [weak platformWindow] in
+                VkExtent2D(
+                    width: platformWindow?.bufferWidth ?? 0,
+                    height: platformWindow?.bufferHeight ?? 0
+                )
+            }
+        )
+        self.renderEngine = engine
+        self.platformWindow = platformWindow
+        platformWindow.win_delegate = self
+
+        displayScale = platformWindow.scale
+
+        // 3. One window-filling canvas for the whole tree, in pixels.
+        attachCanvas(engine: engine, width: Int(platformWindow.bufferWidth), height: Int(platformWindow.bufferHeight))
+
+        // 4. Light or dark, now and whenever the app mode is switched.
+        applyColorScheme(Self.systemColorScheme())
+        appearanceObserver = WindowsAppearance.addObserver { [weak self] _ in
+            // Announced to the window procedure, on the main thread.
+            MainActor.assumeIsolated {
+                self?.applyColorScheme(Self.systemColorScheme())
+            }
+        }
+
+        // 5. Show it.
+        platformWindow.show()
+
+        // 6. Seed the size: Windows reports a resize only when one happens.
+        //    Points, which `on_size` scales itself.
+        on_size(w: platformWindow.width, h: platformWindow.height)
+    }
+    #endif
+
     #if os(Android)
     /// Attach to the Activity's surface.
     ///
@@ -630,6 +707,14 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         MainActor.assumeIsolated {
             renderFrame(dt)
         }
+        #elseif os(Windows)
+        // A turn of `Win32EventLoop.run()`, on the main thread. That loop
+        // gives Foundation's run loop a pass every turn itself — the main
+        // dispatch queue, `Task { @MainActor in … }`, `Timer`s — so the frame
+        // just draws.
+        MainActor.assumeIsolated {
+            renderFrame(dt)
+        }
         #else
         MainActor.assumeIsolated {
             pendingDelta += dt
@@ -711,12 +796,18 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             // devicePixelRatio, which changes with the browser's zoom and
             // when the window moves to another display.
             displayScale = platformWindow?.scale ?? 1
+            #elseif os(Windows)
+            // The window's DPI over 96, which changes when it is moved to a
+            // monitor with another scale — told through a resize.
+            displayScale = platformWindow?.scale ?? 1
             #endif
-            #if os(WASI)
+            #if os(WASI) || os(Windows)
             // The page sizes the drawing buffer, which the swapchain follows,
             // from a CSS size that need not be whole pixels — 657.33 × 1.5 is
             // 986 there but truncates to 985 here, and a window canvas a pixel
             // off the swapchain's extent is never shown. So the page's numbers.
+            // On Windows the points are pixels over the DPI scale, which can
+            // come back a hair under the whole pixel count the same way.
             let pixelWidth = Int(platformWindow?.bufferWidth ?? UInt32(w * displayScale))
             let pixelHeight = Int(platformWindow?.bufferHeight ?? UInt32(h * displayScale))
             #else
@@ -905,6 +996,18 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         if flags.contains(.option) { modifiers.insert(.option) }
         if flags.contains(.command) { modifiers.insert(.command) }
         return modifiers
+        #elseif os(Windows)
+        // The keyboard as of the message being handled: GetKeyState follows
+        // the key messages the thread has read. Ctrl is the command key here,
+        // as Platform_Windows reads menu shortcuts, and Alt is Option — except
+        // together, which is AltGr typing a character ("@" on a German
+        // keyboard), and so neither.
+        var modifiers: EventModifiers = []
+        let control = GetKeyState(VK_CONTROL) < 0, alt = GetKeyState(VK_MENU) < 0
+        if GetKeyState(VK_SHIFT) < 0 { modifiers.insert(.shift) }
+        if control && !alt { modifiers.insert(.command) }
+        if alt && !control { modifiers.insert(.option) }
+        return modifiers
         #else
         return []
         #endif
@@ -993,6 +1096,13 @@ extension HostingWindow: WindowTouchDelegate {}
 // the union of the two Apple protocols above. Its default implementations
 // (Platform_Linux) forward to the same `on_*` methods.
 extension HostingWindow: WaylandWindowDelegate {}
+#endif
+
+#if os(Windows)
+// Like Wayland's, the union of the Apple protocols: a Windows laptop has a
+// mouse, a keyboard and a touch screen at once. Its default implementations
+// (Platform_Windows) forward to the same `on_*` methods.
+extension HostingWindow: Win32WindowDelegate {}
 #endif
 
 #if os(WASI)

@@ -5,7 +5,7 @@
 
 /// Stacks its children vertically.
 @View
-public struct VStack<Content: View>: View {
+public struct VStack<Content: View> {
     public let alignment: HorizontalAlignment
     public let spacing: Double?
     public let content: Content
@@ -44,7 +44,7 @@ extension VStack: BuiltinView {
 
 /// Stacks its children horizontally.
 @View
-public struct HStack<Content: View>: View {
+public struct HStack<Content: View> {
     public let alignment: VerticalAlignment
     public let spacing: Double?
     public let content: Content
@@ -83,7 +83,7 @@ extension HStack: BuiltinView {
 
 /// Overlays its children, back to front.
 @View
-public struct ZStack<Content: View>: View {
+public struct ZStack<Content: View> {
     public let alignment: Alignment
     public let content: Content
 

@@ -73,6 +73,15 @@ let isLinux = !isAndroid && !isWasm
 let isLinux = false
 #endif
 
+/// Windows the same way: NucleantApplication declares `Platform_Windows` only
+/// when built on Windows, which is native like Linux, so the host is the
+/// target.
+#if os(Windows)
+let isWindows = true
+#else
+let isWindows = false
+#endif
+
 /// The platform provider NucleantUI links directly, for the
 /// `PlatformWindow` that `HostingWindow` owns. Only one is ever in scope.
 func platformProviders() -> [Target.Dependency] {
@@ -82,6 +91,9 @@ func platformProviders() -> [Target.Dependency] {
     ]
     if isLinux {
         deps.append(.product(name: "Platform_Linux", package: "NucleantApplication", condition: .when(platforms: [.linux])))
+    }
+    if isWindows {
+        deps.append(.product(name: "Platform_Windows", package: "NucleantApplication", condition: .when(platforms: [.windows])))
     }
     if isAndroid {
         deps.append(.product(name: "Platform_Android", package: "NucleantApplication", condition: .when(platforms: [.android])))

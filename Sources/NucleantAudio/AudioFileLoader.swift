@@ -21,4 +21,6 @@ public struct AudioFileLoader: Sendable {
 public enum AudioFileError: Error {
     /// The file could not be opened or decoded.
     case unreadable(URL)
+    /// This platform has no audio decoder yet.
+    case unsupportedPlatform
 }

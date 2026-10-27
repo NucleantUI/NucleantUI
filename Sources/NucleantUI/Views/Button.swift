@@ -10,7 +10,7 @@
 /// Button(action: reset) { Label() }
 /// ```
 @View
-public struct Button<Label: View>: View {
+public struct Button<Label: View> {
 
     let action: () -> Void
     let label: Label
@@ -83,6 +83,7 @@ public struct Button<Label: View>: View {
     }
 }
 
+@MainActor
 extension Button where Label == Text {
     public init(_ title: String, action: @escaping () -> Void) {
         self.init(action: action) { Text(title) }

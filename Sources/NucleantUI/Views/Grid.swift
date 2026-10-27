@@ -35,7 +35,7 @@
 /// size to its widest cell. For thousands of cells in a scroll view, use a
 /// `LazyVGrid`.
 @View
-public struct Grid<Content: View>: View {
+public struct Grid<Content: View> {
     public let alignment: Alignment
     public let horizontalSpacing: Double?
     public let verticalSpacing: Double?
@@ -83,7 +83,7 @@ extension Grid: BuiltinView {
 /// A modifier applied to a row applies to the row as a whole — it is then a
 /// row of one full-width cell — so modify the cells instead.
 @View
-public struct GridRow<Content: View>: View {
+public struct GridRow<Content: View> {
     public let alignment: VerticalAlignment?
     public let content: Content
 
@@ -135,13 +135,14 @@ struct GridCellTraits: Equatable {
 /// A view with grid-cell traits: its own node, marked. A group's traits go
 /// on each view in it, since each is a cell.
 @View
-struct _GridCellModifier<Content: View>: View {
+struct _GridCellModifier<Content: View> {
     let content: Content
     let traits: GridCellTraits
 
     var body: Never { bodyUnavailable() }
 }
 
+@MainActor
 extension _GridCellModifier: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let node = context.child(0) { ctx in buildNode(content, &ctx) }

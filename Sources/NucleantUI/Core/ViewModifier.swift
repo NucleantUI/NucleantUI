@@ -14,7 +14,7 @@ public protocol ViewModifier {
 
 /// The stand-in a `ViewModifier` receives for the view it wraps.
 @View
-public struct _ViewModifier_Content<Modifier: ViewModifier>: View {
+public struct _ViewModifier_Content<Modifier: ViewModifier> {
     let view: AnyView
 
     init(view: AnyView, _viewID: ViewID = #viewID) {
@@ -27,7 +27,7 @@ public struct _ViewModifier_Content<Modifier: ViewModifier>: View {
 
 /// A view combined with a modifier.
 @View
-public struct ModifiedContent<Content: View, Modifier: ViewModifier>: View {
+public struct ModifiedContent<Content: View, Modifier: ViewModifier> {
     public var content: Content
     public var modifier: Modifier
 

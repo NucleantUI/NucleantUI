@@ -18,7 +18,7 @@
 /// `.checkbox`, `.button`, or one of your own. `.automatic` is a checkbox
 /// on the desktop and a switch on a phone, as in SwiftUI.
 @View
-public struct Toggle<Label: View>: View {
+public struct Toggle<Label: View> {
     @Binding var isOn: Bool
     let label: Label
 
@@ -37,6 +37,7 @@ public struct Toggle<Label: View>: View {
     }
 }
 
+@MainActor
 extension Toggle where Label == ToggleStyleConfiguration.Label {
     /// A toggle for a style's configuration — how a style that only adjusts
     /// another one draws the toggle it was handed.
@@ -53,6 +54,7 @@ extension Toggle where Label == ToggleStyleConfiguration.Label {
     }
 }
 
+@MainActor
 extension Toggle where Label == Text {
     public init(_ title: String, isOn: Binding<Bool>, _viewID: ViewID = #viewID) {
         self.init(isOn: isOn, _viewID: _viewID) { Text(title) }
@@ -99,7 +101,7 @@ public struct ToggleStyleConfiguration {
     /// The toggle's label. The style is not generic over the label's type,
     /// so this carries how to build it.
     @View
-    public struct Label: View {
+    public struct Label {
         let builder: ToggleLabelBuilder
 
         init(_ build: @escaping @MainActor (inout BuildContext) -> ViewNode, _viewID: ViewID = #viewID) {

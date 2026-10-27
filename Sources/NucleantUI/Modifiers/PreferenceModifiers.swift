@@ -77,7 +77,7 @@ struct PreferenceTransformContent<K: PreferenceKey>: NodeContent {
 /// the pass's effects so the value beneath it is checked once the tree is
 /// built.
 @View
-struct _PreferenceChangeView<K: PreferenceKey, Content: View>: View where K.Value: Equatable {
+struct _PreferenceChangeView<K: PreferenceKey, Content: View> where K.Value: Equatable {
     let content: Content
     let action: @MainActor (K.Value) -> Void
 
