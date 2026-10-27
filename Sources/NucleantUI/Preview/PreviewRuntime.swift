@@ -78,10 +78,14 @@ public final class PreviewRuntime {
         guard let start = nucleant_preview_records_start(),
               let end = nucleant_preview_records_end() else { return [] }
         let count = start.distance(to: end) / MemoryLayout<_PreviewRecord>.stride
-        let records = UnsafeBufferPointer(start: start.assumingMemoryBound(to: _PreviewRecord.self), count: count)
+        // Optional: a linker may pad the section with zeros between
+        // object files' contributions (Windows' does), and a null is not a
+        // record.
+        let records = UnsafeBufferPointer(start: start.assumingMemoryBound(to: _PreviewRecord?.self), count: count)
         let entry = UnsafeMutablePointer<_PreviewEntry>.allocate(capacity: 1)
         defer { entry.deallocate() }
-        return records.map { record in
+        return records.compactMap { record in
+            guard let record else { return nil }
             record(entry)
             return entry.move()
         }

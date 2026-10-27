@@ -56,6 +56,8 @@ public final class AudioPlayer<Processor: AudioProcessor> {
 public enum AudioPlayerError: Error {
     /// The output could not take `channels` channels at `sampleRate`.
     case unsupportedFormat(channels: Int, sampleRate: Double)
+    /// This platform has no audio output backend yet.
+    case unsupportedPlatform
 }
 
 /// The processor and its lock, shared by the player (main actor) and the

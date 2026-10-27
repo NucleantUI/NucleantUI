@@ -34,6 +34,11 @@ final class PreviewMacroTests: XCTestCase {
             private let __macro_local_7previewfMu_: NucleantUI._PreviewRecord = {
                 NucleantUI._PreviewEntry._write(to: $0, name: "Ring", fileID: "TestModule/test.swift", filePath: "test.swift", line: 1, content: ringPreview)
             }
+            #elseif os(Windows)
+            @section("nucleant_previews$m") @used
+            private let __macro_local_7previewfMu_: NucleantUI._PreviewRecord = {
+                NucleantUI._PreviewEntry._write(to: $0, name: "Ring", fileID: "TestModule/test.swift", filePath: "test.swift", line: 1, content: ringPreview)
+            }
             #else
             @section("nucleant_previews") @used
             private let __macro_local_7previewfMu_: NucleantUI._PreviewRecord = {
@@ -62,6 +67,11 @@ final class PreviewMacroTests: XCTestCase {
             #if NUCLEANT_PREVIEW
             #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
             @section("__DATA,nucleant_prev") @used
+            private let __macro_local_7previewfMu_: NucleantUI._PreviewRecord = {
+                NucleantUI._PreviewEntry._write(to: $0, name: "ringPreview", fileID: "TestModule/test.swift", filePath: "test.swift", line: 1, content: ringPreview)
+            }
+            #elseif os(Windows)
+            @section("nucleant_previews$m") @used
             private let __macro_local_7previewfMu_: NucleantUI._PreviewRecord = {
                 NucleantUI._PreviewEntry._write(to: $0, name: "ringPreview", fileID: "TestModule/test.swift", filePath: "test.swift", line: 1, content: ringPreview)
             }
