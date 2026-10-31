@@ -117,15 +117,15 @@ func nucleantDependencies() -> [Package.Dependency] {
         return ["NucleantVulkan", "NucleantThorVG", "NucleantApplication", "NucleantSkia"]
             .map { .package(path: "../\($0)") }
     }
-    // Each by version, up to its next major: its new 0.x releases from 0.1.0
-    // (the shared VulkanRenderDevice) are picked up as they come. (Never by
-    // branch: a package depended on by version may not have one, so
-    // NucleantUI could not be.)
+    // Each by version, up to its next minor: its new 0.1.x releases are
+    // picked up as they come; its 0.2.0 only once its line here is moved to
+    // it. (Never by branch: a package depended on by version may not have
+    // one, so NucleantUI could not be.)
     return [
-        .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMajor(from: "0.1.0")),
-        .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMajor(from: "0.1.0")),
-        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMajor(from: "0.1.0")),
-        .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMajor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMinor(from: "0.1.0")),
     ]
 }
 
