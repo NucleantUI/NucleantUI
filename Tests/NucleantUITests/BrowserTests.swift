@@ -81,9 +81,11 @@ struct BrowserTests {
         // directory too (resources.json's buildRoot). Read by path: this
         // Foundation's lookups in a subdirectory drop the name's last
         // character ("Fonts/Roboto-Regular.tt").
-        #expect(Bundle.module.bundleURL.lastPathComponent == "NucleantUI_NucleantUI.resources")
-        let data = try Data(contentsOf: Bundle.module.bundleURL.appendingPathComponent("Fonts/Roboto-Regular.ttf"))
-        #expect(Array(data.prefix(4)) == [0x00, 0x01, 0x00, 0x00])   // a TrueType font
+        // `Bundle.module` here is this test target's own bundle, its
+        // Fixtures; NucleantUI's is the fonts test's.
+        #expect(Bundle.module.bundleURL.lastPathComponent == "NucleantUI_NucleantUITests.resources")
+        let data = try Data(contentsOf: Bundle.module.bundleURL.appendingPathComponent("Fixtures/compute.spv"))
+        #expect(Array(data.prefix(4)) == [0x03, 0x02, 0x23, 0x07])   // SPIR-V's magic number
     }
 
     // MARK: Windows
