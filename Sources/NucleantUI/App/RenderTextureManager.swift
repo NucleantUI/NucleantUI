@@ -245,7 +245,7 @@ final class RenderTextureManager<N: NucleantContainerNode> {
             for placement in retired {
                 // Frees nothing of its own — the image was the texture's. The
                 // container is already out of the engine's list.
-                placement.node.destroyResources(engine)
+                placement.node.destroyResources(engine.renderDevice)
             }
         }
         guard backings.contains(where: { $0.texture == nil }) else { return }
@@ -273,14 +273,14 @@ extension RenderTextureManager {
     /// Blocking and ours: `engine.device`, `findMemoryType` and
     /// `oneTimeSubmit` are the whole of what this needs, so it is written here
     /// rather than added to the engine's API. `nil` until the engine has
-    /// actually drawn the texture's canvas — `engine.readable` carries that,
+    /// actually drawn the texture's canvas — `engine.renderDevice.readable` carries that,
     /// and it is also what makes the layout the barrier starts from true
     /// (a thor node's update leaves its image in `SHADER_READ_ONLY_OPTIMAL`
     /// and publishes it in the same breath).
     func readback(of texture: RenderTexture) -> RasterImage? {
         guard let image = texture.gpuImage,
               let id = texture.canvasID,
-              engine.readable.contains(id)
+              engine.renderDevice.readable.contains(id)
         else { return nil }
 
         let width = image.width, height = image.height
@@ -292,7 +292,7 @@ extension RenderTextureManager {
             vkFreeMemory(engine.device, host.memory, nil)
         }
 
-        engine.oneTimeSubmit { cmd in
+        engine.renderDevice.oneTimeSubmit { cmd in
             engineImageBarrier(
                 cmd,
                 image: image.image,

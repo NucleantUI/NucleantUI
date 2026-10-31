@@ -115,7 +115,7 @@ final class TextureNodeManager<N: NucleantContainerNode> {
             if Int(node.width) != image.width || Int(node.height) != image.height {
                 // Left at the old size on failure: the view keeps showing
                 // what it had, cut by the scissor, rather than nothing.
-                if engine.resizeExternalTextureNode(
+                if engine.renderDevice.resizeExternalTextureNode(
                     node, id: entry.texture.container.id, width: image.width, height: image.height
                 ) {
                     changed = true
@@ -134,7 +134,7 @@ final class TextureNodeManager<N: NucleantContainerNode> {
         } else {
             let node: ExternalTextureNode<N>
             do {
-                node = try engine.makeExternalTextureNode(width: image.width, height: image.height)
+                node = try engine.renderDevice.makeExternalTextureNode(width: image.width, height: image.height)
             } catch {
                 nucleantFlushStandardOutput()
                 nucleantLogError("NucleantUI: texture node (\(image.width)x\(image.height)) failed: \(error)\n")
@@ -222,7 +222,7 @@ final class TextureNodeManager<N: NucleantContainerNode> {
         let retired = pendingDestroy
         pendingDestroy.removeAll()
         for entry in retired {
-            entry.texture.node.destroyResources(engine)
+            entry.texture.node.destroyResources(engine.renderDevice)
         }
     }
 

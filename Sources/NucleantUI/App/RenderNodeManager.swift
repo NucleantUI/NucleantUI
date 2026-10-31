@@ -384,7 +384,7 @@ final class RenderNodeManager<N: NucleantContainerNode> {
         releasePending()
         for node in spare { destroy(node) }
         spare.removeAll()
-        for entry in spareImages { entry.node.destroyResources(engine) }
+        for entry in spareImages { entry.node.destroyResources(engine.renderDevice) }
         spareImages.removeAll()
     }
 
@@ -456,7 +456,7 @@ final class RenderNodeManager<N: NucleantContainerNode> {
         entry.pending = nil
         entry.damage = nil
         guard spareImages.count < spareImageLimit else {
-            entry.node.destroyResources(engine)
+            entry.node.destroyResources(engine.renderDevice)
             return
         }
         spareImages.append(entry)

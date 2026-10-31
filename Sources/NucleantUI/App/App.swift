@@ -89,6 +89,13 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
     /// platform window, and `PlatformWindow` only weakly references back.
     private var windows: [HostingWindow<A.RenderNode>] = []
 
+    #if os(macOS)
+    /// The GPU device every window renders with: made before the first window
+    /// and kept for the process, so a node belongs to the app, not to one
+    /// window — any window can show it, and it outlives the one that made it.
+    private var renderDevice: VulkanRenderDevice<A.RenderNode>?
+    #endif
+
     public var appDelegate: AppDelegate<AppRuntime<A>>?
 
     public init(app: A) {
@@ -109,6 +116,17 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         ThorEngine.ensureInitialized(threads: AppRuntimeSettings.thorVGThreadCount)
 
         windows = app.body._makeWindows()
+        #if os(macOS)
+        do {
+            let device = try VulkanRenderDevice<A.RenderNode>()
+            renderDevice = device
+            for window in windows {
+                window.renderDevice = device
+            }
+        } catch {
+            nucleantLogError("NucleantUI: no GPU device for the windows to share: \(error)\n")
+        }
+        #endif
         for window in windows {
             do {
                 try window.present()

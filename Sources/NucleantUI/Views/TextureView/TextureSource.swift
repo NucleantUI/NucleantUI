@@ -149,7 +149,7 @@ public final class ViewTexture<Node: NucleantContainerNode> {
     @discardableResult
     public func write(ioSurface: UnsafeMutableRawPointer, x: Int = 0, y: Int = 0) -> Bool {
         guard isAttached else { return false }
-        let written = engine.writeExternalTexture(node, ioSurface: ioSurface, x: x, y: y)
+        let written = engine.renderDevice.writeExternalTexture(node, ioSurface: ioSurface, x: x, y: y)
         if written { container.needsRender = true }
         return written
     }
@@ -168,7 +168,7 @@ public final class ViewTexture<Node: NucleantContainerNode> {
         y: Int = 0
     ) -> Bool {
         guard isAttached else { return false }
-        let written = engine.writeExternalTexture(
+        let written = engine.renderDevice.writeExternalTexture(
             node, bgra: pixels, width: width, height: height, bytesPerRow: bytesPerRow, x: x, y: y
         )
         if written { container.needsRender = true }
@@ -180,7 +180,7 @@ public final class ViewTexture<Node: NucleantContainerNode> {
     /// pixelHeight` (images are allocated in granules). `nil` before the
     /// first write. Blocks on the GPU: for tests and debugging only.
     public func readPixels() -> (width: Int, height: Int, bgra: [UInt8])? {
-        guard isAttached, let bytes = engine.readExternalTexture(node) else { return nil }
+        guard isAttached, let bytes = engine.renderDevice.readExternalTexture(node) else { return nil }
         return (Int(node.width), Int(node.height), bytes)
     }
 }

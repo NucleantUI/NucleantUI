@@ -91,7 +91,7 @@ public final class RenderTexture {
         return (canvas.node.image, canvas.node.imageView, canvas.width, canvas.height)
     }
 
-    /// The container id the canvas composites under — what `engine.readable`
+    /// The container id the canvas composites under — what `engine.renderDevice.readable`
     /// is keyed by, and so how `image()` knows the GPU has drawn it.
     var canvasID: Int? { canvas?.container.id }
 

@@ -193,7 +193,7 @@ extension RenderNodeManager {
                 destroy(node)
             }
             let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
-            guard let thor = engine.makeThorWidgetNode(width: width, height: height) else {
+            guard let thor = engine.renderDevice.makeThorWidgetNode(width: width, height: height) else {
                 nucleantFlushStandardOutput()
                 nucleantLogError("NucleantUI: ThorCanvas node build (\(width)x\(height)) failed\n")
                 return nil
@@ -210,7 +210,7 @@ extension RenderNodeManager {
         /// Retarget the node's canvas at an image of `width × height` — the
         /// same `Tvg_Canvas`, so its paints survive. False leaves it as it was.
         private func resize(_ node: ThorCanvasNode, width: Int, height: Int) -> Bool {
-            guard engine.resizeThorNode(node.node, id: node.container.id, width: width, height: height) else {
+            guard engine.renderDevice.resizeThorNode(node.node, id: node.container.id, width: width, height: height) else {
                 return false
             }
             node.width = width
@@ -257,7 +257,7 @@ extension RenderNodeManager {
         /// target, and the node's teardown releases that texture last.
         private func destroy(_ node: ThorCanvasNode) {
             _ = tvg_canvas_destroy(node.node.canvas.base)
-            node.node.destroyResources(engine)
+            node.node.destroyResources(engine.renderDevice)
         }
 
         func destroyAll() {

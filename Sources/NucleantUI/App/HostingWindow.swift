@@ -52,6 +52,12 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     public var renderEngine: VulkanRenderEngine<Node>?
 
+    #if os(macOS)
+    /// The app's device, which the engine is built on when the window is
+    /// presented. Without one the engine makes a device of its own.
+    var renderDevice: VulkanRenderDevice<Node>?
+    #endif
+
     /// (x, y, width, height) in *pixels*, like every other Nucleant window.
     public var win_rect: SIMD4<Int>
 
@@ -246,8 +252,12 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             defer: false
         )
 
-        // 2. The Vulkan engine renders into that layer.
-        let engine = try VulkanRenderEngine<Node>(metalLayer: platformWindow.metalLayer)
+        // 2. The Vulkan engine renders into that layer, on the app's device.
+        let engine = if let renderDevice {
+            try VulkanRenderEngine<Node>(device: renderDevice, metalLayer: platformWindow.metalLayer)
+        } else {
+            try VulkanRenderEngine<Node>(metalLayer: platformWindow.metalLayer)
+        }
         self.renderEngine = engine
         self.platformWindow = platformWindow
         platformWindow.win_delegate = self

@@ -769,7 +769,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             node.computeLayout = nil
             node.computeDescriptorSet = nil
             pipeline.destroy()
-            node.destroyResources(engine)
+            node.destroyResources(engine.renderDevice)
         }
     }
 
@@ -794,7 +794,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             guard let request = texture.pendingShader,
                   let image = texture.gpuImage,
                   let canvasID = texture.canvasID,
-                  engine.readable.contains(canvasID)
+                  engine.renderDevice.readable.contains(canvasID)
             else { continue }
             texture.pendingShader = nil
             guard let entryPoint = SpirvEntryPoints(request.words).compute else {
@@ -818,13 +818,13 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             ))
             shader.pipeline.updateArguments(bytes: request.bytes)
             shader.frame += 1
-            engine.oneTimeSubmit { cmd in
+            engine.renderDevice.oneTimeSubmit { cmd in
                 shader.container.needsRender = true
-                shader.node.update(engine, slot: shader.container, cmd: cmd)
+                shader.node.update(engine.renderDevice, slot: shader.container, cmd: cmd)
                 copy(shader.node.image, into: image.image, width: image.width, height: image.height, cmd)
             }
             // `update` published the container, which is not composited.
-            engine.readable.remove(shader.container.id)
+            engine.renderDevice.readable.remove(shader.container.id)
             texture.shaderDidRender()
             rendered = true
         }
@@ -884,7 +884,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                     argumentCapacity: argumentFloats == 0 ? 0 : max(256, argumentFloats * 3 / 2)
                 )
             } catch {
-                node.destroyResources(engine)
+                node.destroyResources(engine.renderDevice)
                 throw error
             }
             node.computePipeline = pipeline.pipeline
@@ -1094,7 +1094,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                         argumentCapacity: capacity
                     )
                 } catch {
-                    node.destroyResources(engine)
+                    node.destroyResources(engine.renderDevice)
                     throw error
                 }
                 node.pipeline = pipeline.pipeline
@@ -1171,13 +1171,13 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             node.computeLayout = nil
             node.computeDescriptorSet = nil
             pipeline.destroy()
-            node.destroyResources(engine)
+            node.destroyResources(engine.renderDevice)
         case .graphics(let node, let pipeline):
             node.pipeline = nil
             node.pipelineLayout = nil
             node.descriptorSet = nil
             pipeline.destroy()
-            node.destroyResources(engine)
+            node.destroyResources(engine.renderDevice)
         }
         if let layer = slot.layer {
             recycle(layer)
@@ -1299,7 +1299,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         // attachment needs no transition: its render pass starts from
         // UNDEFINED and clears.
         guard usage == .storage else { return (image, view, memory) }
-        engine.oneTimeSubmit { cmd in
+        engine.renderDevice.oneTimeSubmit { cmd in
             engineImageBarrier(
                 cmd,
                 image: image,
