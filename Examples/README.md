@@ -11,7 +11,7 @@ swift build && .build/debug/Calculator
 
 To start your own app from one, copy the directory and change the
 dependency to
-`.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.0.1"))`.
+`.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMajor(from: "0.1.0"))`.
 
 | Example | Kind of app | What it shows |
 | --- | --- | --- |
