@@ -101,7 +101,7 @@ struct BrowserTests {
         try await Task.sleep(for: .milliseconds(300))
 
         let slot = try #require(engine.nodes.first { $0.compositesToWindow && $0.compositeRect == nil })
-        #expect(engine.readable.contains(slot.id))
+        #expect(engine.renderDevice.readable.contains(slot.id))
         // The window canvas is the primary renderer's: Skia (RGBA), or
         // ThorVG (BGRA) in a build without SKIA_MODE.
         let image: VkImage, width: Int, height: Int, red: [UInt8]
@@ -208,7 +208,7 @@ private func readPixels(_ engine: NucleantRenderEngine, _ image: VkImage, width:
     defer { vkFreeMemory(engine.device, memory, nil) }
     vkBindBufferMemory(engine.device, buffer, memory, 0)
 
-    engine.oneTimeSubmit { cmd in
+    engine.renderDevice.oneTimeSubmit { cmd in
         var region = VkBufferImageCopy()
         region.imageSubresource = VkImageSubresourceLayers(
             aspectMask: VkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
