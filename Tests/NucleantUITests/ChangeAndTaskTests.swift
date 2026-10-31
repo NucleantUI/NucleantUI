@@ -20,6 +20,16 @@ final class Knobs {
     var isShown = true
 }
 
+/// A task's body that runs until the task is cancelled. No timer: the stream
+/// never yields, and iterating it ends with the cancellation. (A 60 s
+/// `Task.sleep` stood in for this, but in the browser Swift's own executor
+/// serves deadlines out of order, so the tests' short waits sat behind it.)
+private func untilCancelled() async {
+    let (stream, continuation) = AsyncStream<Never>.makeStream()
+    for await _ in stream {}
+    withExtendedLifetime(continuation) {}
+}
+
 @View
 struct ChangeWatcher {
     let knobs: Knobs
@@ -64,7 +74,7 @@ struct TaskRunner {
             if knobs.isShown {
                 Color.orange.task {
                     log("started")
-                    try? await Task.sleep(for: .seconds(60))
+                    await untilCancelled()
                     log(Task.isCancelled ? "cancelled" : "finished")
                 }
             }
@@ -82,7 +92,7 @@ struct IdentifiedTask {
         let unrelated = knobs.unrelated
         Color.orange.task(id: id) {
             log("started \(id), unrelated \(unrelated)")
-            try? await Task.sleep(for: .seconds(60))
+            await untilCancelled()
             log(Task.isCancelled ? "cancelled \(id)" : "finished \(id)")
         }
     }

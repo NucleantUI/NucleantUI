@@ -384,6 +384,11 @@ public final class SkiaDisplayRenderer {
         let font = SkFont(typeface(for: family), size: Float(size * Self.thorPointScale))
         font.setSubpixel(true)
         font.setEdging(.antiAlias)
+        // Unhinted, as ThorVG draws and the layout measures. Where Skia reads
+        // glyphs through FreeType (the browser, Linux, Android) its default
+        // hinting rounds every advance to a whole pixel, and a word drifts
+        // off its measured width a pixel every few letters.
+        font.setHinting(.none)
         if slanted { font.setSkewX(-0.2) }
         fonts[key] = font
         return font
