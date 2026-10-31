@@ -63,12 +63,12 @@ public struct ShaderImageInput: @unchecked Sendable {
 ///
 /// It owns its image/view/memory and carries the pipeline handles
 /// `ShaderPipeline` installs. With no pipeline installed it has no content, so
-/// it stays out of `engine.readable` rather than compositing whatever the
+/// it stays out of `engine.renderDevice.readable` rather than compositing whatever the
 /// allocation happened to contain.
 @Observable
 public final class ComputeShaderNode<ContainerNode: RenderContainerNode>: VulkanRenderNode, @unchecked Sendable {
 
-    public typealias Engine = VulkanRenderEngine<ContainerNode>
+    public typealias Device = VulkanRenderDevice<ContainerNode>
 
     public var width: UInt32
     public var height: UInt32
@@ -126,7 +126,7 @@ public final class ComputeShaderNode<ContainerNode: RenderContainerNode>: Vulkan
     }
 
     /// No canvas draw — the dispatch writes every pixel of the image.
-    public func update(_ engine: Engine, slot: ContainerNode, cmd: VkCommandBuffer) {
+    public func update(_ device: Device, slot: ContainerNode, cmd: VkCommandBuffer) {
         guard slot.needsRender else { return }
         guard let pipeline = computePipeline,
               let layout = computeLayout,
@@ -170,19 +170,23 @@ public final class ComputeShaderNode<ContainerNode: RenderContainerNode>: Vulkan
             dstStage: compute | VkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT.rawValue)
         )
         currentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        engine.readable.insert(slot.id)
+        device.readable.insert(slot.id)
         // `slot.needsRender` is cleared by the container after this returns,
         // the same steady state as every other node kind.
     }
 
-    /// Free the image/view/memory this node owns. `inputs` are borrowed, so
-    /// they are left for their owners.
-    public func destroyResources(_ engine: Engine) {
-        vkDeviceWaitIdle(engine.device)
-        vkDestroyImageView(engine.device, imageView, nil)
-        vkDestroyImage(engine.device, image, nil)
-        if let memory {
-            vkFreeMemory(engine.device, memory, nil)
+    /// Free the image/view/memory this node owns, once the work in flight in
+    /// any window is done with them. `inputs` are borrowed, so they are left
+    /// for their owners.
+    public func destroyResources(_ device: Device) {
+        let vkDevice = device.device
+        let imageView = imageView, image = image, memory = memory
+        device.releaseAfterInFlightWork {
+            vkDestroyImageView(vkDevice, imageView, nil)
+            vkDestroyImage(vkDevice, image, nil)
+            if let memory {
+                vkFreeMemory(vkDevice, memory, nil)
+            }
         }
     }
 
@@ -226,7 +230,7 @@ public final class ComputeShaderNode<ContainerNode: RenderContainerNode>: Vulkan
 @Observable
 public final class RenderTextureNode<ContainerNode: RenderContainerNode>: VulkanRenderNode, @unchecked Sendable {
 
-    public typealias Engine = VulkanRenderEngine<ContainerNode>
+    public typealias Device = VulkanRenderDevice<ContainerNode>
 
     public var width: UInt32
     public var height: UInt32
@@ -276,12 +280,12 @@ public final class RenderTextureNode<ContainerNode: RenderContainerNode>: Vulkan
     /// whoever wrote it — the texture's canvas node, or a compute slot — and
     /// that is the layout the composite samples in, so there is nothing to
     /// transition here either.
-    public func update(_ engine: Engine, slot: ContainerNode, cmd: VkCommandBuffer) {
+    public func update(_ device: Device, slot: ContainerNode, cmd: VkCommandBuffer) {
         guard hasContent else { return }
-        engine.readable.insert(slot.id)
+        device.readable.insert(slot.id)
     }
 
     /// Nothing: the image belongs to the `RenderTexture`, which frees it once
     /// however many placements borrowed it.
-    public func destroyResources(_ engine: Engine) {}
+    public func destroyResources(_ device: Device) {}
 }

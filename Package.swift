@@ -117,15 +117,15 @@ func nucleantDependencies() -> [Package.Dependency] {
         return ["NucleantVulkan", "NucleantThorVG", "NucleantApplication", "NucleantSkia"]
             .map { .package(path: "../\($0)") }
     }
-    // Each by version, up to its next minor: its new 0.0.x releases are
-    // picked up as they come; its 0.1.0 only once its line here is moved to
-    // it. (Never by branch: a package depended on by version may not have
-    // one, so NucleantUI could not be.)
+    // Each by version, up to its next major: its new 0.x releases from 0.1.0
+    // (the shared VulkanRenderDevice) are picked up as they come. (Never by
+    // branch: a package depended on by version may not have one, so
+    // NucleantUI could not be.)
     return [
-        .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMinor(from: "0.0.1")),
-        .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMinor(from: "0.0.1")),
-        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMinor(from: "0.0.1")),
-        .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMinor(from: "0.0.1")),
+        .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMajor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMajor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMajor(from: "0.1.0")),
+        .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMajor(from: "0.1.0")),
     ]
 }
 
@@ -214,8 +214,24 @@ let package = Package(
             // records, as an app's do in a preview build (PreviewTests).
             swiftSettings: skiaModeSettings + [.define("NUCLEANT_PREVIEW")]
         ),
-        // What `@State` expands to, and what it refuses, checked on the
-        // syntax — no framework involved.
+        .executableTarget(
+            name: "ExperimentalUITests",
+            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]
+        ),
+    ] + macroTestTargets()
+)
+
+/// What `@State` expands to, and what it refuses, checked on the syntax — no
+/// framework involved.
+///
+/// Not in a wasm build. A test product holding a macro's tests is built for
+/// the build machine as well (that is where a macro runs), and SwiftPM decides
+/// so without looking at a dependency's platform condition. Built there, the
+/// framework meets wasm's CVulkan, which is empty off wasm, and the tests the
+/// browser runs never get built.
+func macroTestTargets() -> [Target] {
+    guard !isWasm else { return [] }
+    return [
         .testTarget(
             name: "NucleantUIMacrosTests",
             dependencies: [
@@ -223,9 +239,5 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),
-        .executableTarget(
-            name: "ExperimentalUITests",
-            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]
-        ),
     ]
-)
+}

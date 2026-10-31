@@ -5,7 +5,7 @@ import Foundation
 
 // A standalone app built on NucleantUI. The library is taken from the
 // enclosing checkout; in your own project replace the path dependency with
-//   .package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.0.1"))
+//   .package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMajor(from: "0.1.0"))
 //
 // Its shaders are PyShader `.py` files compiled to SPIR-V by PyShader's build
 // plugin, as `pyshader.toml` lists them — PyShader the sibling checkout under

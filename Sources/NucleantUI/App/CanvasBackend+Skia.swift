@@ -40,7 +40,7 @@ final class CanvasBackend<N: NucleantContainerNode> {
     private func sharedContext() -> SkiaVulkanContext? {
         if let context { return context }
         do {
-            let made = try engine.makeSkiaContext()
+            let made = try engine.renderDevice.makeSkiaContext()
             context = made
             return made
         } catch {
@@ -54,7 +54,7 @@ final class CanvasBackend<N: NucleantContainerNode> {
     /// in the engine's list — with a renderer drawing into it.
     func makeCanvas(width: Int, height: Int) -> (node: Node, container: N, renderer: DisplayRenderer)? {
         guard let context = sharedContext(),
-              let node = engine.makeSkiaWidgetNode(context: context, width: width, height: height) else {
+              let node = engine.renderDevice.makeSkiaWidgetNode(context: context, width: width, height: height) else {
             nucleantFlushStandardOutput()
             nucleantLogError("NucleantUI: Skia canvas build (\(width)x\(height)) failed\n")
             return nil
@@ -67,7 +67,7 @@ final class CanvasBackend<N: NucleantContainerNode> {
     /// A new, empty surface at `width × height` for the same node. False
     /// leaves it as it was.
     func resize(_ node: Node, id: Int, width: Int, height: Int) -> Bool {
-        engine.resizeSkiaNode(node, id: id, width: width, height: height)
+        engine.renderDevice.resizeSkiaNode(node, id: id, width: width, height: height)
     }
 
     /// Empty a node going back to the pool. A Skia surface keeps no paints
@@ -75,14 +75,14 @@ final class CanvasBackend<N: NucleantContainerNode> {
     func clear(_ node: Node) {}
 
     func destroy(_ node: Node) {
-        node.destroyResources(engine)
+        node.destroyResources(engine.renderDevice)
     }
 
     /// The copy-target image an automatic per-view node holds. Its pixels
     /// are copied out of the painter's Skia image, which is RGBA and read as
     /// RGBA — the copy is bytes, so this one is the same.
     func makeImageNode(width: Int, height: Int) throws -> ImageNode<N> {
-        try engine.makeImageNode(
+        try engine.renderDevice.makeImageNode(
             width: width, height: height,
             format: VK_FORMAT_R8G8B8A8_UNORM, viewFormat: VK_FORMAT_R8G8B8A8_UNORM
         )

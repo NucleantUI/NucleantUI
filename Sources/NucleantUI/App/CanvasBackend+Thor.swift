@@ -35,7 +35,7 @@ final class CanvasBackend<N: NucleantContainerNode> {
     /// A fresh canvas at `width × height` and its engine container — not yet
     /// in the engine's list — with a renderer drawing into it.
     func makeCanvas(width: Int, height: Int) -> (node: Node, container: N, renderer: DisplayRenderer)? {
-        guard let node = engine.makeThorWidgetNode(width: width, height: height) else {
+        guard let node = engine.renderDevice.makeThorWidgetNode(width: width, height: height) else {
             // The engine reports *why* on stdout, which is fully buffered when
             // the process isn't attached to a terminal — flush it so the
             // reason lands next to this line rather than being lost.
@@ -51,7 +51,7 @@ final class CanvasBackend<N: NucleantContainerNode> {
     /// Retarget the canvas at an image of `width × height` — the same
     /// `Tvg_Canvas`, so its paints survive. False leaves it as it was.
     func resize(_ node: Node, id: Int, width: Int, height: Int) -> Bool {
-        engine.resizeThorNode(node, id: id, width: width, height: height)
+        engine.renderDevice.resizeThorNode(node, id: id, width: width, height: height)
     }
 
     /// Empty a canvas going back to the pool: its paints come off.
@@ -64,13 +64,13 @@ final class CanvasBackend<N: NucleantContainerNode> {
     /// the node's teardown releases that texture last.
     func destroy(_ node: Node) {
         _ = tvg_canvas_destroy(node.canvas.base)
-        node.destroyResources(engine)
+        node.destroyResources(engine.renderDevice)
     }
 
     /// The copy-target image an automatic per-view node holds, in the
     /// engine's own format, which the ThorVG painter's image shares.
     func makeImageNode(width: Int, height: Int) throws -> ImageNode<N> {
-        try engine.makeImageNode(width: width, height: height)
+        try engine.renderDevice.makeImageNode(width: width, height: height)
     }
 }
 

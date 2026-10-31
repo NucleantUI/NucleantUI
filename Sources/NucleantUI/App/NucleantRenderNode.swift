@@ -125,23 +125,23 @@ public final class NucleantRenderNode: NucleantContainerNode, @unchecked Sendabl
         }
     }
 
-    public func update(engine: Engine, cmd: VkCommandBuffer) {
+    public func update(device: Device, cmd: VkCommandBuffer) {
         guard needsRender else { return }
         switch context {
         case .thor(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         case .skia(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         case .compute(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         case .vertexShader(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         case .image(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         case .externalTexture(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         case .renderTexture(let node):
-            node.update(engine, slot: self, cmd: cmd)
+            node.update(device, slot: self, cmd: cmd)
         }
         // Cleared here, so an idle frame costs nothing: `canvas.draw()` +
         // `sync()` re-rasterize the whole scene, and re-running them for an
@@ -156,22 +156,22 @@ public final class NucleantRenderNode: NucleantContainerNode, @unchecked Sendabl
         needsRender = false
     }
 
-    public func destroyResources(engine: Engine) {
+    public func destroyResources(device: Device) {
         switch context {
         case .thor(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         case .skia(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         case .compute(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         case .vertexShader(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         case .image(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         case .externalTexture(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         case .renderTexture(let node):
-            node.destroyResources(engine)
+            node.destroyResources(device)
         }
     }
 
@@ -199,15 +199,14 @@ public final class NucleantRenderNode: NucleantContainerNode, @unchecked Sendabl
     /// nothing else tracks the size for it. A shader slot, and the canvas
     /// behind a `.shader` effect, are sized by their view's frame instead, and
     /// `ShaderSlotRegistry` rebuilds them on a change.
-    public func resizeToFitWindow(width: Int, height: Int, engine: Engine) {
+    public func resizeToFitWindow(width: Int, height: Int, device: Device) {
+        guard compositesToWindow && compositeRect == nil else { return }
         switch context {
-        case .thor(let node) where compositesToWindow && compositeRect == nil:
-            engine.resizeThorNode(node, id: id, width: width, height: height)
-        case .skia(let node) where compositesToWindow && compositeRect == nil:
-            engine.resizeSkiaNode(node, id: id, width: width, height: height)
-        case .skia:
-            break
-        case .thor, .compute, .vertexShader, .image, .externalTexture, .renderTexture:
+        case .thor(let node):
+            device.resizeThorNode(node, id: id, width: width, height: height)
+        case .skia(let node):
+            device.resizeSkiaNode(node, id: id, width: width, height: height)
+        case .compute, .vertexShader, .image, .externalTexture, .renderTexture:
             break
         }
     }

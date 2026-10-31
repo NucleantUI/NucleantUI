@@ -81,9 +81,11 @@ struct BrowserTests {
         // directory too (resources.json's buildRoot). Read by path: this
         // Foundation's lookups in a subdirectory drop the name's last
         // character ("Fonts/Roboto-Regular.tt").
-        #expect(Bundle.module.bundleURL.lastPathComponent == "NucleantUI_NucleantUI.resources")
-        let data = try Data(contentsOf: Bundle.module.bundleURL.appendingPathComponent("Fonts/Roboto-Regular.ttf"))
-        #expect(Array(data.prefix(4)) == [0x00, 0x01, 0x00, 0x00])   // a TrueType font
+        // `Bundle.module` here is this test target's own bundle, its
+        // Fixtures; NucleantUI's is the fonts test's.
+        #expect(Bundle.module.bundleURL.lastPathComponent == "NucleantUI_NucleantUITests.resources")
+        let data = try Data(contentsOf: Bundle.module.bundleURL.appendingPathComponent("Fixtures/compute.spv"))
+        #expect(Array(data.prefix(4)) == [0x03, 0x02, 0x23, 0x07])   // SPIR-V's magic number
     }
 
     // MARK: Windows
@@ -101,7 +103,7 @@ struct BrowserTests {
         try await Task.sleep(for: .milliseconds(300))
 
         let slot = try #require(engine.nodes.first { $0.compositesToWindow && $0.compositeRect == nil })
-        #expect(engine.readable.contains(slot.id))
+        #expect(engine.renderDevice.readable.contains(slot.id))
         // The window canvas is the primary renderer's: Skia (RGBA), or
         // ThorVG (BGRA) in a build without SKIA_MODE.
         let image: VkImage, width: Int, height: Int, red: [UInt8]
@@ -208,7 +210,7 @@ private func readPixels(_ engine: NucleantRenderEngine, _ image: VkImage, width:
     defer { vkFreeMemory(engine.device, memory, nil) }
     vkBindBufferMemory(engine.device, buffer, memory, 0)
 
-    engine.oneTimeSubmit { cmd in
+    engine.renderDevice.oneTimeSubmit { cmd in
         var region = VkBufferImageCopy()
         region.imageSubresource = VkImageSubresourceLayers(
             aspectMask: VkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
