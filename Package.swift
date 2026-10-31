@@ -214,8 +214,24 @@ let package = Package(
             // records, as an app's do in a preview build (PreviewTests).
             swiftSettings: skiaModeSettings + [.define("NUCLEANT_PREVIEW")]
         ),
-        // What `@State` expands to, and what it refuses, checked on the
-        // syntax — no framework involved.
+        .executableTarget(
+            name: "ExperimentalUITests",
+            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]
+        ),
+    ] + macroTestTargets()
+)
+
+/// What `@State` expands to, and what it refuses, checked on the syntax — no
+/// framework involved.
+///
+/// Not in a wasm build. A test product holding a macro's tests is built for
+/// the build machine as well (that is where a macro runs), and SwiftPM decides
+/// so without looking at a dependency's platform condition. Built there, the
+/// framework meets wasm's CVulkan, which is empty off wasm, and the tests the
+/// browser runs never get built.
+func macroTestTargets() -> [Target] {
+    guard !isWasm else { return [] }
+    return [
         .testTarget(
             name: "NucleantUIMacrosTests",
             dependencies: [
@@ -223,9 +239,5 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),
-        .executableTarget(
-            name: "ExperimentalUITests",
-            dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")]
-        ),
     ]
-)
+}
