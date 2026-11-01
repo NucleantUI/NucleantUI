@@ -94,7 +94,11 @@ struct DragAroundButton {
         let drag = DragGesture()
             .onChanged { value in log("drag \(Int(value.translation.width))") }
             .onEnded { value in log("end \(Int(value.translation.width))") }
-        let content = VStack { Button("B") { log("button") }.frame(width: 200, height: 200) }
+        // A label wide enough that the drags end still on the button.
+        let content = VStack {
+            Button { log("button") } label: { Text("B").frame(width: 60, height: 40) }
+                .frame(width: 200, height: 200)
+        }
         if simultaneous {
             content.simultaneousGesture(drag)
         } else {

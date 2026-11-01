@@ -60,16 +60,15 @@ public struct Button<Label: View> {
             ))
     }
 
+    /// The label as it is — no padding, no background, its own size. The
+    /// tint is only the foreground it inherits, so a label that sets its
+    /// own colour keeps it. A press dims it at once and a release fades it
+    /// back.
     private var standalone: some View {
         label
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(tint.opacity(isPressed ? 0.65 : 1))
-            )
-            .opacity(isEnabled ? 1 : 0.4)
+            .foregroundStyle(tint)
+            .opacity(isEnabled ? (isPressed ? 0.35 : 1) : 0.4)
+            .animation(.easeOut(duration: isPressed ? 0.1 : 0.3), value: isPressed)
             ._hitTarget(HitTarget(
                 isEnabled: isEnabled,
                 // Pressed state is visual only — the action fires on release
