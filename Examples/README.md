@@ -9,6 +9,10 @@ cd Examples/Calculator
 swift build && .build/debug/Calculator
 ```
 
+To run them on iOS, or as a macOS `.app`, open
+[xcode/Examples.xcodeproj](xcode): one Xcode project with every example as
+a target, built from the same sources.
+
 To start your own app from one, copy the directory and change the
 dependency to
 `.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.1.0"))`.
