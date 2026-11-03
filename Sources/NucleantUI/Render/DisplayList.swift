@@ -236,6 +236,45 @@ public struct ImageDraw: Equatable, Sendable {
     }
 }
 
+/// An SVG document drawn into `frame`, as large as fits in proportion,
+/// centered.
+public struct SvgDraw: Equatable, Sendable {
+    public var image: SvgImage
+    public var frame: Rect
+    /// A template's style, resolved for its scheme: everything the document
+    /// draws painted in it, by the document's own coverage. `nil` draws the
+    /// document's colors.
+    public var tint: ShapeStyle?
+    /// The inherited opacity, applied to the drawing as a whole — the
+    /// document's colors are its own, not resolved at layout time.
+    public var opacity: Double
+    public var transform: Transform
+    public var clip: Rect?
+    public var clipCornerRadius: Double
+    /// Clips turned with the view they cut, on top of `clip`.
+    public var transformedClips: [TransformedClip]
+
+    public init(
+        image: SvgImage,
+        frame: Rect,
+        tint: ShapeStyle? = nil,
+        opacity: Double = 1,
+        transform: Transform = .identity,
+        clip: Rect? = nil,
+        clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = []
+    ) {
+        self.image = image
+        self.frame = frame
+        self.tint = tint
+        self.opacity = opacity
+        self.transform = transform
+        self.clip = clip
+        self.clipCornerRadius = clipCornerRadius
+        self.transformedClips = transformedClips
+    }
+}
+
 /// What a `Canvas` view draws with: handed the raw pointer of the node's
 /// `SkCanvas`, already at the canvas's origin, inside its clip. A pointer
 /// rather than the Skia type so the display list names no backend; builds
@@ -298,6 +337,7 @@ public enum DrawCommand: Equatable, Sendable {
     case shape(ShapeDraw)
     case text(TextDraw)
     case image(ImageDraw)
+    case svg(SvgDraw)
     case canvas(CanvasDraw)
 }
 

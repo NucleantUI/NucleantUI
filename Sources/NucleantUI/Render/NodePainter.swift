@@ -136,6 +136,7 @@ final class NodePainter<N: NucleantContainerNode> {
             case .shape(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             case .text(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             case .image(let draw): radius = draw.clipCornerRadius; clip = draw.clip
+            case .svg(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             case .canvas(let draw): radius = draw.clipCornerRadius; clip = draw.clip
             }
             if radius > 0, let clip, !clip.insetBy(radius).contains(damage) { return nil }

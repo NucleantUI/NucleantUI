@@ -1188,6 +1188,12 @@ enum LayoutTrace {
                     index, draw.frame.minX, draw.frame.minY, draw.frame.width, draw.frame.height,
                     draw.image.width, draw.image.height
                 ))
+            case .svg(let draw):
+                nucleantLogError(String(
+                    format: "[layout] %3d svg     x=%7.2f y=%7.2f w=%7.2f h=%7.2f  %.0fx%.0f\n",
+                    index, draw.frame.minX, draw.frame.minY, draw.frame.width, draw.frame.height,
+                    draw.image.size.width, draw.image.size.height
+                ))
             case .canvas(let draw):
                 nucleantLogError(String(
                     format: "[layout] %3d canvas  x=%7.2f y=%7.2f w=%7.2f h=%7.2f\n",

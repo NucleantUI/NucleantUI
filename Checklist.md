@@ -252,3 +252,6 @@ change that adds the API.
 - `PathShape` — a shape from a `(Size) -> Path` closure
 - `Color.dynamic(light:dark:)`
 - `FontRegistry.register(path:as:)` — a font file as a `Font.custom` family
+- `SvgView` / `SvgImage` — an SVG document parsed by Skia, drawn at its own
+  size or `.resizable()` and always in its proportions, `.renderingMode(.template)`
+  painting it in the foreground style
