@@ -115,6 +115,10 @@ extension DrawCommand {
             box = draw.frame
             transform = draw.transform
             clip = draw.clip
+        case .svg(let draw):
+            box = draw.frame
+            transform = draw.transform
+            clip = draw.clip
         case .canvas(let draw):
             box = draw.frame
             transform = draw.transform
@@ -168,6 +172,9 @@ extension DrawCommand {
         case .image(var draw):
             (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
             return .image(draw)
+        case .svg(var draw):
+            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
+            return .svg(draw)
         case .canvas(var draw):
             (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
             return .canvas(draw)

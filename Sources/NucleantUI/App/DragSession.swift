@@ -177,6 +177,12 @@ extension DrawCommand {
             draw.transform = moved(draw.transform)
             draw.transformedClips = moved(draw.transformedClips)
             return .image(draw)
+        case .svg(var draw):
+            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
+            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
+            draw.transform = moved(draw.transform)
+            draw.transformedClips = moved(draw.transformedClips)
+            return .svg(draw)
         case .canvas(var draw):
             draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
@@ -201,6 +207,9 @@ extension DrawCommand {
         case .image(var draw):
             draw.opacity *= context.opacity
             return .image(draw)
+        case .svg(var draw):
+            draw.opacity *= context.opacity
+            return .svg(draw)
         case .canvas(var draw):
             draw.opacity *= context.opacity
             return .canvas(draw)

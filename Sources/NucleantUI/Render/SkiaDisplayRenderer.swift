@@ -52,6 +52,8 @@ public final class SkiaDisplayRenderer {
     private func setUpPaints() {
         fillPaint.setStyle(.fill)
         strokePaint.setStyle(.stroke)
+        tintPaint.setStyle(.fill)
+        tintPaint.setBlendMode(.srcIn)
     }
 
     /// One of each, set per command rather than made per command — each is
@@ -60,6 +62,9 @@ public final class SkiaDisplayRenderer {
     private let strokePaint = SkPaint()
     private let textPaint = SkPaint()
     private let imagePaint = SkPaint()
+    /// The layer an SVG is faded or tinted in, and the tint laid over it.
+    private let layerPaint = SkPaint()
+    private let tintPaint = SkPaint()
     private let path = SkPath()
 
     /// Fonts by face, size and synthetic slant — what text draws with.
@@ -150,6 +155,8 @@ public final class SkiaDisplayRenderer {
             case .text(let draw):
                 emit(draw, on: canvas)
             case .image(let draw):
+                emit(draw, on: canvas)
+            case .svg(let draw):
                 emit(draw, on: canvas)
             case .canvas(let draw):
                 emit(draw, on: canvas)
@@ -458,6 +465,38 @@ public final class SkiaDisplayRenderer {
         ) else { return nil }
         images[key] = (raster, made)
         return made
+    }
+
+    // MARK: - SVG
+
+    /// The document rendered into the box it fits, scaled from its own
+    /// size. Faded or tinted, it is drawn into a layer first: the tint is
+    /// laid over it `srcIn`, so it shows only where the document drew, by
+    /// the document's coverage, and the layer composites at the opacity.
+    private func emit(_ draw: SvgDraw, on canvas: SkCanvas) {
+        let box = draw.image.fittedRect(in: draw.frame)
+        guard box.width > 0, box.height > 0 else { return }
+        let pos = SIMD2<Float>(box.origin)
+        let size = SIMD2<Float>(box.size)
+        let saved = canvas.save()
+        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        // The outermost <svg> cuts what it draws to its viewport, as in a
+        // browser.
+        canvas.clipRect(pos: pos, size: size, doAntiAlias: true)
+        if draw.tint != nil || draw.opacity < 1 {
+            layerPaint.setAlphaf(Float(max(0, min(1, draw.opacity))))
+            canvas.saveLayer(pos: pos, size: size, paint: layerPaint)
+        }
+        canvas.save()
+        canvas.translate(pos)
+        canvas.scale(Float(box.width / draw.image.size.width))
+        draw.image.document.render(canvas)
+        canvas.restore()
+        if let tint = draw.tint {
+            apply(tint, to: tintPaint, bounds: draw.frame)
+            canvas.drawRect(pos: pos, size: size, paint: tintPaint)
+        }
+        canvas.restoreToCount(saved)
     }
 
     // MARK: - Shared head

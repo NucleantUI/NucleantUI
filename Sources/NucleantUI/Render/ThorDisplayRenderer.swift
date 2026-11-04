@@ -41,6 +41,20 @@ public final class ThorDisplayRenderer {
     /// layer render while one is in progress.
     private var scene: Tvg_Paint?
 
+    /// Every SVG document drawn by the last render, parsed once into a
+    /// picture of its own that is never added anywhere: each draw adds a
+    /// duplicate, which the canvas takes. The source is held with it, so its
+    /// identifier stays its own; whatever a render does not draw is
+    /// released after it.
+    private var svgPictures: [ObjectIdentifier: (source: SvgImage, picture: Tvg_Paint)] = [:]
+    private var svgsDrawn: Set<ObjectIdentifier> = []
+
+    isolated deinit {
+        for entry in svgPictures.values {
+            _ = tvg_paint_rel(entry.picture)
+        }
+    }
+
     /// Replace the canvas contents with `list`.
     public func render(_ list: DisplayList) {
         render(list, origin: nil, flipHeight: 0)
@@ -53,6 +67,8 @@ public final class ThorDisplayRenderer {
     func render(_ list: DisplayList, origin: Point?, flipHeight: Int) {
         _ = tvg_canvas_remove(canvas, nil)
         scene = nil
+        svgsDrawn.removeAll(keepingCapacity: true)
+        defer { releaseUndrawnSvgs() }
         if let origin, let root = tvg_scene_new() {
             // Pixel space, applied after `scale`: translate by the origin,
             // then y' = height - y.
@@ -79,6 +95,8 @@ public final class ThorDisplayRenderer {
     func render(packed items: [(list: DisplayList, x: Int, y: Int)]) {
         _ = tvg_canvas_remove(canvas, nil)
         scene = nil
+        svgsDrawn.removeAll(keepingCapacity: true)
+        defer { releaseUndrawnSvgs() }
         for item in items {
             guard let root = tvg_scene_new() else { continue }
             // Pixel space, applied after `scale`. A scene rather than a
@@ -104,6 +122,8 @@ public final class ThorDisplayRenderer {
             case .text(let draw):
                 emit(draw)
             case .image(let draw):
+                emit(draw)
+            case .svg(let draw):
                 emit(draw)
             case .canvas:
                 // Draws into a Skia canvas; a ThorVG node has none.
@@ -315,6 +335,61 @@ public final class ThorDisplayRenderer {
             _ = tvg_paint_set_opacity(picture, UInt8(max(0, min(1, draw.opacity)) * 255))
         }
         finish(paint: picture, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+    }
+
+    // MARK: - SVG
+
+    /// The document's picture sized to the box it fits. Tinted, the picture
+    /// is the alpha mask of a box filled with the tint, so the tint shows
+    /// only where the document drew, by the document's coverage.
+    private func emit(_ draw: SvgDraw) {
+        let box = draw.image.fittedRect(in: draw.frame)
+        guard box.width > 0, box.height > 0,
+              let parsed = svgPicture(for: draw.image),
+              let picture = tvg_paint_duplicate(parsed) else { return }
+        _ = tvg_picture_set_size(picture, f(box.width), f(box.height))
+        _ = tvg_paint_translate(picture, f(box.minX), f(box.minY))
+        var paint = picture
+        if let tint = draw.tint, let shape = tvg_shape_new() {
+            _ = tvg_shape_append_rect(shape, f(box.minX), f(box.minY), f(box.width), f(box.height), 0, 0, true)
+            apply(tint, to: shape, bounds: draw.frame, stroke: false)
+            // The mask is owned by the shape it masks.
+            _ = tvg_paint_set_mask_method(shape, picture, TVG_MASK_METHOD_ALPHA)
+            paint = shape
+        }
+        if draw.opacity < 1 {
+            _ = tvg_paint_set_opacity(paint, UInt8(max(0, min(1, draw.opacity)) * 255))
+        }
+        finish(paint: paint, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+    }
+
+    /// `image` parsed by ThorVG's own SVG loader, once.
+    private func svgPicture(for image: SvgImage) -> Tvg_Paint? {
+        let key = ObjectIdentifier(image)
+        svgsDrawn.insert(key)
+        if let cached = svgPictures[key] { return cached.picture }
+        guard let picture = tvg_picture_new() else { return nil }
+        let loaded = image.data.withUnsafeBufferPointer { buffer in
+            buffer.withMemoryRebound(to: CChar.self) { chars in
+                tvg_picture_load_data(picture, chars.baseAddress, UInt32(chars.count), "svg", nil, true)
+            }
+        }
+        guard loaded == TVG_RESULT_SUCCESS else {
+            _ = tvg_paint_rel(picture)
+            return nil
+        }
+        svgPictures[key] = (image, picture)
+        return picture
+    }
+
+    /// Release the pictures this render did not draw — usually none.
+    private func releaseUndrawnSvgs() {
+        guard svgPictures.count > svgsDrawn.count else { return }
+        for key in Array(svgPictures.keys) where !svgsDrawn.contains(key) {
+            if let entry = svgPictures.removeValue(forKey: key) {
+                _ = tvg_paint_rel(entry.picture)
+            }
+        }
     }
 
     // MARK: - Shared tail
