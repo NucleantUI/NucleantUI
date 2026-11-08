@@ -42,9 +42,24 @@ private final class Model {
 
 // MARK: - Views
 
-/// A model with an inferred type (private, so only the macro's storage
-/// makes it) and a value with a declared one (internal, so `@View`'s
-/// initializer takes it). Tapping bumps the model.
+/// Every kind of `@State` the generated initializer meets: with a value,
+/// optional with a value, optional without one, and one with no value,
+/// which only the caller can start.
+@View
+private struct StartingValues {
+    @State var count = 3
+    @State var age: Int? = nil
+    @State var name: String?
+    @State var start: Int
+
+    var body: some View {
+        Text("\(count) \(age ?? 0) \(name ?? "-") \(start)")
+    }
+}
+
+/// A model with an inferred type and a value with a declared one, both
+/// started by their own declarations — `@View`'s initializer takes neither.
+/// Tapping bumps the model.
 @View
 private struct Child {
     let tick: Int
@@ -189,13 +204,19 @@ extension HostedViews {
         let bottom = Point(x: 100, y: 150)
         let top = Point(x: 100, y: 50)
 
+        @Test func onlyAStateWithNoValueIsAnInitParameter() {
+            // The rest start where they are declared; the call compiles
+            // with nothing else to pass.
+            let view = StartingValues(start: 7)
+            #expect(view._viewID != .unknown)
+        }
+
         @Test func constructingAViewMakesNoInitialValue() {
             Made.reset()
             let log = Log()
             for tick in 0..<3 {
                 _ = Child(tick: tick, log: log)
             }
-            _ = Child(tick: 0, log: log, tally: Made.tally() + 5)
             #expect(Made.models == 0)
             #expect(Made.tallies == 0)
         }

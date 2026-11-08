@@ -272,11 +272,12 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
     ///
     /// Follows the memberwise rules where the syntax allows: a `let` with a
     /// value is fixed, a `var` with a value becomes a defaulted parameter, a
-    /// `@State` takes its value, a `@Binding` takes the binding. A `@State`
-    /// with an initial value — or an optional one, which starts at `nil` —
-    /// takes it as an autoclosure defaulting to that value, so neither the
-    /// default nor a value passed in is evaluated unless the state is being
-    /// created. A property whose type is only inferred from its initializer
+    /// `@Binding` takes the binding. A `@State` with a value of its own — or
+    /// an optional one, which starts at `nil` — is not a parameter at all:
+    /// its declaration is where it starts, and a view that wants its caller
+    /// to choose the start writes that init itself. Only a `@State` with no
+    /// value, which nothing else could start, takes one. A property whose
+    /// type is only inferred from its initializer
     /// is left at that value rather than guessed at — the macro sees syntax,
     /// not types.
     /// For the same reason a parameter whose *type* is less visible than
@@ -294,13 +295,10 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
             let escaping = property.isFunctionTyped && !property.isOptional ? "@escaping " : ""
             switch property.wrapper {
             case "State":
-                if let initial = property.initializer ?? (property.isOptional ? "nil" : nil) {
-                    parameters.append("\(property.name): @autoclosure @escaping @MainActor () -> \(type) = \(initial)")
-                    assignments.append("self._\(property.name) = _StateProperty(\(property.name))")
-                } else {
-                    parameters.append("\(property.name): \(escaping)\(type)")
-                    assignments.append("self._\(property.name) = _StateProperty(initialValue: \(property.name))")
-                }
+                // Started by its own declaration.
+                if property.initializer != nil || property.isOptional { continue }
+                parameters.append("\(property.name): \(escaping)\(type)")
+                assignments.append("self._\(property.name) = _StateProperty(initialValue: \(property.name))")
             case "Binding":
                 parameters.append("\(property.name): Binding<\(type)>")
                 assignments.append("self._\(property.name) = \(property.name)")
