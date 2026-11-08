@@ -76,9 +76,28 @@ extension View {
         _ModifierView(content: self, key: ["hidden"] as [AnyHashable]) { _ in HiddenContent() }
     }
 
-    /// Moves the drawing without disturbing the layout.
+    /// Offset this view by the horizontal and vertical amount specified in
+    /// the offset parameter.
+    ///
+    /// Moves the drawing — and where the view is hit, and where it is
+    /// measured from outside — without disturbing the layout: the view's
+    /// place, and every other view's, stays where layout put it. A change
+    /// animates the offset itself.
+    public func offset(_ offset: Size) -> some View {
+        _ModifierView(content: self, key: ["offset", offset] as [AnyHashable]) { context in
+            OffsetContent(offset: context.animatedValue(.offset, [offset.width, offset.height]))
+        }
+    }
+
+    /// Offset this view by the specified horizontal and vertical distances.
+    ///
+    /// Moves the drawing — and where the view is hit, and where it is
+    /// measured from outside — without disturbing the layout. A change
+    /// animates the offset itself.
     public func offset(x: Double = 0, y: Double = 0) -> some View {
-        _ModifierView(content: self, key: ["offset", Point(x: x, y: y)] as [AnyHashable]) { _ in OffsetContent(offset: Point(x: x, y: y)) }
+        _ModifierView(content: self, key: ["offset(x:y:)", x, y] as [AnyHashable]) { context in
+            OffsetContent(offset: context.animatedValue(.offset, [x, y]))
+        }
     }
 
     public func rotationEffect(_ angle: Angle, anchor: UnitPoint = .center) -> some View {

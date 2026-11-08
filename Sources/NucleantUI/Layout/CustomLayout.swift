@@ -196,7 +196,10 @@ public struct LayoutSubview: Equatable {
     /// The spacing the subview asks of its neighbours: the default gap, or
     /// what a custom layout says for itself.
     public var spacing: ViewSpacing {
-        (node.content as? LayoutSpacingSource)?.spacing(node: node) ?? ViewSpacing()
+        // A subview arriving or leaving asks what the view under its
+        // transition asks.
+        let view = node.underTransition
+        return (view.content as? LayoutSpacingSource)?.spacing(node: view) ?? ViewSpacing()
     }
 
     /// Puts the subview's `anchor` at `position`, sized as it chooses under

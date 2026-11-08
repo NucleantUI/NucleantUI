@@ -158,7 +158,7 @@ extension ForEach {
         for offset in lower..<upper {
             let element = data[position]
             position = data.index(after: position)
-            let index = identify(element).hashValue
+            let index = rows.childSlot(for: identify(element))
             let isNew = rows.isNewChild(at: index)
             let node = rows.child(index) { ctx in
                 let row = trackingObservation(at: path) { build(element) }
@@ -172,7 +172,7 @@ extension ForEach {
         if lower > 0 {
             children.append(ViewNode(content: LazyGapContent(owner: cursor.owner, start: start, count: lower)))
         }
-        children += rows.structuralChildren(built)
+        children += rows.transitionChildren(built)
         if upper < count {
             children.append(ViewNode(content: LazyGapContent(owner: cursor.owner, start: start + upper, count: count - upper)))
         }
@@ -185,7 +185,7 @@ extension ForEach {
     private func makeExpandedLazyNode(_ context: inout BuildContext, cursor: LazyBuildCursor) -> ViewNode {
         let path = context.path
         let built = data.map { element in
-            let index = identify(element).hashValue
+            let index = context.childSlot(for: identify(element))
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
                 let row = trackingObservation(at: path) { build(element) }
@@ -193,7 +193,7 @@ extension ForEach {
             }
             return (index: index, node: node, isNew: isNew)
         }
-        return ViewNode(content: GroupContent(), children: context.structuralChildren(built))
+        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }
 

@@ -417,6 +417,11 @@ public struct DrawContext: Sendable {
     /// or follows motion, and no node's remembered rect is disturbed.
     var freezesMotion = false
 
+    /// Set while a leaving transition slot is drawn: the node over the
+    /// child its body stands on, which freezes that child — and only that
+    /// one — while the body around it keeps moving.
+    var frozenTransitionContent: ObjectIdentifier?
+
     /// The coordinate spaces named above this point — by `.coordinateSpace`
     /// and by every scroll view — with where each was placed, innermost
     /// last, for a `GeometryProxy` to measure in.

@@ -251,17 +251,28 @@ struct HiddenContent: NodeContent {
     }
 }
 
-/// `.offset(x:y:)` — moves the drawing without changing the layout.
+/// `.offset` — moves the drawing without changing the layout.
+///
+/// A translation on the transform the child is drawn under, as SwiftUI's
+/// offset is a geometry effect: the child is placed in the rect layout
+/// gave, so nothing under it sees its rect change — an offset animating
+/// never reads as a move of layout to whatever is placed inside it — and
+/// what reads the transform (drawing, hit testing, a `GeometryReader`'s
+/// frame in the window) sees the view where it is drawn. The amount is
+/// animated, filed by path like an opacity: a change under an animation
+/// moves the view from where it is showing, and a transition built from
+/// an offset has its `willAppear` amount to start from.
 struct OffsetContent: NodeContent {
-    let offset: Point
+    /// `[x, y]`, animated.
+    let offset: AnimatedVector
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
-        node.singleChild?.place(
-            in: rect.offsetBy(dx: offset.x, dy: offset.y),
-            proposal: proposal,
-            context: context,
-            into: &list
-        )
+        let xy = offset.current()
+        var inner = context
+        if xy[0] != 0 || xy[1] != 0 {
+            inner.transform = context.transform.concatenating(.translation(x: xy[0], y: xy[1]))
+        }
+        node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
     }
 }
 

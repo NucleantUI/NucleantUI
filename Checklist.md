@@ -227,8 +227,15 @@ change that adds the API.
 - [x] CustomAnimation
 - [x] Animatable / AnimatablePair / VectorArithmetic
 - [x] Transaction / withTransaction / .transaction
-- [x] .transition / AnyTransition (opacity, scale, offset, move, slide, push,
-      asymmetric, combined)
+- [x] Transition protocol (body(content:phase:), properties, apply(content:phase:),
+      .animation, .combined) / TransitionPhase / TransitionProperties /
+      PlaceholderContentView
+- [x] IdentityTransition / OpacityTransition / OffsetTransition / MoveTransition /
+      ScaleTransition / SlideTransition / PushTransition / AsymmetricTransition
+- [ ] BlurReplaceTransition (needs .blur)
+- [x] AnyTransition — the type eraser: init(_:), .modifier(active:identity:),
+      .asymmetric, .combined, .animation and every static
+- [x] .transition(_: AnyTransition) / .transition(_: some Transition)
 - [ ] matchedGeometryEffect
 - [ ] .phaseAnimator / .keyframeAnimator
 - [ ] .contentTransition
