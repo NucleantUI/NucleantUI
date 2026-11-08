@@ -18,8 +18,9 @@
 ///
 /// Every `View` is one (`@View` generates the witness; a primitive without
 /// one compares by `Equatable`); property wrappers and a few framework types
-/// conform by hand. Anything else falls back to `Equatable` where available
-/// and is otherwise not equivalent — there is no reflection.
+/// conform by hand. Anything else falls back to `Equatable` where available,
+/// then to its bytes when it is plain data (`_isPOD`), and is otherwise not
+/// equivalent — there is no reflection.
 @MainActor
 public protocol ViewInput {
     func _isEquivalent(to other: Self) -> Bool
@@ -34,7 +35,11 @@ public protocol ViewInput {
 
 @MainActor
 public func _areEquivalent<T: Equatable>(_ a: T, _ b: T) -> Bool {
-    a == b
+    // Plain data with the same bytes is the same value, whatever `==` would
+    // take the time to work out; different bytes still ask `==`, which may
+    // call them equal (`-0.0` and `0.0`).
+    if _isPOD(T.self), _plainBytesEqual(a, b) { return true }
+    return a == b
 }
 
 @MainActor
@@ -49,7 +54,31 @@ public func _areEquivalent<T: Equatable & ViewInput>(_ a: T, _ b: T) -> Bool {
 
 @MainActor
 public func _areEquivalent<T>(_ a: T, _ b: T) -> Bool {
-    _dynamicallyEquivalent(a, b)
+    if _isPOD(T.self), _plainBytesEqual(a, b) { return true }
+    return _dynamicallyEquivalent(a, b)
+}
+
+/// Whether two values have the same bytes — a word at a time, then the
+/// bytes left over. Only meaningful for plain data (`_isPOD`): a value
+/// holding a reference has the reference's bytes, not what it refers to.
+@inline(__always)
+nonisolated func _plainBytesEqual<T>(_ a: T, _ b: T) -> Bool {
+    withUnsafeBytes(of: a) { a in
+        withUnsafeBytes(of: b) { b in
+            let count = a.count
+            var offset = 0
+            while offset + 8 <= count {
+                guard a.loadUnaligned(fromByteOffset: offset, as: UInt64.self)
+                        == b.loadUnaligned(fromByteOffset: offset, as: UInt64.self) else { return false }
+                offset += 8
+            }
+            while offset < count {
+                guard a[offset] == b[offset] else { return false }
+                offset += 1
+            }
+            return true
+        }
+    }
 }
 
 /// The runtime answer for a value whose static type says nothing.
@@ -92,12 +121,24 @@ private func comparator(for value: Any) -> @MainActor (Any, Any) -> Bool {
     if type(of: value) is AnyClass {
         return { a, b in (a as AnyObject) === (b as AnyObject) }
     }
-    // Nothing that says how to compare it: undecidable, so not equivalent.
-    // A type that should compare declares `Equatable`.
     if let value = value as? any Equatable {
         return equatableComparator(value)
     }
+    // Plain data — no references, nothing retained, copied as its bytes —
+    // is its bytes: equal bytes are the same value. Different bytes for the
+    // same value (padding, `-0.0` and `0.0`) only cost a rebuild.
+    if let compare = _openExistential(value, do: plainDataComparator) {
+        return compare
+    }
+    // Nothing that says how to compare it: undecidable, so not equivalent.
+    // A type that should compare declares `Equatable`.
     return { _, _ in false }
+}
+
+/// Compares two values of `T` by their bytes, when `T` is plain data.
+private nonisolated func plainDataComparator<T>(_: T) -> (@MainActor (Any, Any) -> Bool)? {
+    guard _isPOD(T.self) else { return nil }
+    return { a, b in _plainBytesEqual(a as! T, b as! T) }
 }
 
 @MainActor
@@ -107,7 +148,7 @@ private func viewInputComparator<T: ViewInput>(_: T) -> @MainActor (Any, Any) ->
 
 @MainActor
 private func equatableComparator<T: Equatable>(_: T) -> @MainActor (Any, Any) -> Bool {
-    { a, b in (a as! T) == (b as! T) }
+    { a, b in _areEquivalent(a as! T, b as! T) }
 }
 
 // MARK: - Property wrappers

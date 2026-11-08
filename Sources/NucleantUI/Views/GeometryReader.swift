@@ -125,12 +125,22 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         let path = context.path
         // Whatever this frame serves, not the frame the reader was built in.
         context.transaction = context.animations.transaction
+        // The environment the reader stands under now: kept by a parent
+        // that re-ran under values its subtree never read, the reader was
+        // not built again, and its record has today's values where the
+        // context it was built with has the old.
+        if let entry = context.records.entry(for: path) {
+            context.environment = entry.environment
+        }
         context.records.beginRebuild(under: path + [0])
 
         DependencyTracker.shared.push(path)
+        EnvironmentReads.shared.begin()
         let child = build(at: placed, context: context)
+        let environmentReads = EnvironmentReads.shared.end()
         DependencyTracker.shared.pop()
         context.records.addReads(DependencyTracker.shared.takeReads(for: path), at: path)
+        context.records.addEnvironmentReads(environmentReads, along: path)
         releaseDeparted(context)
 
         node.replaceChild(at: 0, with: child)

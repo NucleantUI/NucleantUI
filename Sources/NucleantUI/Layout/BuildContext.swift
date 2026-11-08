@@ -482,7 +482,16 @@ final class RebuildRecords {
 
     struct Entry {
         let identity: ViewIdentity
-        let environment: EnvironmentValues
+        /// The environment the view was built under. Rebased when the view
+        /// is kept under one that differs only in values its subtree never
+        /// read (`reuse`), so that a later rebuild from here — a scoped one,
+        /// or a `GeometryReader`'s during placement — gets today's values.
+        var environment: EnvironmentValues
+        /// The environment values read anywhere in this view's subtree
+        /// (`EnvironmentReads`) — the only ones a change of which rebuilds
+        /// it when its parent re-runs. Only ever grows while the view
+        /// stands: a rebuild below adds what it read (`addEnvironmentReads`).
+        var environmentReads: Set<ObjectIdentifier> = []
         let stackAxis: Axis?
         /// The view built here: rebuilds it in place, and says whether a
         /// freshly built view is equivalent to it.
@@ -549,8 +558,15 @@ final class RebuildRecords {
         var lazyUnits: Int { node.value.unsafelyUnwrapped.lazyUnits }
         var standingNode: ViewNode { node.value.unsafelyUnwrapped.node }
 
-        func isBuiltUnder(_ environment: EnvironmentValues) -> Bool {
-            node.value.unsafelyUnwrapped.environment._isEquivalent(to: environment)
+        /// Whether every environment value the subtree read is the one
+        /// `environment` holds.
+        func readsAgree(with environment: EnvironmentValues) -> Bool {
+            let entry = node.value.unsafelyUnwrapped
+            return entry.environment.agrees(with: environment, on: entry.environmentReads)
+        }
+
+        var environmentReads: Set<ObjectIdentifier> {
+            node.value.unsafelyUnwrapped.environmentReads
         }
 
         /// Whether `view` is equivalent to the view recorded here. Only for a
@@ -561,15 +577,70 @@ final class RebuildRecords {
         }
     }
 
-    /// Keep the standing subtree at `path`: its entries go back to `live`
-    /// untouched — readers, state, `onAppear` marks and all.
-    func reuse(_ candidate: Candidate, at path: [Int]) {
+    /// Keep the standing subtree at `path`, now standing under
+    /// `environment`: its entries go back to `live` — readers, state,
+    /// `onAppear` marks and all.
+    ///
+    /// The subtree read none of the values that differ (`readsAgree`), but
+    /// its entries still hold them, and a rebuild started from one of them
+    /// later would build with the old ones. So each entry takes the new
+    /// values of the keys it inherited unchanged.
+    func reuse(_ candidate: Candidate, at path: [Int], under environment: EnvironmentValues) {
         if path == previousBase {
             previous = nil
         } else if let parent = previousNode(at: path.dropLast()), let last = path.last {
             parent.removeChild(at: last)
         }
         live.attach(candidate.node, at: path)
+
+        let old = candidate.node.value.unsafelyUnwrapped.environment
+        let changed = keysDiffering(old, environment)
+        if !changed.isEmpty {
+            rebase(candidate.node, from: old, to: environment, keys: changed)
+        }
+    }
+
+    /// The last pair of environments compared by `keysDiffering`, by
+    /// version, and the answer: the rows of a `ForEach` are all kept under
+    /// the same new environment, having been built under the same old one.
+    private var lastDifference: (old: UInt64, new: UInt64, keys: [ObjectIdentifier])?
+
+    private func keysDiffering(_ old: EnvironmentValues, _ new: EnvironmentValues) -> [ObjectIdentifier] {
+        if let last = lastDifference, last.old == old.version, last.new == new.version {
+            return last.keys
+        }
+        let keys = old.keysDiffering(from: new)
+        lastDifference = (old.version, new.version, keys)
+        return keys
+    }
+
+    private func rebase(_ node: PathTrie<Entry>.Node, from old: EnvironmentValues, to new: EnvironmentValues, keys: [ObjectIdentifier]) {
+        if var entry = node.value {
+            entry.environment = entry.environment.rebased(from: old, to: new, keys: keys)
+            node.value = entry
+        }
+        node.forEachChild { _, child in
+            rebase(child, from: old, to: new, keys: keys)
+        }
+    }
+
+    /// Environment values read at `path` after its entry was filed — a
+    /// rebuild that started there, a `GeometryReader`'s content built during
+    /// placement — added to that entry and every one above it, whose
+    /// subtrees hold it.
+    func addEnvironmentReads(_ keys: Set<ObjectIdentifier>, along path: [Int]) {
+        guard !keys.isEmpty else { return }
+        var node: PathTrie<Entry>.Node? = live.root
+        var depth = 0
+        while let current = node {
+            if var entry = current.value, !keys.isSubset(of: entry.environmentReads) {
+                entry.environmentReads.formUnion(keys)
+                current.value = entry
+            }
+            guard depth < path.count else { return }
+            node = current.child(path[depth])
+            depth += 1
+        }
     }
 
     /// Take the old entry at exactly `path` out of the running, because a

@@ -329,6 +329,8 @@ public final class ViewHost {
         // Slot `[0]` of the host root, which itself takes whatever the window
         // is: the app's own root view.
         guard !measuredContentSizes.isEmpty, let content = rootNode?.children.first else { return }
+        DependencyTracker.shared.beginPlacement()
+        defer { DependencyTracker.shared.endPlacement() }
         let limits = ContentSizeLimits(
             minimum: measuredContentSizes.contains(.minimum) ? content.sizeThatFits(.zero) : nil,
             maximum: measuredContentSizes.contains(.maximum) ? content.sizeThatFits(.infinity) : nil,
@@ -434,6 +436,11 @@ public final class ViewHost {
             }
             let replacement = record.view.rebuild(&context)
             releaseDeparted()
+            // What it reads now, the views above it hold in their subtrees:
+            // a change of it above them must not keep them standing.
+            if let rebuiltEntry = records.entry(for: path) {
+                records.addEnvironmentReads(rebuiltEntry.environmentReads, along: Array(path.dropLast()))
+            }
 
             parent.replaceChild(at: slot, with: replacement)
             records.replaceNode(old, with: replacement, above: path)
@@ -466,6 +473,10 @@ public final class ViewHost {
     /// redrawn.
     private func layoutAndRender() -> Bool {
         guard let node = rootNode else { return false }
+        // State read from here on, outside a body, is read by layout or
+        // drawing — see `StateStorage.isReadDuringPlacement`.
+        DependencyTracker.shared.beginPlacement()
+        defer { DependencyTracker.shared.endPlacement() }
 
         // Shader views and drawing groups claim their slots and nodes during
         // `place`; anything not claimed by the end of the pass has left the
@@ -798,7 +809,11 @@ public final class ViewHost {
         scrollTarget = nil
         // Anchored at the press, not at the point the threshold was crossed,
         // so the preview stays under the pointer where it was picked up.
-        let session = DragSession(source: source, origin: touchStart)
+        let session = DragSession(
+            source: source,
+            origin: touchStart,
+            environment: records.entry(for: source.value.path)?.environment ?? environment
+        )
         dragSession = session
         session.move(to: pointerLocation, in: rootNode)
         InputTrace.log("drag begins — \(session.payload.itemName) as \(session.payload.contentTypes)")

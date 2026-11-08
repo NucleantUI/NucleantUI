@@ -73,15 +73,14 @@ public macro viewID() -> ViewID = #externalMacro(module: "NucleantUIMacros", typ
 /// `_viewID: ViewID = #viewID` parameter, for views constructed outside a
 /// builder.
 ///
-/// A stored closure is not compared at all — there is nothing to compare two
-/// closures by — so a view whose only difference is a closure is *equivalent*
-/// and is kept. The closure the view then runs is the one from the build that
-/// created it: capture a `Binding`, a `@State` holder or a model object in it,
-/// never a plain value the parent may change (`{ delete(userID) }` with
-/// `userID` a `let` of the parent keeps the old id; `{ delete(model.userID) }`
-/// reads the live one). A view with nothing but closures — a canvas view — is
-/// equivalent to every other value of itself, which is the point: its work is
-/// driven by what its closures read, not by who re-ran the parent.
+/// A stored closure is compared by what it runs and what it captured: two
+/// closures written at the same spot that captured equivalent values are
+/// the same input, and one that captured a changed value is a changed one
+/// (`{ delete(userID) }` after `userID` changed rebuilds the view, which then
+/// runs the closure with the new id). Captures compare as inputs do — `==`,
+/// identity for an object, the source of a `Binding`, the bytes of plain
+/// data. A capture with no way to compare it (a non-`Equatable` struct that
+/// holds a reference, a captured `var`) counts as changed.
 ///
 /// The builder uses the result like SwiftUI does: when a parent's body re-runs
 /// and produces a child that is equivalent to the one already standing at the
