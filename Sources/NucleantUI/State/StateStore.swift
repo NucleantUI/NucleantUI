@@ -36,6 +36,13 @@ final class StateStorage<Value>: AnyStateStorage {
 
     var readers: [[Int]: [[AnyKeyPath]]] = [:]
 
+    /// Read while the tree was laid out or drawn, outside any `body` — a
+    /// `ScrollView` placing its content at its offset, a `PathShape` or a
+    /// `Canvas` closure reading state as it draws. Nothing records such a
+    /// reader, so from then on a write rebuilds the view that declared the
+    /// state, which builds the node that will be placed again.
+    private(set) var isReadDuringPlacement = false
+
     init(_ value: Value, ownerPath: [Int]) {
         self.value = value
         self.ownerPath = ownerPath
@@ -50,10 +57,10 @@ final class StateStorage<Value>: AnyStateStorage {
     /// nested either way: a write to `[3].level` reaches a reader of the whole
     /// array and a reader of `[3].level`, not a reader of `[2].level`.
     ///
-    /// The owner is always dirtied, reader or not: some reads happen outside
-    /// any body — a `ScrollView` reads its offset during layout — and the
-    /// owner's rebuild is the safe floor. The readers are what make reuse
-    /// correct on top of that.
+    /// Only the readers are dirtied — the view that declared the state is not
+    /// rebuilt for passing `$value` down — unless the value was read while
+    /// the tree was placed (`isReadDuringPlacement`): then the declaring view
+    /// is dirtied as well.
     ///
     /// A write of the value already held is no write: nothing is bumped and
     /// nothing is dirtied, as in SwiftUI. "The same" is decided the way view
@@ -66,7 +73,9 @@ final class StateStorage<Value>: AnyStateStorage {
         if _dynamicallyEquivalent(value, newValue) { return }
         value = newValue
         version &+= 1
-        Invalidator.shared.invalidate(owner: ownerPath)
+        if isReadDuringPlacement {
+            Invalidator.shared.invalidate(owner: ownerPath)
+        }
         for (reader, chains) in readers {
             guard chains.contains(where: { $0.starts(with: chain) || chain.starts(with: $0) }) else {
                 continue
@@ -79,7 +88,11 @@ final class StateStorage<Value>: AnyStateStorage {
     /// is currently being built. `chain` is the key path the read came
     /// through, `[]` for the whole value.
     func read(via chain: [AnyKeyPath] = []) -> Value {
-        DependencyTracker.shared.recordRead(self, via: chain)
+        if DependencyTracker.shared.isPlacingOutsideABody {
+            isReadDuringPlacement = true
+        } else {
+            DependencyTracker.shared.recordRead(self, via: chain)
+        }
         return value
     }
 
@@ -139,6 +152,22 @@ final class DependencyTracker {
 
     /// The view identity currently having its `body` evaluated, innermost last.
     private var stack: [[Int]] = []
+
+    /// How many layout-and-draw passes are running. A read during one with
+    /// no `body` running is a read no view records (see
+    /// `StateStorage.isReadDuringPlacement`); one inside a body built
+    /// during placement — a `GeometryReader`'s content — is that body's.
+    private var placements = 0
+
+    var isPlacingOutsideABody: Bool { placements > 0 && stack.isEmpty }
+
+    func beginPlacement() {
+        placements += 1
+    }
+
+    func endPlacement() {
+        placements -= 1
+    }
 
     /// Slots read by each view still being built, collected until the
     /// builder takes them.

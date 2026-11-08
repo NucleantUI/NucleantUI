@@ -312,6 +312,81 @@ private struct WidthProbe {
     }
 }
 
+// MARK: - Who a write rebuilds
+
+/// Declares the state but never reads it: it only hands `$value` down.
+@View
+private struct PassesBinding {
+    let log: Log
+    @State private var value = 0
+
+    var body: some View {
+        let _ = log("owner")
+        BoundCounter(value: $value, log: log)
+    }
+}
+
+@View
+private struct BoundCounter {
+    @Binding var value: Int
+    let log: Log
+
+    var body: some View {
+        let _ = log("child \(value)")
+        Color.blue
+            .frame(width: 200, height: 200)
+            .onTapGesture { value += 1 }
+    }
+}
+
+/// Reads its state only inside a shape's closure, which runs as the shape
+/// is placed — no `body` reads it.
+@View
+private struct DrawsState {
+    let log: Log
+    @State private var width = 50.0
+
+    var body: some View {
+        let _ = log("owner")
+        VStack(spacing: 0) {
+            Color.gray
+                .frame(width: 200, height: 100)
+                .onTapGesture { width = 150 }
+            PathShape { size in
+                log("path \(Int(width))")
+                return Path()
+            }
+            .frame(width: 200, height: 100)
+        }
+    }
+}
+
+/// Ten rows of 100 points in a 200-point scroll view, eager or lazy, each
+/// logging its index when tapped.
+@View
+private struct ScrolledRows {
+    let lazy: Bool
+    let log: Log
+
+    var body: some View {
+        ScrollView {
+            if lazy {
+                LazyVStack(spacing: 0) { rows }
+            } else {
+                VStack(spacing: 0) { rows }
+            }
+        }
+    }
+
+    private var rows: some View {
+        ForEach(0..<10, id: \.self) { index in
+            Color.blue
+                .frame(width: 200, height: 100)
+                .onTapGesture { log("row \(index)") }
+        }
+    }
+}
+
 @MainActor
 @Suite
 struct PlainDataEquivalence {
@@ -369,7 +444,7 @@ extension HostedViews {
             await harness.tap(Point(x: 100, y: 50))     // 1 over 1
             #expect(log.take() == [])
             await harness.tap(Point(x: 100, y: 150))    // 1 over 2
-            #expect(log.take() == ["mixer", "fader 1"])
+            #expect(log.take() == ["fader 1"])     // the mixer only hands bindings down
             await harness.tap(Point(x: 100, y: 150))    // 1 over 1 again
             #expect(log.take() == [])
         }
@@ -442,6 +517,47 @@ extension HostedViews {
             #expect(log.take() == ["logger 1"])
             await harness.tap(Point(x: 100, y: 25))     // read during placement: not kept now
             #expect(log.take() == ["parent 2", "logger 2"])
+        }
+    }
+
+    @MainActor
+    @Suite
+    struct WhoAWriteRebuilds {
+
+        @Test func aViewThatOnlyPassesItsStateDownIsNotRebuilt() async {
+            let log = Log()
+            let harness = Harness(PassesBinding(log: log))
+            #expect(log.take() == ["owner", "child 0"])
+            await harness.tap(center)
+            #expect(log.take() == ["child 1"])
+            await harness.tap(center)
+            #expect(log.take() == ["child 2"])
+        }
+
+        @Test func stateReadWhileDrawingStillRedraws() async {
+            let log = Log()
+            let harness = Harness(DrawsState(log: log))
+            let first = log.take()
+            #expect(first.first == "owner")
+            #expect(first.contains("path 50"))
+            await harness.tap(Point(x: 100, y: 50))
+            let second = log.take()
+            #expect(second.first == "owner")
+            #expect(second.contains("path 150"))
+            #expect(!second.contains("path 50"))
+        }
+        @Test(arguments: [false, true])
+        func aScrollViewStillMovesItsContent(lazy: Bool) async {
+            let log = Log()
+            let harness = Harness(ScrolledRows(lazy: lazy, log: log))
+            await harness.tap(Point(x: 100, y: 50))
+            #expect(log.take() == ["row 0"])
+            harness.host.pointerMoved(to: center)
+            harness.host.scroll(dx: 0, dy: -500)
+            await harness.settle()
+            await harness.settle()
+            await harness.tap(Point(x: 100, y: 50))
+            #expect(log.take() == ["row 5"])
         }
     }
 

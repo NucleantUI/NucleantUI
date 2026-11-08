@@ -207,7 +207,7 @@ counts) on an existing example before and after, plus its tests in
 
 ## Progress (branch `change-detection`)
 
-### Done, waiting for a build to confirm
+### Done
 
 - **1. Equal `@State` writes** — `StateStorage.set` asks `_dynamicallyEquivalent`
   first and returns when the value is the same; nothing is bumped, nothing is
@@ -254,6 +254,19 @@ counts) on an existing example before and after, plus its tests in
     Dynamic colors resolve at draw time from the draw context, and every
     pass places every node again and compares its commands, so a kept
     subtree still repaints when the color scheme flips.
+- **5. Owner floor dropped** — a write dirties the views that read the
+  value, not the one that declared it. A read made while the host lays out
+  or draws (`DependencyTracker.beginPlacement`), outside any `body`, has no
+  view to record it against: a `ScrollView` placing at its offset, a lazy
+  stack's window, a `PathShape` / `Canvas` closure reading state as it
+  draws. Such a read flags the slot (`isReadDuringPlacement`), and a write
+  to a flagged slot dirties the declaring view as before. Reads in event
+  handlers flag nothing. A view that only hands `$value` down is no longer
+  rebuilt when a child writes it.
+- Steps 1, 2 and 4 confirmed: built, 379 tests green, and the tests that
+  guard the rebase and the read propagation fail with either switched off.
+  Step 5 likewise: the drawing-closure and scroll tests fail without the
+  placement flag. Tasks and Moodboard build.
 - Tests: `Tests/NucleantUITests/ChangeDetectionTests.swift`.
 
 ### Not started, and why
@@ -267,7 +280,4 @@ counts) on an existing example before and after, plus its tests in
   metadata sources for generic captures) — the same on every platform's
   Swift runtime, but a piece of work of its own. Still to confirm first:
   the public-API probe of SwiftUI's behaviour.
-- **5. Owner floor**: next, once 1/2/4 are confirmed. Layout-time reads to
-  register: `ScrollView` offset (`place`), lazy stack/grid window
-  (`LazyStackContent` / `LazyGridContent` `place`), `TextSelection`.
 - **6. Keep a child whose dirty state lies deeper**: last, as planned.

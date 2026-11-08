@@ -329,6 +329,8 @@ public final class ViewHost {
         // Slot `[0]` of the host root, which itself takes whatever the window
         // is: the app's own root view.
         guard !measuredContentSizes.isEmpty, let content = rootNode?.children.first else { return }
+        DependencyTracker.shared.beginPlacement()
+        defer { DependencyTracker.shared.endPlacement() }
         let limits = ContentSizeLimits(
             minimum: measuredContentSizes.contains(.minimum) ? content.sizeThatFits(.zero) : nil,
             maximum: measuredContentSizes.contains(.maximum) ? content.sizeThatFits(.infinity) : nil,
@@ -471,6 +473,10 @@ public final class ViewHost {
     /// redrawn.
     private func layoutAndRender() -> Bool {
         guard let node = rootNode else { return false }
+        // State read from here on, outside a body, is read by layout or
+        // drawing — see `StateStorage.isReadDuringPlacement`.
+        DependencyTracker.shared.beginPlacement()
+        defer { DependencyTracker.shared.endPlacement() }
 
         // Shader views and drawing groups claim their slots and nodes during
         // `place`; anything not claimed by the end of the pass has left the
