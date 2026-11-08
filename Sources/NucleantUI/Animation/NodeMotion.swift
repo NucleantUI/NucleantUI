@@ -31,20 +31,14 @@
 
 /// A node's animation in flight, carried over when its view is rebuilt.
 struct NodeMotion {
-    struct Displacement {
-        /// How far the center is from where layout puts it, and — for a
-        /// node that animates its size — how much bigger it is.
-        var dx: Double, dy: Double, dw: Double, dh: Double
-        let run: AnimationRun
+    /// How far the center is from where layout puts it, and — for a node
+    /// that animates its size — how much bigger it is: ((dx, dy), (dw, dh)).
+    typealias Offset = AnimatablePair<AnimatablePair<Double, Double>, AnimatablePair<Double, Double>>
 
-        /// What is left of it at `now`, and whether it has run out.
-        @MainActor func remaining(at now: Double) -> (fraction: Double, isFinished: Bool) {
-            let progress = run.progress(at: now)
-            return (1 - progress.fraction, progress.isFinished)
-        }
-    }
-
-    var displacement: Displacement?
+    /// What is left of the way to where layout puts the node. A move made
+    /// while one is under way turns from where the node is showing, as
+    /// fast as it is going (Motion.swift).
+    var displacement: Motion<Offset>?
 }
 
 extension ViewNode {
@@ -60,45 +54,48 @@ extension ViewNode {
         defer { layoutRect = target }
 
         if store.isCommitPass, let animation = context.animation, let last = layoutRect, last != target {
-            let shown = displaced(last, at: store.now)
             let resizes = content.animatesSize
-            let displacement = NodeMotion.Displacement(
-                dx: shown.midX - target.midX,
-                dy: shown.midY - target.midY,
-                dw: resizes ? shown.width - target.width : 0,
-                dh: resizes ? shown.height - target.height : 0,
-                run: AnimationRun(animation, start: store.now)
+            let offset = NodeMotion.Offset(
+                AnimatablePair(last.midX - target.midX, last.midY - target.midY),
+                AnimatablePair(resizes ? last.width - target.width : 0, resizes ? last.height - target.height : 0)
             )
-            let isStill = abs(displacement.dx) < 0.01 && abs(displacement.dy) < 0.01
-                && abs(displacement.dw) < 0.01 && abs(displacement.dh) < 0.01
-            motion.displacement = isStill ? nil : displacement
-            if !isStill { store.noteStarted(displacement.run) }
+            // Moved by next to nothing: what is under way, if anything,
+            // carries on.
+            let isStill = abs(offset.first.first) < 0.01 && abs(offset.first.second) < 0.01
+                && abs(offset.second.first) < 0.01 && abs(offset.second.second) < 0.01
+            if !isStill {
+                motion.displacement = Motion.begin(
+                    offset: offset,
+                    previous: motion.displacement,
+                    animation: animation,
+                    at: store.now
+                )
+                if let displacement = motion.displacement {
+                    store.noteStarted(displacement.run)
+                }
+            }
         }
 
         var frame = target
         if let displacement = motion.displacement {
-            let remaining = displacement.remaining(at: store.now)
-            if remaining.isFinished {
+            let left = displacement.displacement(at: store.now)
+            if left.isFinished {
                 motion.displacement = nil
             } else {
-                frame = displaced(target, at: store.now)
+                frame = displaced(target, by: left.value)
                 store.requestFrame()
             }
         }
         return (frame, children.isEmpty ? frame : target)
     }
 
-    /// `rect` moved by whatever is left of the displacement at `now`.
-    private func displaced(_ rect: Rect, at now: Double) -> Rect {
-        guard let displacement = motion.displacement else { return rect }
-        let remaining = displacement.remaining(at: now)
-        guard !remaining.isFinished else { return rect }
-        let k = remaining.fraction
-        let width = max(0, rect.width + displacement.dw * k)
-        let height = max(0, rect.height + displacement.dh * k)
+    /// `rect` moved by `offset`.
+    private func displaced(_ rect: Rect, by offset: NodeMotion.Offset) -> Rect {
+        let width = max(0, rect.width + offset.second.first)
+        let height = max(0, rect.height + offset.second.second)
         return Rect(
-            x: rect.midX + displacement.dx * k - width / 2,
-            y: rect.midY + displacement.dy * k - height / 2,
+            x: rect.midX + offset.first.first - width / 2,
+            y: rect.midY + offset.first.second - height / 2,
             width: width,
             height: height
         )

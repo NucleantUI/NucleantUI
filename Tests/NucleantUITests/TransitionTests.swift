@@ -266,6 +266,11 @@ final class PaintedHarness {
     func update() { harness.host.update() }
     func settle(_ seconds: Double) async { await harness.settle(seconds) }
 
+    /// The frame after a change, on time, as a display would draw it: an
+    /// animation's clock starts from it, and a first frame that comes late
+    /// would show its curve from the beginning (`AnimationRun`).
+    func nextFrame() async { await harness.settle(1.0 / 60) }
+
     func alpha(_ x: Int, _ y: Int) -> UInt8 {
         surface.readPixel(x: x, y: y)?.w ?? 0
     }
@@ -449,6 +454,7 @@ extension HostedViews {
             painted.update()
             // Inserted where its fade starts.
             #expect(painted.alpha(25, 25) == 0)
+            await painted.nextFrame()
             await painted.settle(0.3)
             let arriving = painted.alpha(25, 25)
             #expect(arriving > 25 && arriving < 230)
@@ -459,6 +465,7 @@ extension HostedViews {
             painted.update()
             // Removed where its fade starts: still all there.
             #expect(painted.alpha(25, 25) == 255)
+            await painted.nextFrame()
             await painted.settle(0.3)
             let leaving = painted.alpha(25, 25)
             #expect(leaving > 25 && leaving < 230)
@@ -472,6 +479,7 @@ extension HostedViews {
             let painted = PaintedHarness(Toggled(stage: stage, transition: RotatingFadeTransition()))
             withAnimation(.linear(duration: 0.6)) { stage.show() }
             painted.update()
+            await painted.nextFrame()
             await painted.settle(0.3)
             // Half faded, and turned: the square's corner is off its place.
             let middle = painted.alpha(25, 25)
@@ -488,6 +496,7 @@ extension HostedViews {
             stage.show()
             painted.update()
             #expect(painted.alpha(25, 25) == 0)
+            await painted.nextFrame()
             await painted.settle(0.3)
             let arriving = painted.alpha(25, 25)
             #expect(arriving > 25 && arriving < 230)
@@ -496,6 +505,7 @@ extension HostedViews {
 
             stage.hide()
             painted.update()
+            await painted.nextFrame()
             await painted.settle(0.3)
             let leaving = painted.alpha(25, 25)
             #expect(leaving > 25 && leaving < 230)

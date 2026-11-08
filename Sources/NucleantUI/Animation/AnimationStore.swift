@@ -282,12 +282,12 @@ final class AnimationStore {
 
 /// One animatable parameter of a node: a vector of numbers heading for
 /// `target`. Shared by every build of the node at its path, so a value a
-/// rebuild changes again mid-flight turns from where it is.
+/// rebuild changes again mid-flight turns from where it is, and as fast as
+/// it is going (Motion.swift).
 @MainActor
 final class AnimatedVector {
     private(set) var target: [Double]
-    private var from: [Double] = []
-    private var run: AnimationRun?
+    private var motion: Motion<ComponentVector>?
 
     init(_ target: [Double]) {
         self.target = target
@@ -296,12 +296,13 @@ final class AnimatedVector {
     func update(to newTarget: [Double], animation: Animation?, in store: AnimationStore) {
         guard newTarget != target else { return }
         if let animation, newTarget.count == target.count {
-            from = sample(at: store.now).value
-            let run = AnimationRun(animation, start: store.now)
-            self.run = run
-            store.noteStarted(run)
+            let offset = ComponentVector(zip(target, newTarget).map { old, new in old - new })
+            motion = Motion.begin(offset: offset, previous: motion, animation: animation, at: store.now)
+            if let motion {
+                store.noteStarted(motion.run)
+            }
         } else {
-            run = nil
+            motion = nil
         }
         target = newTarget
     }
@@ -311,7 +312,7 @@ final class AnimatedVector {
         guard let store = AnimationStore.current else { return target }
         let sample = sample(at: store.now)
         if sample.isFinished {
-            run = nil
+            motion = nil
         } else {
             store.requestFrame()
         }
@@ -319,11 +320,10 @@ final class AnimatedVector {
     }
 
     private func sample(at now: Double) -> (value: [Double], isFinished: Bool) {
-        guard let run else { return (target, true) }
-        let progress = run.progress(at: now)
-        guard !progress.isFinished else { return (target, true) }
-        let t = progress.fraction
-        return (zip(from, target).map { a, b in a + (b - a) * t }, false)
+        guard let motion else { return (target, true) }
+        let left = motion.displacement(at: now)
+        guard !left.isFinished else { return (target, true) }
+        return (target.indices.map { target[$0] + left.value[$0] }, false)
     }
 }
 

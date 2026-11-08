@@ -179,22 +179,47 @@ struct CustomCurve: Hashable, Sendable {
 @MainActor
 final class AnimationRun {
     let animation: Animation
-    let start: Double
+    /// When the curve's clock started: the frame that started the run,
+    /// until a later frame settles it (`settleStart(at:)`).
+    private(set) var start: Double
+    private var isStartSettled = false
     private var context = AnimationContext<Double>()
     private var customFinished = false
+
+    /// The most of the curve the first frame after the one that started a
+    /// run may show: two frames at 60 Hz.
+    static let longestFirstStep = 2.0 / 60
 
     init(_ animation: Animation, start: Double) {
         self.animation = animation
         self.start = start
     }
 
+    /// The frame that starts a run shows it at its beginning. If the next
+    /// frame comes late — the change built a lot, so the frame it was made
+    /// in took long — the start moves up to `longestFirstStep` before it,
+    /// so the motion begins where the curve does rather than part-way in.
+    /// A frame on time leaves it where it was.
+    private func settleStart(at now: Double) {
+        guard !isStartSettled, now > start else { return }
+        isStartSettled = true
+        start = max(start, now - Self.longestFirstStep)
+    }
+
+    /// Real seconds since the curve's clock started.
+    func elapsed(at now: Double) -> Double {
+        settleStart(at: now)
+        return now - start
+    }
+
     /// The fraction of the change done at `now`, and whether it is over.
     func progress(at now: Double) -> (fraction: Double, isFinished: Bool) {
+        let elapsed = elapsed(at: now)
         guard case .custom(let custom) = animation.curve else {
-            return animation.progress(after: now - start)
+            return animation.progress(after: elapsed)
         }
         guard !customFinished else { return (1, true) }
-        let time = animation.localTime(now - start)
+        let time = animation.localTime(elapsed)
         guard time > 0 else { return (0, false) }
         guard let fraction = custom.animate(time, &context) else {
             customFinished = true
@@ -203,12 +228,24 @@ final class AnimationRun {
         return (fraction, false)
     }
 
+    /// How fast the fraction changes at `now`, per real second. Zero for a
+    /// custom curve, which can only be run forward, one frame at a time.
+    func rate(at now: Double) -> Double {
+        guard !isDone(at: now) else { return 0 }
+        if case .custom = animation.curve { return 0 }
+        let elapsed = elapsed(at: now)
+        let step = 0.001
+        let ahead = animation.progress(after: elapsed + step).fraction
+        let behind = animation.progress(after: max(0, elapsed - step)).fraction
+        return (ahead - behind) / (elapsed + step - max(0, elapsed - step))
+    }
+
     /// Whether it is over by `now` — by the clock for a built-in curve;
     /// for a custom one, once it has said so (or called itself logically
     /// complete) the last time it ran.
     func isDone(at now: Double) -> Bool {
         guard case .custom = animation.curve else {
-            return now - start >= animation.totalDuration
+            return elapsed(at: now) >= animation.totalDuration
         }
         return customFinished || context.isLogicallyComplete
     }

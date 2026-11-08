@@ -208,40 +208,38 @@ extension EdgeInsets: Animatable {
 
 /// One path's `animatableData` on its way to `target`. Shared by every
 /// build of the view at that path, so a change mid-flight turns from where
-/// the value is showing.
+/// the value is showing, and as fast as it is going (Motion.swift).
 @MainActor
 final class AnimatableDataState<Data: VectorArithmetic> {
     private(set) var target: Data
-    private var from: Data
-    private var run: AnimationRun?
+    private var motion: Motion<Data>?
 
     init(_ target: Data) {
         self.target = target
-        self.from = target
     }
 
     func update(to newTarget: Data, animation: Animation?, in store: AnimationStore) {
         guard newTarget != target else { return }
         if let animation {
-            from = sample(at: store.now).value
-            let run = AnimationRun(animation, start: store.now)
-            self.run = run
-            store.noteStarted(run)
+            motion = Motion.begin(offset: target - newTarget, previous: motion, animation: animation, at: store.now)
+            if let motion {
+                store.noteStarted(motion.run)
+            }
         } else {
-            run = nil
+            motion = nil
         }
         target = newTarget
     }
 
     /// The value showing at `now`, and whether it has arrived.
     func sample(at now: Double) -> (value: Data, isFinished: Bool) {
-        guard let run else { return (target, true) }
-        let progress = run.progress(at: now)
-        if progress.isFinished {
-            self.run = nil
+        guard let motion else { return (target, true) }
+        let left = motion.displacement(at: now)
+        if left.isFinished {
+            self.motion = nil
             return (target, true)
         }
-        return (Data.interpolate(from: from, to: target, fraction: progress.fraction), false)
+        return (target + left.value, false)
     }
 }
 
