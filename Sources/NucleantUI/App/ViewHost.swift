@@ -434,6 +434,11 @@ public final class ViewHost {
             }
             let replacement = record.view.rebuild(&context)
             releaseDeparted()
+            // What it reads now, the views above it hold in their subtrees:
+            // a change of it above them must not keep them standing.
+            if let rebuiltEntry = records.entry(for: path) {
+                records.addEnvironmentReads(rebuiltEntry.environmentReads, along: Array(path.dropLast()))
+            }
 
             parent.replaceChild(at: slot, with: replacement)
             records.replaceNode(old, with: replacement, above: path)
@@ -798,7 +803,11 @@ public final class ViewHost {
         scrollTarget = nil
         // Anchored at the press, not at the point the threshold was crossed,
         // so the preview stays under the pointer where it was picked up.
-        let session = DragSession(source: source, origin: touchStart)
+        let session = DragSession(
+            source: source,
+            origin: touchStart,
+            environment: records.entry(for: source.value.path)?.environment ?? environment
+        )
         dragSession = session
         session.move(to: pointerLocation, in: rootNode)
         InputTrace.log("drag begins — \(session.payload.itemName) as \(session.payload.contentTypes)")

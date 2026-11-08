@@ -29,7 +29,7 @@ extension View {
         _ModifierView(content: self) { context in
             DragSourceContent(source: DragSource(
                 isEnabled: context.environment.isEnabled,
-                environment: context.environment,
+                path: context.path,
                 makePayload: { TransferPayload(payload()) },
                 makePreview: nil
             ))
@@ -45,7 +45,7 @@ extension View {
         _ModifierView(content: self) { context in
             DragSourceContent(source: DragSource(
                 isEnabled: context.environment.isEnabled,
-                environment: context.environment,
+                path: context.path,
                 makePayload: { TransferPayload(payload()) },
                 makePreview: { AnyView(preview()) }
             ))
@@ -96,9 +96,11 @@ extension View {
 final class DragSource {
     let isEnabled: Bool
 
-    /// The environment the source was built under, for building a custom
-    /// preview the same way.
-    let environment: EnvironmentValues
+    /// Where the source's view stands. A custom preview is built under the
+    /// environment filed there when the drag begins — the one the view
+    /// stands under then, which a parent that re-ran without rebuilding it
+    /// may have moved on from the one it was built with.
+    let path: [Int]
 
     let makePayload: @MainActor () -> TransferPayload
     let makePreview: (@MainActor () -> AnyView)?
@@ -114,12 +116,12 @@ final class DragSource {
 
     init(
         isEnabled: Bool,
-        environment: EnvironmentValues,
+        path: [Int],
         makePayload: @escaping @MainActor () -> TransferPayload,
         makePreview: (@MainActor () -> AnyView)?
     ) {
         self.isEnabled = isEnabled
-        self.environment = environment
+        self.path = path
         self.makePayload = makePayload
         self.makePreview = makePreview
     }

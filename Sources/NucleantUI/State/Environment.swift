@@ -11,45 +11,107 @@ public protocol EnvironmentKey {
 
 /// Values handed down a subtree — the foreground color a `Text` picks up, the
 /// font it inherits, the tint a `Button` uses.
+///
+/// Every read of a value is noted against the view being built
+/// (`EnvironmentReads`), so a view is rebuilt for a change of the values it
+/// read, not of any value at all.
 public struct EnvironmentValues: @unchecked Sendable {
 
-    private var storage: [ObjectIdentifier: Any] = [:]
+    /// One value, with the write that put it there. Copies of an
+    /// environment share their entries, so two entries with the same stamp
+    /// are the same write — the same value, inherited — and need no
+    /// comparing.
+    struct Entry {
+        var value: Any
+        var stamp: UInt64
+    }
 
-    /// Stamped on every write from a process-wide counter, so two values
-    /// with the same stamp are copies of one another and need no comparing.
-    /// Different stamps say nothing either way — see `_isEquivalent`.
-    private var version: UInt64 = 0
+    private var storage: [ObjectIdentifier: Entry] = [:]
 
-    nonisolated(unsafe) private static var nextVersion: UInt64 = 1
+    /// The stamp of the last write, so two values with the same version are
+    /// copies of one another. Different versions say nothing either way —
+    /// see `agrees(with:on:)`.
+    private(set) var version: UInt64 = 0
+
+    nonisolated(unsafe) private static var nextStamp: UInt64 = 1
+
+    private static func takeStamp() -> UInt64 {
+        defer { nextStamp &+= 1 }
+        return nextStamp
+    }
 
     public init() {}
 
     public subscript<K: EnvironmentKey>(key: K.Type) -> K.Value {
-        get { storage[ObjectIdentifier(key)] as? K.Value ?? K.defaultValue }
+        get {
+            let id = ObjectIdentifier(key)
+            EnvironmentReads.shared.note(id)
+            return storage[id]?.value as? K.Value ?? K.defaultValue
+        }
         set {
-            storage[ObjectIdentifier(key)] = newValue
-            version = Self.nextVersion
-            Self.nextVersion &+= 1
+            let stamp = Self.takeStamp()
+            storage[ObjectIdentifier(key)] = Entry(value: newValue, stamp: stamp)
+            version = stamp
         }
     }
 
-    /// Whether a view built under `other` would see the same values.
+    /// Whether a view that read `keys` would see the same values under
+    /// `other`.
     ///
     /// A parent that re-runs re-applies its `.font(…)` and produces a fresh
-    /// copy, so the stamp usually differs even when nothing did; the values
-    /// are then compared one by one. A value the framework can't compare — a
-    /// closure, a class — makes the whole environment "changed", which
-    /// only ever costs a rebuild.
+    /// write, so the stamps usually differ even when nothing did; the values
+    /// are then compared. A value the framework can't compare — a closure,
+    /// a class it was handed anew — counts as changed, which only ever costs
+    /// a rebuild, and only of the views that read it.
     @MainActor
-    func _isEquivalent(to other: EnvironmentValues) -> Bool {
+    func agrees(with other: EnvironmentValues, on keys: Set<ObjectIdentifier>) -> Bool {
         if version == other.version { return true }
-        guard storage.count == other.storage.count else { return false }
-        for (key, value) in storage {
-            guard let theirs = other.storage[key], _dynamicallyEquivalent(value, theirs) else {
-                return false
-            }
+        for key in keys where !hasSameValue(at: key, as: other) {
+            return false
         }
         return true
+    }
+
+    /// The keys whose values differ between this and `other`, a key set in
+    /// one and not the other included.
+    @MainActor
+    func keysDiffering(from other: EnvironmentValues) -> [ObjectIdentifier] {
+        if version == other.version { return [] }
+        var keys: [ObjectIdentifier] = []
+        for key in storage.keys where !hasSameValue(at: key, as: other) {
+            keys.append(key)
+        }
+        for key in other.storage.keys where storage[key] == nil {
+            keys.append(key)
+        }
+        return keys
+    }
+
+    @MainActor
+    private func hasSameValue(at key: ObjectIdentifier, as other: EnvironmentValues) -> Bool {
+        switch (storage[key], other.storage[key]) {
+        case (nil, nil):
+            return true
+        case let (mine?, theirs?):
+            return mine.stamp == theirs.stamp || _dynamicallyEquivalent(mine.value, theirs.value)
+        default:
+            return false
+        }
+    }
+
+    /// This environment, which was derived from `old`, as it would have been
+    /// derived from `new`: each of `keys` this one inherited from `old`
+    /// unchanged takes `new`'s value; one written on the way down keeps its
+    /// own.
+    func rebased(from old: EnvironmentValues, to new: EnvironmentValues, keys: [ObjectIdentifier]) -> EnvironmentValues {
+        var result = self
+        var changed = false
+        for key in keys where storage[key]?.stamp == old.storage[key]?.stamp {
+            result.storage[key] = new.storage[key]
+            changed = true
+        }
+        if changed { result.version = Self.takeStamp() }
+        return result
     }
 }
 

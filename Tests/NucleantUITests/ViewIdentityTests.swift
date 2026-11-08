@@ -30,9 +30,10 @@ private struct Untracked {
     var body: some View { Text(title) }
 }
 
-/// A plain value with no `Equatable` — nothing says how to compare it.
+/// A value with no `Equatable` that is not plain data (it holds a string) —
+/// nothing says how to compare it.
 private struct Opaque {
-    var count: Int
+    var name: String
 }
 
 @View
@@ -132,8 +133,8 @@ struct ViewIdentityTests {
     }
 
     @Test func anInputThatCannotBeComparedIsNotEquivalent() {
-        let view = HoldsOpaque(value: Opaque(count: 1))
-        #expect(!view._isEquivalent(to: HoldsOpaque(value: Opaque(count: 1))))
+        let view = HoldsOpaque(value: Opaque(name: "a"))
+        #expect(!view._isEquivalent(to: HoldsOpaque(value: Opaque(name: "a"))))
     }
 
     @Test func aClassInputComparesByIdentity() {

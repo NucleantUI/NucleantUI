@@ -54,7 +54,16 @@ final class StateStorage<Value>: AnyStateStorage {
     /// any body — a `ScrollView` reads its offset during layout — and the
     /// owner's rebuild is the safe floor. The readers are what make reuse
     /// correct on top of that.
+    ///
+    /// A write of the value already held is no write: nothing is bumped and
+    /// nothing is dirtied, as in SwiftUI. "The same" is decided the way view
+    /// inputs are (`_dynamicallyEquivalent`): `==` for an `Equatable` value,
+    /// identity for an object, the bytes for plain data. A value with no way
+    /// to tell counts as changed. A `withAnimation` whose writes were all
+    /// equal claims no frame, and its completion runs on the next one, as
+    /// for a body that wrote nothing.
     func set(_ newValue: Value, via chain: [AnyKeyPath] = []) {
+        if _dynamicallyEquivalent(value, newValue) { return }
         value = newValue
         version &+= 1
         Invalidator.shared.invalidate(owner: ownerPath)

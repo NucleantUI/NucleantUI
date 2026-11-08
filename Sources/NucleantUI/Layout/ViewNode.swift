@@ -435,12 +435,14 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             && candidate.stackAxis == context.stackAxis
             && candidate.lazyKey == lazyKey
             && !context.isDirty(under: path)
-            && candidate.isBuiltUnder(context.environment)
+            && candidate.readsAgree(with: context.environment)
             && candidate.isEquivalent(to: view)
         if reusable {
             let node = candidate.standingNode
             lazyCursor?.position += candidate.lazyUnits
-            context.records.reuse(candidate, at: path)
+            // What the kept subtree read, the view around it has read too.
+            EnvironmentReads.shared.add(candidate.environmentReads)
+            context.records.reuse(candidate, at: path, under: context.environment)
             if PerfTrace.isEnabled { PerfTrace.nodesReused += 1 }
             PerfTrace.trace("reuse \(path) \(V.self)")
             return node
@@ -451,7 +453,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
                 : candidate.stackAxis != context.stackAxis ? "stack axis"
                 : candidate.lazyKey != lazyKey ? "lazy window"
                 : context.isDirty(under: path) ? "dirty"
-                : !candidate.isBuiltUnder(context.environment) ? "environment"
+                : !candidate.readsAgree(with: context.environment) ? "environment"
                 : "inputs"
             return "build \(path) \(V.self) — \(reason)"
         }())
@@ -474,6 +476,11 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     } else {
         PerfTrace.trace("build \(path) \(V.self) — new")
     }
+
+    // Every environment value read from here until the view is built —
+    // by its `@Environment`s, bound next, by the builtin it is or the body
+    // it has, by everything built under it — is one it depends on.
+    EnvironmentReads.shared.begin()
 
     // Wire up @State / @Environment before anything reads `body`.
     let stateKeys = context.bindDynamicProperties(of: view)
@@ -531,6 +538,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         node.inheritMotion(from: predecessor)
     }
     let reads = DependencyTracker.shared.takeReads(for: path)
+    let environmentReads = EnvironmentReads.shared.end()
 
     // Remember how to rebuild exactly this view in exactly this position, and
     // how to recognise it next time. The record holds the concrete view
@@ -540,6 +548,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         RebuildRecords.Entry(
             identity: identity,
             environment: context.environment,
+            environmentReads: environmentReads,
             stackAxis: context.stackAxis,
             view: RecordedViewOf(view),
             node: node,

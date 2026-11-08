@@ -37,7 +37,9 @@ final class DragSession {
         case view(ViewNode, size: Size, environment: EnvironmentValues)
     }
 
-    init(source: Hit<DragSource>, origin: Point) {
+    /// `environment` is the one the source's view stands under — a custom
+    /// preview is built under it.
+    init(source: Hit<DragSource>, origin: Point, environment: EnvironmentValues) {
         payload = source.value.makePayload()
         self.origin = origin
         location = origin
@@ -48,7 +50,7 @@ final class DragSession {
             // anything under the host's paths. The path prefix keeps any
             // shader slot it claims apart from the tree's.
             var context = BuildContext(
-                environment: source.value.environment,
+                environment: environment,
                 store: StateStore(),
                 effects: EffectQueue(),
                 animations: AnimationStore(),
@@ -57,7 +59,7 @@ final class DragSession {
             context.path = [-1]
             let node = buildNode(makePreview(), &context)
             let size = node.sizeThatFits(.unspecified)
-            preview = .view(node, size: size, environment: source.value.environment)
+            preview = .view(node, size: size, environment: environment)
         } else {
             // Place the node again, into a list nobody renders, under the
             // context it was last placed with — same rect, same transform,
