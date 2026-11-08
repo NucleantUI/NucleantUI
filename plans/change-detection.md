@@ -267,17 +267,31 @@ counts) on an existing example before and after, plus its tests in
   guard the rebase and the read propagation fail with either switched off.
   Step 5 likewise: the drawing-closure and scroll tests fail without the
   placement flag. Tasks and Moodboard build.
-- Tests: `Tests/NucleantUITests/ChangeDetectionTests.swift`.
+- **3. Closures compared by what they captured** — confirmed first with a
+  public-API probe: SwiftUI skips a child whose closure captured equal
+  values and re-runs it (with the new closure) when a capture changed.
+  `@View` now generates `_areEquivalentClosures(self, other, \Self.x,
+  name: "x")` for each stored closure (`Core/ClosureEquivalence.swift`):
+  - Same function pointer, then the captures: the context's metadata gives
+    the offset of the first capture and a capture descriptor listing each
+    capture's type by mangled name; each is resolved by the runtime, found
+    at its size and alignment, and compared as a view input. Worked out once
+    per context kind. The same runtime layout on every platform.
+  - The closure is read *in place*, at the property's offset in the view,
+    looked up by name in the struct's own metadata (type descriptor field
+    records + field offset vector). Handed over as a generic value — a key
+    path's value included — a closure is wrapped in a thunk made at that
+    spot, and two wraps of one closure don't compare.
+  - Counts as changed (a rebuild, never a stale closure): generic captures
+    (metadata sources), a captured `var` box, a captured closure (named by
+    its lowered type), a non-`Equatable` struct holding a reference (SwiftUI
+    compares those field by field; we don't), and a closure *value* handed to
+    a generic-typed property (`() -> Content`), which gets wrapped. A closure
+    literal written for a generic property is built for it directly and
+    compares.
+- Tests: `Tests/NucleantUITests/ChangeDetectionTests.swift`,
+  `Tests/NucleantUITests/ClosureEquivalenceTests.swift`.
 
 ### Not started, and why
 
-- **3. Closures**: comparing a closure's captures exactly needs its capture
-  layout. A context's allocation size (`malloc_size` /
-  `malloc_usable_size`) is not it: the slack after the captures is
-  uninitialised, so two equal contexts would almost always differ and
-  every view holding a closure would rebuild. The exact layout comes from
-  the runtime's capture descriptor (capture types as mangled names, plus
-  metadata sources for generic captures) — the same on every platform's
-  Swift runtime, but a piece of work of its own. Still to confirm first:
-  the public-API probe of SwiftUI's behaviour.
 - **6. Keep a child whose dirty state lies deeper**: last, as planned.

@@ -77,11 +77,10 @@ func sourceHash(_ text: String) -> Int64 {
 ///   stamps every view expression in a body; the parameter covers views
 ///   constructed outside one.)
 ///
-/// A stored closure is left out of `_isEquivalent(to:)`: there is nothing
-/// to compare two closures by, and a view whose only difference is a closure
-/// is treated as unchanged — see `Core/ViewID.swift` for what that asks of
-/// the closure. A struct that writes its own `_isEquivalent(to:)` — one whose
-/// closure *is* its content — keeps it, and none is generated.
+/// A stored closure is compared by `_areEquivalentClosures`: the same code
+/// over equivalent captures — see `Core/ClosureEquivalence.swift`. A struct
+/// that writes its own `_isEquivalent(to:)` keeps it, and none is
+/// generated.
 public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
 
     // MARK: Extension
@@ -223,15 +222,16 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
     /// a `@FocusState.Binding` to one, which keep their value in the same
     /// store. `@Environment` is skipped
     /// because the environment is compared separately by the builder. A
-    /// closure is skipped because two closures cannot be compared at all:
-    /// rather than making the view "never equivalent" (and so rebuilt every
-    /// time its parent is), a closure counts for nothing, and the view is
-    /// as equivalent as its other properties say. Every other wrapper is
-    /// compared through its backing storage, which is where `Binding` keeps
-    /// the source it points at.
+    /// closure is compared by what it runs and what it captured
+    /// (`_areEquivalentClosures`), so one that captured a changed value
+    /// rebuilds the view, which then runs the new closure. Every other
+    /// wrapper is compared through its backing storage, which is where
+    /// `Binding` keeps the source it points at.
     private static func equivalenceFunction(access: String, properties: [StoredProperty]) -> DeclSyntax {
         let checks = properties.compactMap { property -> String? in
-            if property.isFunctionTyped { return nil }
+            if property.isFunctionTyped && property.wrapper == nil {
+                return "_areEquivalentClosures(self, other, \\Self.\(property.name), name: \"\(property.name.filter { $0 != "`" })\")"
+            }
             switch property.wrapper {
             case "State", "Environment", "FocusState", "FocusState.Binding":
                 return nil
