@@ -17,25 +17,27 @@ private struct Opaque {
     var name: String
 }
 
-private struct Point3: Equatable {
-    var x, y, z: Double
-}
-
 // One spot each, so two calls make two closures of the same code.
-private func capturing(_ value: Int) -> () -> Int { { value } }
-private func capturing(_ value: String) -> () -> String { { value } }
-private func capturing(_ value: Object) -> () -> ObjectIdentifier { { ObjectIdentifier(value) } }
-private func capturing(_ value: Opaque) -> () -> String { { value.name } }
-private func capturing(_ value: Point3, _ scale: Double, _ label: String) -> () -> String {
+@inline(never) @_optimize(none) private func capturing(_ value: Int) -> () -> Int { { value } }
+@inline(never) @_optimize(none) private func capturing(_ value: String) -> () -> String { { value } }
+@inline(never) @_optimize(none) private func capturing(_ value: Object) -> () -> ObjectIdentifier { { ObjectIdentifier(value) } }
+@inline(never) @_optimize(none) private func capturing(_ value: Opaque) -> () -> String { { value.name } }
+@inline(never) @_optimize(none) private func capturing(_ value: SIMD3<Double>, _ scale: Double, _ label: String) -> () -> String {
     { "\(label) \(value.x * scale)" }
 }
-private func capturingNothing() -> () -> Int { { 42 } }
-private func otherCapturingNothing() -> () -> Int { { 7 } }
-private func wrapping(_ inner: @escaping () -> Int) -> () -> Int { { inner() + 1 } }
-@MainActor private func capturing(_ binding: Binding<Int>) -> @MainActor () -> Int { { binding.wrappedValue } }
+@inline(never) @_optimize(none) private func capturingNothing() -> () -> Int { { 42 } }
+@inline(never) @_optimize(none) private func otherCapturingNothing() -> () -> Int { { 7 } }
+@inline(never) @_optimize(none) private func wrapping(_ inner: @escaping () -> Int) -> () -> Int { { inner() + 1 } }
+@inline(never) @_optimize(none) @MainActor private func capturing(_ binding: Binding<Int>) -> @MainActor () -> Int { { binding.wrappedValue } }
 
 // A view holds its closures in stored properties, and that is where they
 // are compared — never passed along as generic values, which wraps them.
+//
+// The helpers are left unoptimised: in a release build the optimiser would
+// otherwise merge two identical calls into one closure, or re-create each
+// closure at a spot of its own inside a specialised copy of `same` — neither
+// of which a view's builds do: each build makes its closure at the one spot
+// in the parent's body.
 private struct Holds<Result> {
     let f: () -> Result
 }
@@ -60,17 +62,17 @@ private struct HoldsMainActor {
     let f: @MainActor () -> Int
 }
 
-@MainActor
+@MainActor @_optimize(none)
 private func same(_ a: @escaping () -> Int, _ b: @escaping () -> Int) -> Bool {
     _areEquivalentClosures(HoldsInt(f: a), HoldsInt(f: b), \.f, name: "f")
 }
 
-@MainActor
+@MainActor @_optimize(none)
 private func same(_ a: @escaping () -> String, _ b: @escaping () -> String) -> Bool {
     _areEquivalentClosures(HoldsString(f: a), HoldsString(f: b), \.f, name: "f")
 }
 
-@MainActor
+@MainActor @_optimize(none)
 private func same(_ a: @escaping () -> ObjectIdentifier, _ b: @escaping () -> ObjectIdentifier) -> Bool {
     _areEquivalentClosures(HoldsIdentifier(f: a), HoldsIdentifier(f: b), \.f, name: "f")
 }
@@ -108,11 +110,14 @@ struct ClosureEquivalenceTests {
     }
 
     @Test func severalCapturesAllCount() {
-        let point = Point3(x: 1, y: 2, z: 3)
+        // A standard type: a type of the test's own that nothing else needs
+        // at run time may have no metadata in a release build, and then the
+        // capture can't be read (it counts as changed).
+        let point = SIMD3<Double>(1, 2, 3)
         let equal = same(capturing(point, 2, "a"), capturing(point, 2, "a"))
         let otherScale = same(capturing(point, 2, "a"), capturing(point, 3, "a"))
         let otherLabel = same(capturing(point, 2, "a"), capturing(point, 2, "b"))
-        let otherPoint = same(capturing(point, 2, "a"), capturing(Point3(x: 1, y: 2, z: 4), 2, "a"))
+        let otherPoint = same(capturing(point, 2, "a"), capturing(SIMD3<Double>(1, 2, 4), 2, "a"))
         #expect(equal)
         #expect(!otherScale)
         #expect(!otherLabel)
@@ -139,7 +144,7 @@ struct ClosureEquivalenceTests {
     }
 
     @Test func optionalClosures() {
-        func same(_ a: (() -> Int)?, _ b: (() -> Int)?) -> Bool {
+        @_optimize(none) func same(_ a: (() -> Int)?, _ b: (() -> Int)?) -> Bool {
             _areEquivalentClosures(HoldsOptional(f: a), HoldsOptional(f: b), \.f, name: "f")
         }
         let bothAbsent = same(nil, nil)
@@ -155,7 +160,7 @@ struct ClosureEquivalenceTests {
     }
 
     @Test func aCapturedBindingComparesBySource() {
-        func same(_ a: @escaping @MainActor () -> Int, _ b: @escaping @MainActor () -> Int) -> Bool {
+        @_optimize(none) func same(_ a: @escaping @MainActor () -> Int, _ b: @escaping @MainActor () -> Int) -> Bool {
             _areEquivalentClosures(HoldsMainActor(f: a), HoldsMainActor(f: b), \.f, name: "f")
         }
         // A binding from raw closures has no source: never the same input.

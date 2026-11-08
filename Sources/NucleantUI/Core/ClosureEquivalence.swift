@@ -25,7 +25,8 @@
 //  context whose descriptor needs generic metadata, a captured `var` (it
 //  lives in a box of its own), a type the runtime can't resolve by name — a
 //  captured closure among them, which the descriptor names by its lowered
-//  type.
+//  type, and in an optimised build a type of the app's own that nothing
+//  else needed metadata for.
 //
 
 /// Whether the closures two views hold in the stored property `name` run
