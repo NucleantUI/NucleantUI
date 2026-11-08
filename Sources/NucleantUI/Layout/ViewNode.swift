@@ -38,7 +38,7 @@ final class ViewNode {
     /// the next layout is compared with. See `NodeMotion.swift`.
     var layoutRect: Rect?
 
-    /// Its animation in flight: a displacement, an entrance.
+    /// Its geometry animation in flight.
     var motion = NodeMotion()
 
     /// The `.transition` of the view this node stands for, carried up
@@ -46,8 +46,8 @@ final class ViewNode {
     /// removes it.
     var transitionTrait: AnyTransition?
 
-    /// Set on a node removed from the tree while its exit plays: it is
-    /// drawn, but neither laid out nor hit.
+    /// Set on a container's slot node whose child was removed, while its
+    /// transition plays the exit: it is drawn, but neither laid out nor hit.
     var removal: NodeRemoval? {
         didSet { isLeaving = removal != nil }
     }
@@ -211,6 +211,11 @@ final class ViewNode {
         into list: inout DisplayList
     ) {
         let store = AnimationStore.current
+        // A view leaving just before this one among its parent's children
+        // is drawn first, under it.
+        if let store, store.hasExits {
+            placeLeavingBefore(context: context, store: store, into: &list)
+        }
         var rect = rect
         var context = context
         frame = rect
@@ -220,8 +225,8 @@ final class ViewNode {
         transform = context.transform
         self.proposal = proposal
         content.place(node: self, in: rect, proposal: proposal, context: context, into: &list)
-        if let store, store.hasGhosts {
-            placeGhosts(context: context, store: store, into: &list)
+        if let store, store.hasExits {
+            placeLeavingChildren(context: context, store: store, into: &list)
         }
     }
 }

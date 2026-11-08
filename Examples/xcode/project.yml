@@ -183,6 +183,8 @@ targets:
         product: NucleantAudio
   Sketch:
     templates: [Example, ExampleSources]
+  Slides:
+    templates: [Example, ExampleSources]
   Tasks:
     templates: [Example, ExampleSources]
   TwentyFortyEight:

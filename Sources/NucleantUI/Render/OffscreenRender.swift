@@ -46,6 +46,9 @@ final class OffscreenRender {
 
     init(environment: EnvironmentValues = EnvironmentValues()) {
         self.environment = environment
+        // A snapshot has no frames after this one: a view is in it or not,
+        // never on its way.
+        animations.runsTransitions = false
     }
 
     /// Build `view`, lay it out at `size` points, and place it — the display

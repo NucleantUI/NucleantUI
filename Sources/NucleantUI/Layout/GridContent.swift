@@ -135,11 +135,17 @@ struct GridContent: NodeContent {
         }
     }
 
-    /// The `GridRow` a row node is — directly, or under the render node a
-    /// stateful view wrapping it draws into.
+    /// The `GridRow` a row node is — directly, under the render node a
+    /// stateful view wrapping it draws into, or under the transition of a
+    /// row arriving or leaving (placed through it, so the row's cells move
+    /// and fade with it).
     private static func gridRow(in node: ViewNode) -> (ViewNode, GridRowContent)? {
         if let content = node.content as? GridRowContent { return (node, content) }
         if node.content is RenderBoundaryContent, let child = node.singleChild {
+            return gridRow(in: child)
+        }
+        let child = node.underTransition
+        if child !== node {
             return gridRow(in: child)
         }
         return nil

@@ -63,7 +63,7 @@ extension _ViewArray: BuiltinView {
             let node = context.child(index) { ctx in buildNode(element, &ctx) }
             return (index: index, node: node, isNew: isNew)
         }
-        return ViewNode(content: GroupContent(), children: context.structuralChildren(built))
+        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }
 
@@ -106,11 +106,11 @@ extension _ConditionalContent: BuiltinView where TrueContent: View, FalseContent
             isNew = context.isNewChild(at: 1)
             node = context.child(1) { ctx in buildNode(content, &ctx) }
         }
-        // The branch's node stands for this view as long as nothing is
-        // exiting beside it; while the other branch transitions out, the
-        // two share a group.
-        let children = context.structuralChildren([(index, node, isNew)])
-        guard children.count > 1 else { return node }
+        // The branch — or the slot its transition stands on it in — stands
+        // for this view as long as nothing is leaving beside it; while the
+        // other branch transitions out, the two share a group.
+        let children = context.transitionChildren([(index, node, isNew)])
+        guard children.count > 1 else { return children.first ?? node }
         return ViewNode(content: GroupContent(), children: children)
     }
 }
@@ -127,12 +127,12 @@ extension Optional: BuiltinView where Wrapped: View {
         case .some(let wrapped):
             let isNew = context.isNewChild(at: 0)
             let node = context.child(0) { ctx in buildNode(wrapped, &ctx) }
-            // One slot: a view back in it replaces whatever was exiting
-            // from it, so the result is only ever `node`.
-            _ = context.structuralChildren([(0, node, isNew)])
-            return node
+            // One slot: a view back in it takes over whatever was leaving
+            // it, so there is only ever the one child — the view, or the
+            // slot its transition stands on it in.
+            return context.transitionChildren([(0, node, isNew)]).first ?? node
         case .none:
-            return ViewNode(content: GroupContent(), children: context.structuralChildren([]))
+            return ViewNode(content: GroupContent(), children: context.transitionChildren([]))
         }
     }
 }

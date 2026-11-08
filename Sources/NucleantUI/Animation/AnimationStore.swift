@@ -19,8 +19,11 @@
 //    view is rebuilt at each, its path dirtied frame by frame until done;
 //  * geometry — a node placed somewhere other than where it last stood
 //    (`ViewNode.animate`, in NodeMotion.swift);
-//  * transitions — a view inserted into, or removed from, an `if` or a
-//    `ForEach`. A removed one stays drawn, out of layout, until it is gone.
+//  * transitions — a view inserted into, or removed from, an `if`, a
+//    `switch`, a `ForEach` or a `for`: its transition's body built around
+//    it and moved from phase to phase, the body's own values doing the
+//    animating (Transition/TransitionSlots.swift). A removed one stays
+//    drawn, out of layout, until everything its exit started is over.
 //
 
 import Foundation
@@ -37,7 +40,7 @@ final class AnimationStore {
     /// Seconds on a monotonic clock, fixed for the frame.
     private(set) var now: Double = 0
 
-    /// Bumped every frame, so a ghost reached twice in one pass is drawn
+    /// Bumped every frame, so a leaving view reached twice in one pass is drawn
     /// once and a scoped change can tell "this frame" from "some frame".
     private(set) var frame = 0
 
@@ -76,11 +79,29 @@ final class AnimationStore {
     }
 
     /// An animation began in this pass: whichever `withAnimation`
-    /// completions ride on the pass wait for it.
+    /// completions ride on the pass wait for it, and so does whatever is
+    /// collecting the runs started meanwhile.
     func noteStarted(_ run: AnimationRun) {
         for completion in transaction.completions {
             completion.runs.append(run)
         }
+        for index in collectors.indices {
+            collectors[index].append(run)
+        }
+    }
+
+    /// Runs started since each open `beginCollectingRuns`, innermost last.
+    private var collectors: [[AnimationRun]] = []
+
+    /// Start collecting the animations started from here on — what a
+    /// transition's change of phase started, which its exit waits on.
+    func beginCollectingRuns() {
+        collectors.append([])
+    }
+
+    /// The animations started since the matching `beginCollectingRuns`.
+    func endCollectingRuns() -> [AnimationRun] {
+        collectors.removeLast()
     }
 
     func endPass() {
@@ -120,7 +141,7 @@ final class AnimationStore {
     /// Which of a node's parameters a value is — one node, one modifier,
     /// so the kinds never collide at a path.
     enum Slot: Hashable {
-        case opacity, rotation, scale, fill, stroke, textColor
+        case opacity, rotation, scale, offset, move, fill, stroke, textColor
     }
 
     private var values: [[Int]: [Slot: AnimatedVector]] = [:]
@@ -166,30 +187,48 @@ final class AnimationStore {
         animating.insert(path)
     }
 
-    // MARK: - Removed views
+    // MARK: - Transitions
 
-    /// Views removed with a transition still running, by the path of the
-    /// container they were removed from and the child slot they held.
-    private var ghosts: [[Int]: [Int: ViewNode]] = [:]
+    /// False for a tree rendered as a snapshot (`OffscreenRender`): its
+    /// frames never advance, so nothing arrives or leaves — every view is
+    /// simply there or not.
+    var runsTransitions = true
 
-    var hasGhosts: Bool { !ghosts.isEmpty }
+    /// The child slots with a transition standing on them, by the path of
+    /// their container and their slot in it.
+    private var transitionSlots: [[Int]: [Int: TransitionSlot]] = [:]
 
-    func addGhost(_ node: ViewNode, container: [Int], index: Int) {
-        ghosts[container, default: [:]][index] = node
+    func transitionSlots(in container: [Int]) -> [Int: TransitionSlot] {
+        transitionSlots[container] ?? [:]
     }
 
-    /// The ghosts still fading out of `container`, less any whose slot a
-    /// view came back to — that one replaces it rather than overlapping it.
-    func ghosts(in container: [Int], excluding rebuilt: Set<Int>) -> [ViewNode] {
-        guard var standing = ghosts[container] else { return [] }
-        for index in rebuilt { standing[index] = nil }
-        ghosts[container] = standing.isEmpty ? nil : standing
-        return standing.keys.sorted().compactMap { standing[$0] }
+    func setTransitionSlots(_ slots: [Int: TransitionSlot], in container: [Int]) {
+        transitionSlots[container] = slots.isEmpty ? nil : slots
     }
 
-    func removeGhost(container: [Int], index: Int) {
-        ghosts[container]?[index] = nil
-        if ghosts[container]?.isEmpty == true { ghosts[container] = nil }
+    /// The slot nodes on their way out.
+    private var leaving: Set<ObjectIdentifier> = []
+
+    /// Whether any slot is on its way out — what makes every node placed
+    /// look among its children for one to draw.
+    var hasExits: Bool { !leaving.isEmpty }
+
+    func exitBegan(_ node: ViewNode) {
+        leaving.insert(ObjectIdentifier(node))
+    }
+
+    /// No longer leaving: its exit ended, or the view came back.
+    func exitEnded(_ node: ViewNode) {
+        leaving.remove(ObjectIdentifier(node))
+    }
+
+    /// Containers whose exits played out this frame, rebuilt the next so
+    /// what was left of the views goes.
+    private var finishedExits: Set<[Int]> = []
+
+    func exitFinished(_ node: ViewNode, container: [Int]) {
+        exitEnded(node)
+        finishedExits.insert(container)
     }
 
     // MARK: - Timelines
@@ -209,6 +248,11 @@ final class AnimationStore {
             Invalidator.shared.invalidate(owner: path)
         }
         animating.removeAll(keepingCapacity: true)
+        // A container whose exit is over, still standing.
+        for path in finishedExits where transitionSlots[path] != nil {
+            Invalidator.shared.invalidate(owner: path)
+        }
+        finishedExits.removeAll()
         guard !timelines.isEmpty else { return }
         let date = Date()
         for (path, due) in timelines where due <= date {
@@ -227,7 +271,11 @@ final class AnimationStore {
             animatableData[path] = nil
             animating.remove(path)
             timelines[path] = nil
-            ghosts[path] = nil
+            if let slots = transitionSlots.removeValue(forKey: path) {
+                for slot in slots.values where slot.isLeaving {
+                    exitEnded(slot.node)
+                }
+            }
         }
     }
 }
