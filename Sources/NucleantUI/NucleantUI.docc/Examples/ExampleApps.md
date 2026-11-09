@@ -76,3 +76,4 @@ code.
 - <doc:MoodboardExample>
 - <doc:MindMapExample>
 - <doc:ReaderExample>
+- <doc:AtlasExample>
