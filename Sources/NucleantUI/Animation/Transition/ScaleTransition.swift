@@ -29,6 +29,10 @@ public struct ScaleTransition: Transition, Equatable {
 }
 
 extension ScaleTransition: BuiltinTransition {
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        let factor = phase.isIdentity ? 1 : scale
+        return [.scale(x: factor, y: factor, anchor: anchor)]
+    }
     static var identityLeavesViewUnchanged: Bool { true }
     static var animatesArrival: Bool { false }
     static var animatesRemoval: Bool { false }

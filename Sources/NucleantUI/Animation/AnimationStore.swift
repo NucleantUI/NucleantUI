@@ -20,10 +20,12 @@
 //  * geometry — a node placed somewhere other than where it last stood
 //    (`ViewNode.animate`, in NodeMotion.swift);
 //  * transitions — a view inserted into, or removed from, an `if`, a
-//    `switch`, a `ForEach` or a `for`: its transition's body built around
-//    it and moved from phase to phase, the body's own values doing the
-//    animating (Transition/TransitionSlots.swift). A removed one stays
-//    drawn, out of layout, until everything its exit started is over.
+//    `switch`, a `ForEach` or a `for`: the framework's transitions drawn
+//    around it as effects whose numbers animate, any other transition's
+//    body built around it and moved from phase to phase, the body's own
+//    values doing the animating (Transition/TransitionSlots.swift). A
+//    removed one stays drawn, out of layout, until everything its exit
+//    started is over.
 //
 
 import Foundation

@@ -25,6 +25,10 @@ public struct OffsetTransition: Transition, Equatable {
 }
 
 extension OffsetTransition: BuiltinTransition {
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        let amount = phase.isIdentity ? Size.zero : offset
+        return [.offset(x: amount.width, y: amount.height)]
+    }
     static var identityLeavesViewUnchanged: Bool { true }
     static var animatesArrival: Bool { false }
     static var animatesRemoval: Bool { false }

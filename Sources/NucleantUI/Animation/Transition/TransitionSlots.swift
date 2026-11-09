@@ -34,6 +34,14 @@
 //  full. Any other transition stays on its view while it is shown — its
 //  identity phase is part of how the view looks.
 //
+//  Nor do they build a body at all. A framework transition says what its
+//  body would draw in each phase — an opacity, an offset, a move, a scale
+//  (TransitionEffect.swift) — and its slot's node draws that around the
+//  node over the child itself, the numbers animated from phase to phase:
+//  the same picture, with nothing built for an arrival or an exit. Only a
+//  transition that cannot say — one written outside the framework, or one
+//  carrying an animation of its own — has its body built, as above.
+//
 
 /// One child slot of a structural container while a transition's body
 /// stands on it.
@@ -66,12 +74,32 @@ final class TransitionSlot {
     /// nothing in `identity` is taken off once every one has run out.
     var arrival: [AnimationRun] = []
 
+    /// For a built-in transition that says what it draws: the effects the
+    /// slot's node draws the child with, in place of a body. Emptied when
+    /// the slot takes a transition that has to build its body.
+    let effects: TransitionEffects
+
+    /// A slot whose transition's body is built, standing on `content`.
     init(index: Int, content: ViewNode, body: ViewNode, transition: AnyTransition) {
         self.index = index
         self.content = content
-        self.node = ViewNode(content: TransitionSlotContent(content: content), children: [body])
+        effects = TransitionEffects([])
+        self.node = ViewNode(content: TransitionSlotContent(content: content, effects: effects), children: [body])
         self.transition = transition
     }
+
+    /// A slot that draws its transition's `effects` itself: no body, the
+    /// node over the child is the slot's only child.
+    init(index: Int, content: ViewNode, effects: [TransitionEffect], transition: AnyTransition) {
+        self.index = index
+        self.content = content
+        self.effects = TransitionEffects(effects)
+        self.node = ViewNode(content: TransitionSlotContent(content: content, effects: self.effects), children: [content])
+        self.transition = transition
+    }
+
+    /// Whether the slot draws effects rather than a body.
+    var drawsEffects: Bool { node.children.first === content }
 
     /// The child left and its exit is playing.
     var isLeaving: Bool { node.isLeaving }
@@ -141,6 +169,13 @@ struct NodeRemoval {
 struct TransitionSlotContent: NodeContent {
     /// The node over the child.
     let content: ViewNode
+    /// What a built-in transition draws, when the slot stands without a
+    /// body: applied around the child here, as its modifiers would be.
+    let effects: TransitionEffects
+
+    func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        node.singleChild?.place(in: rect, proposal: proposal, context: effects.apply(to: context, in: rect), into: &list)
+    }
 }
 
 /// The node between a transition's body and the child it stands on: lays
@@ -355,12 +390,22 @@ extension BuildContext {
         phase: TransitionPhase
     ) -> TransitionSlot {
         let content = ViewNode(content: TransitionContentContent(), children: [child])
+        if let effects = transition.box.effects(in: phase) {
+            return TransitionSlot(index: index, content: content, effects: effects, transition: transition)
+        }
         let body = buildBody(index, transition: transition, standingOn: content, phase: phase, animation: nil)
         return TransitionSlot(index: index, content: content, body: body, transition: transition)
     }
 
-    /// Build `slot`'s body in `phase`, under `animation`.
+    /// Show `slot` in `phase`, under `animation`: its effects moved there,
+    /// or its body built again for it. A slot that drew effects and now
+    /// has a transition that cannot builds its body from here on.
     private func show(_ slot: TransitionSlot, in phase: TransitionPhase, animation: Animation?) {
+        if slot.drawsEffects, let effects = slot.transition.box.effects(in: phase) {
+            slot.effects.update(to: effects, animation: animation, in: animations)
+            return
+        }
+        slot.effects.update(to: nil, animation: nil, in: animations)
         slot.setBody(buildBody(slot.index, transition: slot.transition, standingOn: slot.content, phase: phase, animation: animation))
     }
 
