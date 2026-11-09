@@ -12,7 +12,10 @@
 //  * The card: dragged with a `DragGesture` and no animation at all (it
 //    follows the pointer), sprung back with `withAnimation(.bouncy)` if
 //    let go short, or flung off with `withAnimation(_:_:completion:)` —
-//    whose completion then grades the card and brings on the next.
+//    whose completion then grades the card and brings on the next. The
+//    drag's `onChanged` runs with `Transaction.tracksVelocity`, so the
+//    spring-back sets off at the speed the card was thrown with, and a
+//    card caught mid-spring turns from where it is without stopping.
 //  * The next card arrives through a `ForEach` over just the current one:
 //    a new id is a removal and an insertion, so `.transition` applies.
 //  * Tapping flips it: `FlipCard` is `Animatable`, so the face swaps at
