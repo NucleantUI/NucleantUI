@@ -114,9 +114,15 @@ final class Motion<Value: VectorArithmetic> {
             velocity.magnitudeSquared.squareRoot() * spring.response / (2 * .pi)
         )
         guard size > 0 else { return nil }
-        let settling = spring.endOfMotion(target: .zero - start, initialVelocity: velocity, epsilon: size * 0.001)
+        // Starting from rest — the usual case, every node a layout change
+        // moves — the motion is the animation's own unit curve scaled, and
+        // ends when that does, worked out once when the animation was made.
+        // Only a carried velocity changes the shape, and the end with it.
         var settled = animation
-        settled.curve = .spring(spring, initialVelocity: unitVelocity, settlingDuration: settling)
+        if running != nil || tracked != nil {
+            let settling = spring.endOfMotion(target: .zero - start, initialVelocity: velocity, epsilon: size * 0.001)
+            settled.curve = .spring(spring, initialVelocity: unitVelocity, settlingDuration: settling)
+        }
 
         return Motion(
             run: AnimationRun(settled, start: now),
