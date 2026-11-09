@@ -130,6 +130,8 @@ targetTemplates:
       - path: ../${target_name}/Sources/${target_name}
 
 targets:
+  Atlas:
+    templates: [Example, ExampleSources]
   Bookmarks:
     templates: [Example, ExampleSources]
   Calculator:

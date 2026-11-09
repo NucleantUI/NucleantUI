@@ -97,3 +97,63 @@ struct ReadingPage {
     }
 }
 ```
+
+## Moving between screens
+
+A push slides the new screen in from the trailing edge, over the one it
+covers, which drifts the other way and dims a little; a pop plays the same
+slide backwards. That is the stack's ``AutomaticNavigationTransition``. A push
+or pop made inside a transaction with `disablesAnimations` set happens at once.
+
+A screen can grow out of a view on the screen it is pushed from, and shrink
+back into it when you go back: mark the view with
+`.matchedTransitionSource(id:in:)`, and give the destination
+`.navigationTransition(.zoom(sourceID:in:))` with the same id. Both name a
+``Namespace``, which the view that holds the stack owns:
+
+```swift
+@View
+struct Gallery {
+    let photos: [Photo]
+    @Namespace private var zoom
+
+    var body: some View {
+        NavigationStack {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) {
+                ForEach(photos) { photo in
+                    NavigationLink(value: photo.id) {
+                        Thumbnail(photo: photo)
+                            .matchedTransitionSource(id: photo.id, in: zoom)
+                    }
+                }
+            }
+            .navigationDestination(for: Photo.ID.self) { id in
+                PhotoDetail(id: id)
+                    .navigationTransition(.zoom(sourceID: id, in: zoom))
+            }
+        }
+    }
+}
+```
+
+While it zooms, the new screen is drawn scaled into a frame that grows from
+the source's to its own, its corners rounding off from the source's; the
+screen underneath recedes and dims, and the source itself is hidden. On the
+way back the frame shrinks into wherever the source is then. With no source
+on screen, the push slides in instead.
+
+The source can be styled: clipped to a rounded rectangle, with a colour
+behind it that also fills the shape as it grows:
+
+```swift
+Thumbnail(photo: photo)
+    .matchedTransitionSource(id: photo.id, in: zoom) { source in
+        source
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(photo.dominantColor)
+    }
+```
+
+Unlike SwiftUI, every platform plays the same transitions, macOS included:
+NucleantUI draws them itself. The source configuration's `shadow` is not
+there yet. The <doc:AtlasExample> app shows both transitions at work.

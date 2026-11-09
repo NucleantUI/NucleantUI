@@ -32,6 +32,7 @@ built for WebAssembly and drawn with WebGPU. You need a browser with WebGPU
     - <doc:ReaderExample>
     - <doc:CompositorExample>
     - <doc:IssuesExample>
+    - <doc:AtlasExample>
 }
 
 ### One download for every example
