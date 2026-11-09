@@ -176,7 +176,7 @@ extension Spring {
 extension Spring {
     /// The displacement at `time` as d₀·A + v₀·B, and its rate of change as
     /// d₀·A′ + v₀·B′.
-    private func coefficients(at time: Double) -> (a: Double, b: Double, da: Double, db: Double) {
+    func coefficients(at time: Double) -> (a: Double, b: Double, da: Double, db: Double) {
         let lambda = decayConstant
         let omega = angularFrequency
         // Infinitely damped: there at once, and still.
@@ -265,6 +265,29 @@ extension Spring {
         let distance = target.magnitudeSquared.squareRoot()
         let lead = (target.scaled(by: lambda) - initialVelocity).magnitudeSquared.squareRoot()
         return settlingDuration(distance: distance, lead: lead, epsilon: epsilon)
+    }
+
+    /// When a running animation of the spring ends: the last moment, at
+    /// 120 Hz, the motion is still `epsilon` or more from `target`.
+    ///
+    /// `settlingDuration` is SwiftUI's figure, and for a bouncing spring an
+    /// envelope bound — a fifth or more past the last moment anything
+    /// visibly moves (a bounce of 0.3 over 0.5 s: 1.04 s against 0.82 s).
+    /// Running to it only draws frames of nothing; SwiftUI's own spring
+    /// animations stop on their motion, not on that bound. So start from
+    /// it and step back to where the motion last was that far out — a few
+    /// dozen evaluations, once per animation.
+    func endOfMotion<V: VectorArithmetic>(target: V, initialVelocity: V = .zero, epsilon: Double) -> TimeInterval {
+        let bound = settlingDuration(target: target, initialVelocity: initialVelocity, epsilon: epsilon)
+        guard bound.isFinite, bound > 0 else { return bound }
+        let step = 1.0 / 120
+        var time = bound
+        while time > step {
+            let left = value(target: target, initialVelocity: initialVelocity, time: time - step) - target
+            if left.magnitudeSquared.squareRoot() >= epsilon { return time }
+            time -= step
+        }
+        return time
     }
 
     /// `distance` is |x|, `lead` is |λx − v₀|.

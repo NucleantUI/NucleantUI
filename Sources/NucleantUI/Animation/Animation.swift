@@ -99,7 +99,7 @@ public struct Animation: Hashable, Sendable {
         Animation(curve: .spring(
             spring,
             initialVelocity: initialVelocity,
-            settlingDuration: spring.settlingDuration(target: 1.0, initialVelocity: initialVelocity, epsilon: 0.001)
+            settlingDuration: spring.endOfMotion(target: 1.0, initialVelocity: initialVelocity, epsilon: 0.001)
         ))
     }
 

@@ -114,7 +114,7 @@ final class Motion<Value: VectorArithmetic> {
             velocity.magnitudeSquared.squareRoot() * spring.response / (2 * .pi)
         )
         guard size > 0 else { return nil }
-        let settling = spring.settlingDuration(target: .zero - start, initialVelocity: velocity, epsilon: size * 0.001)
+        let settling = spring.endOfMotion(target: .zero - start, initialVelocity: velocity, epsilon: size * 0.001)
         var settled = animation
         settled.curve = .spring(spring, initialVelocity: unitVelocity, settlingDuration: settling)
 
@@ -133,8 +133,9 @@ final class Motion<Value: VectorArithmetic> {
             guard !run.isDone(at: now) else { return (.zero, true) }
             let time = run.animation.localTime(run.elapsed(at: now))
             guard time > 0 else { return (offset, false) }
-            let moved = spring.value(target: .zero - offset, initialVelocity: initialVelocity, time: time)
-            return (moved + offset, false)
+            // d = d₀·A + v₀·B: two scalars, applied once to each vector.
+            let c = spring.coefficients(at: time)
+            return (offset.scaled(by: c.a) + initialVelocity.scaled(by: c.b), false)
         }
         let progress = run.progress(at: now)
         guard !progress.isFinished else {
@@ -151,8 +152,8 @@ final class Motion<Value: VectorArithmetic> {
             // Still in its delay: holding still.
             let time = run.animation.localTime(run.elapsed(at: now))
             guard time >= 0 else { return .zero }
-            return spring.velocity(target: .zero - offset, initialVelocity: initialVelocity, time: time)
-                .scaled(by: run.animation.speed)
+            let c = spring.coefficients(at: time)
+            return (offset.scaled(by: c.da) + initialVelocity.scaled(by: c.db)).scaled(by: run.animation.speed)
         }
         // d = s·(1 − f), with s the old target's distance plus what is
         // left of the motion below: d′ = s′·(1 − f) − s·f′.

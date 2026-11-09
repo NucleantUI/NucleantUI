@@ -106,4 +106,23 @@ struct SpringTests {
         #expect(close(spring.response, 0.5))
         #expect(close(spring.dampingRatio, 1))
     }
+
+    @Test func aRunningAnimationEndsWhenTheMotionDoesNotAtTheBound() {
+        for spring in [Spring(duration: 0.5, bounce: 0.3), Spring(duration: 0.5, bounce: 0.15), Spring(duration: 0.5), Spring(duration: 0.4, bounce: -0.3)] {
+            let end = spring.endOfMotion(target: 1.0, epsilon: 0.001)
+            let bound = spring.settlingDuration(target: 1.0, initialVelocity: 0.0, epsilon: 0.001)
+            #expect(end <= bound)
+            // A thousandth or more out a 120 Hz step before the end…
+            #expect(abs(spring.value(target: 1.0, time: end - 1.0 / 120) - 1) >= 0.001)
+            // …and within it from the end on.
+            for step in 0..<240 {
+                let time = end + Double(step) / 120
+                #expect(abs(spring.value(target: 1.0, time: time) - 1) < 0.001)
+            }
+        }
+        // A bounce of 0.3 over 0.5 s: the bound is a fifth past the motion.
+        let bouncy = Spring(duration: 0.5, bounce: 0.3)
+        #expect(bouncy.endOfMotion(target: 1.0, epsilon: 0.001) < 0.85)
+        #expect(bouncy.settlingDuration > 1)
+    }
 }
