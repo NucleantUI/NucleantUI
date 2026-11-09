@@ -97,8 +97,47 @@ final class NavigationStackStorage {
         barVersion &+= 1
     }
 
+    // MARK: Transitions
+
+    /// The transition each screen asked for with `.navigationTransition`.
+    /// Read when the screen is pushed and when it is popped; not observed —
+    /// nothing on screen shows it.
+    @ObservationIgnored
+    private var transitions: [NavigationScreenID: _NavigationTransitionContent] = [:]
+
+    func transition(for screen: NavigationScreenID) -> _NavigationTransitionContent? {
+        transitions[screen]
+    }
+
+    func setTransition(_ transition: _NavigationTransitionContent, for screen: NavigationScreenID) {
+        transitions[screen] = transition
+    }
+
+    /// Where each marked transition source was last drawn: where a zoom
+    /// grows from, and shrinks back into.
+    @ObservationIgnored
+    private var sources: [MatchedTransitionSourceKey: MatchedTransitionSourceFrame] = [:]
+
+    func noteSource(_ key: MatchedTransitionSourceKey, at frame: MatchedTransitionSourceFrame) {
+        sources[key] = frame
+    }
+
+    func source(_ key: MatchedTransitionSourceKey) -> MatchedTransitionSourceFrame? {
+        sources[key]
+    }
+
+    /// The source a zoom is standing in for, drawn as nothing meanwhile.
+    @ObservationIgnored
+    var hiddenSource: MatchedTransitionSourceKey?
+
     /// Forgets what screens no longer on the stack set.
     func retain(_ screens: Set<NavigationScreenID>) {
+        if transitions.keys.contains(where: { !screens.contains($0) }) {
+            transitions = transitions.filter { screens.contains($0.key) }
+        }
+        if sources.values.contains(where: { $0.screen.map { !screens.contains($0) } ?? false }) {
+            sources = sources.filter { $0.value.screen.map(screens.contains) ?? true }
+        }
         if titles.keys.contains(where: { !screens.contains($0) }) {
             titles = titles.filter { screens.contains($0.key) }
         }
@@ -271,6 +310,11 @@ public struct NavigationStack<Data, Root: View> {
     @State private var pushed: [NavigationRouter.PushedView] = []
     @State private var nextID: Int = 0
     @State private var storage = NavigationStackStorage()
+    /// The push or pop being played.
+    @State private var transition = NavigationStackTransition()
+    /// Bumped as a move ends, to rebuild the stack: the screen underneath
+    /// parked again, or the popped one let go.
+    @State private var settled = 0
 
     init(title: String?, path: Binding<NavigationPath>?, root: Root, _viewID: ViewID) {
         self.title = title
@@ -288,7 +332,12 @@ public struct NavigationStack<Data, Root: View> {
         )
         let screens = router.screens
         let top = screens.last
-        let _ = storage.retain(Set(screens.map(\.id) + [.root]))
+        let _ = settled
+        let _ = transition.settle = { [$settled] in $settled.wrappedValue &+= 1 }
+        let _ = transition.update(screens: screens, storage: storage)
+        // A popped screen stays until its pop has played.
+        let shown = screens + (transition.leaving.map { [$0] } ?? [])
+        let _ = storage.retain(Set(shown.map(\.id) + [.root]))
 
         // The screens first and the bar second, so the bar is built *after*
         // them: a screen's `.navigationTitle` and `.toolbarVisibility` are
@@ -303,13 +352,21 @@ public struct NavigationStack<Data, Root: View> {
             // identity, so its `@State` and scroll position are still there
             // on the way back. A screen that left the tree would lose them
             // at once, the way any departed view does.
+            //
+            // While a push or pop plays, the screen underneath and the one
+            // going on or coming off are both drawn, each as the move has
+            // it (NavigationStackTransition.swift). A screen's arrival is
+            // the move's, not a container transition's.
             ZStack {
                 root
                     .environment(\.navigationScreen, .root)
-                    ._parked(top != nil)
-                ForEach(screens) { screen in
+                    ._parked(top != nil && !transition.involves(.root))
+                    .navigationScreenTransition(.root, transition, storage: storage)
+                ForEach(shown) { screen in
                     NavigationScreenView(screen: screen, storage: storage)
-                        ._parked(screen.id != top?.id)
+                        ._parked(screen.id != top?.id && !transition.involves(screen.id))
+                        .navigationScreenTransition(screen.id, transition, storage: storage)
+                        .transition(.identity)
                 }
             }
             // The stack takes everything offered, bar or no bar.

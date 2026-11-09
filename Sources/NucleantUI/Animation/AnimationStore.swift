@@ -328,6 +328,10 @@ final class AnimatedVector {
         target = newTarget
     }
 
+    /// Whether it is still on its way: false once a pass has drawn it
+    /// arrived.
+    var isMoving: Bool { motion != nil }
+
     /// The value to draw in the pass under way.
     func current() -> [Double] {
         guard let store = AnimationStore.current else { return target }
