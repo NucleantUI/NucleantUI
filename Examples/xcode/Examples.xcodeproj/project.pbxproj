@@ -31,6 +31,7 @@
 		32BE3D184F1D4CB00C10D7E9 /* MoodboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3270022DF097F842A002F9C /* MoodboardApp.swift */; };
 		339B79F3F0A420C577876470 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = F740C62F9012636B8F1AA07C /* Document.swift */; };
 		367722CEF2A358A15B21CDD0 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B09705B36471D01F3C6AE9 /* Model.swift */; };
+		37FBF3B880F881FC6B28E16C /* Poster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0269BD4009DAE0DF45969708 /* Poster.swift */; };
 		3A7767A39B5042D398ADA4D2 /* ReadingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16A370C857F4E8A724E5FACA /* ReadingScreen.swift */; };
 		3C0B2DB2DF8084590E60A00F /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA2E656552606216DBE1E2 /* Appearance.swift */; };
 		3F457E0DAFC6EDCCB7D7071E /* Plan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD916B29DECBBCFE1FA0420 /* Plan.swift */; };
@@ -43,11 +44,14 @@
 		4D951153C67F4FFCDD77F443 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 639E5C4910E8344EC2859009 /* NucleantUI */; };
 		4E08B71AB83CD03AA9990B61 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F3091149C43009F0219EBF0 /* Appearance.swift */; };
 		4F1E12B3E4437E83DAF538DC /* TwentyFortyEightApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5A4CC67BDC44951C8868DE /* TwentyFortyEightApp.swift */; };
+		4F8A8DB1F8C32B8607DDA0B1 /* DestinationScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01D7544CD96E35369793A39 /* DestinationScreen.swift */; };
+		50BBD425716CA55DC78C0B0C /* Guide.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5551F2E5E855913E0784FCA /* Guide.swift */; };
 		50CF5F32C438C86DA2DC9CD2 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4D4D1D7952D74F1132107BF5 /* NucleantUI */; };
 		51027B27D21F737D34E260BC /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E75E0135F35577221B7D9D /* Appearance.swift */; };
 		52100F36C1736F8C16B25291 /* DashboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2451354E13A3518916EA8690 /* DashboardApp.swift */; };
 		521E01BBC5FE9B0321EDBADD /* CompositeShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703A21A5B602E3CF0312D737 /* CompositeShader.swift */; };
 		5240F97406F163548A7AC164 /* Material in Resources */ = {isa = PBXBuildFile; fileRef = 1BA36B2714FD9C20C65D1B59 /* Material */; };
+		527F5C4DDB15B30BB904178A /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB17301193CF9949CFD97906 /* Model.swift */; };
 		53B50E926CC5A138A376697A /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = AD499C5A4EE55DFB5E287260 /* NucleantUI */; };
 		53B9E19A3F88D8400CB9F58A /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777109A25264D7E9D66A67FF /* Model.swift */; };
 		54EFCEE08D24D2D51573F082 /* ClickEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C6CECB90D63E2315980C4D /* ClickEngine.swift */; };
@@ -69,6 +73,7 @@
 		6F93FFF6025B346D2F9A56F5 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7CC091C5BF331569852DBF /* Appearance.swift */; };
 		70D11CD24579B342EDFA913F /* Books.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0519923B885B9F257D27A80 /* Books.swift */; };
 		7111E8A6E6549185A5DC5F30 /* Inspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 005321CF439E0786AD0FCCAE /* Inspector.swift */; };
+		7352E962AC90F8155963F96F /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 53D73B413EB077FD58473A68 /* NucleantUI */; };
 		7360FB01E805F15EC588E047 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 607EF935D161CA008C6F9A0C /* Model.swift */; };
 		777870960B2AB0831EF4A359 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = E590BA3C8903F72E91BE06A9 /* NucleantUI */; };
 		78B65C6BCE98B3D09D2C87BC /* CompositorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36785BC2B77BD110B9CC433C /* CompositorApp.swift */; };
@@ -78,6 +83,7 @@
 		901033EFD14B8958FD255E15 /* LayerArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A853FB08ECFEADB36AA3BB1 /* LayerArt.swift */; };
 		911FCB1BAF23C010CB93D11A /* IssuesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3AB0ACB7A3BF0E519F02F9 /* IssuesApp.swift */; };
 		933AC0B13C908E9DF11C3C60 /* IssueBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D365B032239F4201B30C58A5 /* IssueBrowser.swift */; };
+		949474829127FA52D775458B /* HighlightScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC41B2C6211EB4ADD3306F7 /* HighlightScreen.swift */; };
 		9BBFE476D5E533DCB91F799A /* saved.md in Resources */ = {isa = PBXBuildFile; fileRef = 74600F9C22BC45EC7F3A9430 /* saved.md */; };
 		9C86913DE50A9A43609027F1 /* NucleantAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F7E9785C099C23668F7D45FD /* NucleantAudio */; };
 		9CCA6284EDD143B2F4A813DB /* Recipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1C04ABD659486FEA2F41E9 /* Recipes.swift */; };
@@ -107,9 +113,11 @@
 		C248F321489255D708DC2B44 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C60C6D08A4863980C8B512 /* Appearance.swift */; };
 		C2784BEDF347988F4738A6E1 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 74B0D083329F4C709B6E2394 /* NucleantUI */; };
 		C4E0244A4C1CDA57494EF633 /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51F1477EEB25B617E422F8DE /* Sidebar.swift */; };
+		C7061F1C0540583AC5D5E0AA /* AtlasApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DF668FE17FE07B0E00E1629 /* AtlasApp.swift */; };
 		CA56FF75E436462860D8A04C /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = A01927736ABED8E08346FED0 /* NucleantUI */; };
 		CB260C0CAC0E541A9DB43A5F /* SettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6134BE1A92B49E6152E7D2 /* SettingsPane.swift */; };
 		D021FEF30DBF3F740C5CF66D /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 46D5D45B736B93100EA87A47 /* NucleantUI */; };
+		D143AC483C72E0F1AD80ADFB /* GalleryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706D6F607FC2387588D1902D /* GalleryScreen.swift */; };
 		D5AFF379BB29125036495470 /* BookmarksApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB5B3D3D249847FB7876EE3 /* BookmarksApp.swift */; };
 		D61E1591752D9AB8ACC31D30 /* ReaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CF68775FAF4CA1DA3A1B4E /* ReaderApp.swift */; };
 		D7B025E766CFEBC3A3D058A3 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1224CA80CE2F615B9672310 /* Model.swift */; };
@@ -124,6 +132,7 @@
 
 /* Begin PBXFileReference section */
 		005321CF439E0786AD0FCCAE /* Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inspector.swift; sourceTree = "<group>"; };
+		0269BD4009DAE0DF45969708 /* Poster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Poster.swift; sourceTree = "<group>"; };
 		045F5C6FE4EA98F38E450091 /* PomodoroApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroApp.swift; sourceTree = "<group>"; };
 		0871D724BA1FC2CCCC338949 /* IconGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconGrid.swift; sourceTree = "<group>"; };
 		08C65E3C2FBC2FB7601D574A /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
@@ -142,6 +151,8 @@
 		1B3AB0ACB7A3BF0E519F02F9 /* IssuesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssuesApp.swift; sourceTree = "<group>"; };
 		1BA36B2714FD9C20C65D1B59 /* Material */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Material; path = ../Icons/Sources/Icons/Material; sourceTree = SOURCE_ROOT; };
 		1C29A38F8949884C75ED18D0 /* Deck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deck.swift; sourceTree = "<group>"; };
+		1DC41B2C6211EB4ADD3306F7 /* HighlightScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightScreen.swift; sourceTree = "<group>"; };
+		1ED24231BEB2B455E20F20E2 /* Atlas.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Atlas.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20E9676FD7F19112D3077B78 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		21C60C6D08A4863980C8B512 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		2451354E13A3518916EA8690 /* DashboardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardApp.swift; sourceTree = "<group>"; };
@@ -176,6 +187,7 @@
 		6F0621BF6ED84E57B68241D7 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		6F3091149C43009F0219EBF0 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		703A21A5B602E3CF0312D737 /* CompositeShader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositeShader.swift; sourceTree = "<group>"; };
+		706D6F607FC2387588D1902D /* GalleryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryScreen.swift; sourceTree = "<group>"; };
 		717041910FC9EF0846A28F47 /* IconsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconsApp.swift; sourceTree = "<group>"; };
 		74600F9C22BC45EC7F3A9430 /* saved.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = saved.md; sourceTree = "<group>"; };
 		74EA11AFC82636F350A558B5 /* BoardCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardCanvas.swift; sourceTree = "<group>"; };
@@ -199,6 +211,7 @@
 		96EA647B0ED9F8F57406E275 /* DaysScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaysScreen.swift; sourceTree = "<group>"; };
 		99CF68775FAF4CA1DA3A1B4E /* ReaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderApp.swift; sourceTree = "<group>"; };
 		9DF4F83DEE56EF50E370A869 /* RecipesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesApp.swift; sourceTree = "<group>"; };
+		9DF668FE17FE07B0E00E1629 /* AtlasApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasApp.swift; sourceTree = "<group>"; };
 		9E0BA05376A4D695B54B5B0B /* Pomodoro.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Pomodoro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F306568C3E86065110367EB /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		A081F10BE85F0EB3155968E5 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
@@ -213,6 +226,7 @@
 		B4B09705B36471D01F3C6AE9 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		B4BBB80475100884139B847F /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		B5845CA5CDBABA43AA53CBC9 /* FinderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderApp.swift; sourceTree = "<group>"; };
+		BB17301193CF9949CFD97906 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		BB868199B5E0D9BB07F617F9 /* Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inspector.swift; sourceTree = "<group>"; };
 		BC93A5A5A0E3510F0E873A2F /* Bookmarks.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Bookmarks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4A56C62650CFE06109E5C9A /* CardFace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardFace.swift; sourceTree = "<group>"; };
@@ -225,7 +239,9 @@
 		D1224CA80CE2F615B9672310 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		D365B032239F4201B30C58A5 /* IssueBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueBrowser.swift; sourceTree = "<group>"; };
 		D83312CA5241B9DF9F031E51 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		E01D7544CD96E35369793A39 /* DestinationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationScreen.swift; sourceTree = "<group>"; };
 		E0B6172622839CA4A2E424A0 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
+		E5551F2E5E855913E0784FCA /* Guide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Guide.swift; sourceTree = "<group>"; };
 		E9A5F3049632CB3C403BC389 /* Dashboard.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Dashboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EAB5B3D3D249847FB7876EE3 /* BookmarksApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksApp.swift; sourceTree = "<group>"; };
 		EE88B55A4863F6052F2A0BEB /* Calculator.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Calculator.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -400,6 +416,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FB0D07C531BBEF22B9D2A821 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7352E962AC90F8155963F96F /* NucleantUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -413,6 +437,21 @@
 			);
 			name = MindMap;
 			path = ../MindMap/Sources/MindMap;
+			sourceTree = "<group>";
+		};
+		16F1DD79114F129DF7EA21AA /* Atlas */ = {
+			isa = PBXGroup;
+			children = (
+				9DF668FE17FE07B0E00E1629 /* AtlasApp.swift */,
+				E01D7544CD96E35369793A39 /* DestinationScreen.swift */,
+				706D6F607FC2387588D1902D /* GalleryScreen.swift */,
+				E5551F2E5E855913E0784FCA /* Guide.swift */,
+				1DC41B2C6211EB4ADD3306F7 /* HighlightScreen.swift */,
+				BB17301193CF9949CFD97906 /* Model.swift */,
+				0269BD4009DAE0DF45969708 /* Poster.swift */,
+			);
+			name = Atlas;
+			path = ../Atlas/Sources/Atlas;
 			sourceTree = "<group>";
 		};
 		267222D2C8C8A05861ED685E /* Slides */ = {
@@ -459,6 +498,7 @@
 		3FDBCEEB7C4C53F0545FC427 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				1ED24231BEB2B455E20F20E2 /* Atlas.app */,
 				BC93A5A5A0E3510F0E873A2F /* Bookmarks.app */,
 				EE88B55A4863F6052F2A0BEB /* Calculator.app */,
 				A1879D982A8ED5EDBFA4FA0E /* Compositor.app */,
@@ -650,6 +690,7 @@
 			isa = PBXGroup;
 			children = (
 				1BA36B2714FD9C20C65D1B59 /* Material */,
+				16F1DD79114F129DF7EA21AA /* Atlas */,
 				F8683DEF2D4BF9662272EA33 /* Bookmarks */,
 				9557D988AC10231897B9FCF8 /* Calculator */,
 				8393164D0A2D07198E12AD86 /* Compositor */,
@@ -879,6 +920,25 @@
 			);
 			productName = Reader;
 			productReference = 89163FEA939C2FB6ADAB25F4 /* Reader.app */;
+			productType = "com.apple.product-type.application";
+		};
+		3BDBDFD827CB024BC09FBDFF /* Atlas */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6BA74B5BCD71FBCA4694C425 /* Build configuration list for PBXNativeTarget "Atlas" */;
+			buildPhases = (
+				9C0BBC9B19524AE1B036BA29 /* Sources */,
+				FB0D07C531BBEF22B9D2A821 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Atlas;
+			packageProductDependencies = (
+				53D73B413EB077FD58473A68 /* NucleantUI */,
+			);
+			productName = Atlas;
+			productReference = 1ED24231BEB2B455E20F20E2 /* Atlas.app */;
 			productType = "com.apple.product-type.application";
 		};
 		3F036267C5A064A6C5BC26FE /* MindMap */ = {
@@ -1153,6 +1213,10 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					3BDBDFD827CB024BC09FBDFF = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					3F036267C5A064A6C5BC26FE = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -1221,6 +1285,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				3BDBDFD827CB024BC09FBDFF /* Atlas */,
 				2F024D7E6F1A16BFCC3B6396 /* Bookmarks */,
 				7D102039452452C42320DAD7 /* Calculator */,
 				405AFBE4DE5E0E195B761A4B /* Compositor */,
@@ -1470,6 +1535,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9C0BBC9B19524AE1B036BA29 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C7061F1C0540583AC5D5E0AA /* AtlasApp.swift in Sources */,
+				4F8A8DB1F8C32B8607DDA0B1 /* DestinationScreen.swift in Sources */,
+				D143AC483C72E0F1AD80ADFB /* GalleryScreen.swift in Sources */,
+				50BBD425716CA55DC78C0B0C /* Guide.swift in Sources */,
+				949474829127FA52D775458B /* HighlightScreen.swift in Sources */,
+				527F5C4DDB15B30BB904178A /* Model.swift in Sources */,
+				37FBF3B880F881FC6B28E16C /* Poster.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A26DB7936415E8CF8C0EA876 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1587,6 +1666,31 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Reader;
 				PRODUCT_NAME = Reader;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		1D80F573AAC30C449A849812 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Atlas;
+				PRODUCT_NAME = Atlas;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -2519,6 +2623,31 @@
 			};
 			name = Debug;
 		};
+		D9BBA521DF3B74957E810394 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Atlas;
+				PRODUCT_NAME = Atlas;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		E96552039BF39D8A55A00E5D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2663,6 +2792,15 @@
 			buildConfigurations = (
 				2584EE4456B6EAEE40F54F5D /* Debug */,
 				6138458906FF9EE4ADAE0EC6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6BA74B5BCD71FBCA4694C425 /* Build configuration list for PBXNativeTarget "Atlas" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D9BBA521DF3B74957E810394 /* Debug */,
+				1D80F573AAC30C449A849812 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -2857,6 +2995,10 @@
 			productName = NucleantUI;
 		};
 		4D4D1D7952D74F1132107BF5 /* NucleantUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NucleantUI;
+		};
+		53D73B413EB077FD58473A68 /* NucleantUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NucleantUI;
 		};

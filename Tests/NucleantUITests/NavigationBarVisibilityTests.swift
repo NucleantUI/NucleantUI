@@ -178,6 +178,16 @@ extension HostedViews {
             #expect(log.take() == [])
         }
 
+        /// Let a push or pop play out, frame after frame as a display
+        /// draws them: the frame after the change starts it on time, the
+        /// wait runs it through, and one more frame takes the rebuild that
+        /// parks the screen underneath.
+        private func playMove(_ harness: Harness) async {
+            await harness.settle(1.0 / 60)
+            await harness.settle(0.6)
+            await harness.settle(0.02)
+        }
+
         @Test func eachScreenKeepsItsOwnSetting() async {
             let log = Log()
             let harness = Harness(BarPerScreen(log: log))
@@ -186,25 +196,31 @@ extension HostedViews {
             await harness.tap(Self.underBar)
             #expect(log.take() == ["root"])
 
-            // The cover hides it in the frame it is pushed in.
+            // The cover hides it in the frame it is pushed in. A push or
+            // pop plays before the screen it brings is where taps reach it.
             await harness.tap(Self.secondRowUnderBar)
+            await playMove(harness)
             await harness.tap(Self.atTop)
             #expect(log.take() == ["close"])
 
             // Popped: root's bar is back.
             await harness.tap(Self.atTop)
+            await playMove(harness)
             #expect(log.take() == [])
             await harness.tap(Self.underBar)
             #expect(log.take() == ["root"])
 
             // Cover again, then details on top of it: shown there, with Back.
             await harness.tap(Self.secondRowUnderBar)
+            await playMove(harness)
             await harness.tap(Self.secondRowAtTop)
+            await playMove(harness)
             await harness.tap(Self.underBar)
             #expect(log.take() == ["details 7"])
 
             // Back to the cover: hidden again.
             await harness.tap(Self.back)
+            await playMove(harness)
             await harness.tap(Self.atTop)
             #expect(log.take() == ["close"])
         }
