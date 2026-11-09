@@ -124,6 +124,97 @@ struct RetargetTests {
         #expect(close(carried[1], velocity[1], 1e-6))
     }
 
+    // MARK: - What merges
+
+    @Test func aDelayedSpringLetsTheOldMotionRunThroughItsDelay() throws {
+        let first = try #require(Motion<Double>.begin(offset: -100, previous: nil, animation: .easeInOut(duration: 1), at: 0))
+        run(first, from: 0, to: 0.3)
+        // A spring with a delay the ease didn't have: combined, not merged.
+        let second = try #require(Motion<Double>.begin(
+            offset: -100, previous: first, animation: .spring(duration: 0.5).delay(0.2), at: 0.3
+        ))
+        let start = second.displacement(at: 0.3).value
+        run(second, from: 0.3, to: 0.4)
+        // Still in the delay, yet moving: the ease runs on beneath it.
+        #expect(second.displacement(at: 0.4).value > start + 1)
+    }
+
+    @Test func aSpringWithTheSameDelayMerges() throws {
+        let spring = Animation.spring(duration: 0.5).delay(0.1)
+        let first = try #require(Motion<Double>.begin(offset: -100, previous: nil, animation: spring, at: 0))
+        run(first, from: 0, to: 0.3)
+        let velocity = first.velocity(at: 0.3)
+        let second = try #require(Motion<Double>.begin(offset: -100, previous: first, animation: spring, at: 0.3))
+        let start = second.displacement(at: 0.3).value
+        // Held through its own delay, as SwiftUI's merged spring is…
+        run(second, from: 0.3, to: 0.39)
+        #expect(second.displacement(at: 0.39).value == start)
+        // …then off at the speed it had.
+        #expect(close(second.velocity(at: 0.4), velocity, 1e-6))
+    }
+
+    @Test func anEndlessRepeatIsNotKeptBeneath() throws {
+        let pulse = Animation.easeInOut(duration: 0.5).repeatForever()
+        let first = try #require(Motion<Double>.begin(offset: -100, previous: nil, animation: pulse, at: 0))
+        let before = run(first, from: 0, to: 0.7)
+        let second = try #require(Motion<Double>.begin(offset: -100, previous: first, animation: pulse, at: 0.7))
+        // No jump: it starts where the pulse showed it…
+        #expect(close(200 + second.displacement(at: 0.7).value, 100 + before, 1e-9))
+        // …and the new pulse alone drives it: one cycle there and back
+        // later, it is at the new target, with no old pulse added on top.
+        run(second, from: 0.7, to: 1.2)
+        #expect(close(second.displacement(at: 1.2).value, 0, 1e-6))
+    }
+
+    // MARK: - Logical completion
+
+    @Test func aSpringIsLogicallyCompleteOneResponseIn() {
+        let run = AnimationRun(.spring(duration: 0.5), start: 0)
+        _ = run.progress(at: 0)
+        _ = run.progress(at: frame)
+        #expect(!run.isLogicallyComplete(at: 0.49))
+        #expect(run.isLogicallyComplete(at: 0.5))
+        // Still settling.
+        #expect(!run.isDone(at: 0.5))
+    }
+
+    @Test func anEaseIsLogicallyCompleteAtItsEnd() {
+        let run = AnimationRun(.easeInOut(duration: 0.4), start: 0)
+        _ = run.progress(at: frame)
+        #expect(!run.isLogicallyComplete(at: 0.39))
+        #expect(run.isLogicallyComplete(at: 0.4))
+    }
+
+    @Test func logicallyCompleteAfterSetsTheTimeAfterTheDelay() {
+        let run = AnimationRun(.easeInOut(duration: 2).delay(0.5).logicallyComplete(after: 0.3), start: 0)
+        _ = run.progress(at: frame)
+        #expect(!run.isLogicallyComplete(at: 0.79))
+        #expect(run.isLogicallyComplete(at: 0.8))
+        #expect(!run.isDone(at: 0.8))
+    }
+
+    @Test func anEndlessRepeatIsLogicallyCompleteOnlyWhenTold() {
+        let pulse = AnimationRun(.easeInOut(duration: 0.5).repeatForever(), start: 0)
+        _ = pulse.progress(at: frame)
+        #expect(!pulse.isLogicallyComplete(at: 100))
+        let told = AnimationRun(.easeInOut(duration: 0.5).repeatForever().logicallyComplete(after: 1), start: 0)
+        _ = told.progress(at: frame)
+        #expect(told.isLogicallyComplete(at: 1))
+    }
+
+    @Test func theCompletionCriteriaChooseWhichEndIsWaitedFor() {
+        let run = AnimationRun(.spring(duration: 0.5), start: 0)
+        _ = run.progress(at: frame)
+        let logical = AnimationCompletion(criteria: .logicallyComplete) {}
+        let removed = AnimationCompletion(criteria: .removed) {}
+        logical.runs = [run]
+        removed.runs = [run]
+        #expect(logical.isDue(at: 0.5))
+        #expect(!removed.isDue(at: 0.5))
+        let end = run.animation.totalDuration
+        #expect(removed.isDue(at: end))
+    }
+
     // MARK: - The clock
 
     @Test func aLateFirstFrameDoesNotSkipTheStart() {

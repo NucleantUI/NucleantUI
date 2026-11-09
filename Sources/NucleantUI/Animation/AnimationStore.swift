@@ -108,10 +108,14 @@ final class AnimationStore {
         for completion in transaction.completions {
             completion.isScheduled = true
         }
-        // A repeat that never ends never completes; waiting on it would
-        // only keep the clock running.
+        // A repeat that never ends never completes — unless it was told
+        // when to count as logically complete, and that is what the
+        // completion waits for; waiting on it would only keep the clock
+        // running.
         pending.removeAll { completion in
-            completion.isScheduled && completion.runs.contains { $0.isEndless }
+            completion.isScheduled && completion.runs.contains { run in
+                run.isEndless && (completion.criteria == .removed || run.animation.logicalCompletionTime == nil)
+            }
         }
         transaction = Transaction()
         isCommitPass = false
@@ -129,7 +133,7 @@ final class AnimationStore {
         var due = AnimationCompletion.unclaimed
         AnimationCompletion.unclaimed.removeAll()
         pending.removeAll { completion in
-            guard completion.isScheduled, completion.runs.allSatisfy({ $0.isDone(at: now) }) else { return false }
+            guard completion.isScheduled, completion.isDue(at: now) else { return false }
             due.append(completion)
             return true
         }

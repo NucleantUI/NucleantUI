@@ -250,6 +250,26 @@ final class AnimationRun {
         return customFinished || context.isLogicallyComplete
     }
 
+    /// Whether the value has visibly arrived by `now`, though the curve
+    /// may still be settling — as SwiftUI judges it:
+    ///
+    /// * a time given with `logicallyComplete(after:)`, after the delay;
+    /// * a spring played once, one response in — the rest of its motion is
+    ///   the settling;
+    /// * a custom curve, once it has said so;
+    /// * anything else, once it is over. A repeat that never ends never is.
+    func isLogicallyComplete(at now: Double) -> Bool {
+        if isDone(at: now) { return true }
+        let elapsed = elapsed(at: now)
+        if let time = animation.logicalCompletionTime {
+            return elapsed - animation.delay >= time
+        }
+        if case .spring(let spring, _, _) = animation.curve, animation.repeatCount == 1 {
+            return animation.localTime(elapsed) >= spring.response
+        }
+        return false
+    }
+
     /// True for a repeat that never ends — nothing waits on it.
     var isEndless: Bool {
         animation.repeatCount == nil

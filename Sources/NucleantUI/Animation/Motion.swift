@@ -62,9 +62,24 @@ final class Motion<Value: VectorArithmetic> {
         animation: Animation,
         at now: Double
     ) -> Motion<Value>? {
-        let running = previous.flatMap { $0.run.isDone(at: now) ? nil : $0 }
+        // A repeat that never ends is not kept running beneath: it would
+        // never let go, and each new target would nest another. The new
+        // motion starts from where it shows the value, standing still.
+        var offset = offset
+        var running = previous.flatMap { $0.run.isDone(at: now) ? nil : $0 }
+        if let endless = running, endless.run.isEndless {
+            offset += endless.displacement(at: now).value
+            running = nil
+        }
 
-        guard case .spring(let spring, let unitVelocity, _) = animation.curve, animation.repeatCount == 1 else {
+        // A spring played once takes over what is running, as SwiftUI's
+        // merges — but, as there, only from an animation with the same
+        // delay and speed. Otherwise the two are combined, and the old
+        // motion runs on through the new one's delay.
+        let merges = running.map {
+            $0.run.animation.delay == animation.delay && $0.run.animation.speed == animation.speed
+        } ?? true
+        guard case .spring(let spring, let unitVelocity, _) = animation.curve, animation.repeatCount == 1, merges else {
             return Motion(
                 run: AnimationRun(animation, start: now),
                 offset: offset,

@@ -41,6 +41,10 @@ public struct Animation: Hashable, Sendable {
     var repeatCount: Int? = 1
     /// Every other repetition plays backwards.
     var autoreverses = false
+    /// Real seconds after the delay at which the animation counts as
+    /// logically complete, whatever its curve says — see
+    /// `logicallyComplete(after:)`.
+    var logicalCompletionTime: Double?
 
     init(curve: Curve) {
         self.curve = curve
@@ -198,6 +202,16 @@ public struct Animation: Hashable, Sendable {
         var copy = self
         copy.repeatCount = nil
         copy.autoreverses = autoreverses
+        return copy
+    }
+
+    /// Counts as logically complete `duration` seconds after it starts
+    /// moving — what a `withAnimation` completion with the
+    /// `.logicallyComplete` criteria waits for — though the curve itself
+    /// may run on.
+    public func logicallyComplete(after duration: TimeInterval) -> Animation {
+        var copy = self
+        copy.logicalCompletionTime = max(0, duration)
         return copy
     }
 
