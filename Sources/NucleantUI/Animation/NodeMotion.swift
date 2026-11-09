@@ -39,6 +39,11 @@ struct NodeMotion {
     /// while one is under way turns from where the node is showing, as
     /// fast as it is going (Motion.swift).
     var displacement: Motion<Offset>?
+
+    /// How fast layout moved the node while it moved it without animating
+    /// (`Transaction.tracksVelocity`), so a spring that takes over sets off
+    /// at that speed: ((x, y), (width, height)) per second.
+    var sampler = VelocitySampler<Offset>()
 }
 
 extension ViewNode {
@@ -67,12 +72,25 @@ extension ViewNode {
                 motion.displacement = Motion.begin(
                     offset: offset,
                     previous: motion.displacement,
+                    tracked: motion.sampler.velocity(at: store.now),
                     animation: animation,
                     at: store.now
                 )
                 if let displacement = motion.displacement {
                     store.noteStarted(displacement.run)
                 }
+            }
+            motion.sampler.reset()
+        } else if store.isCommitPass, context.animation == nil, let last = layoutRect, last != target {
+            // Moved at once: under a drag, note where to, and when.
+            if store.transaction.tracksVelocity {
+                let resizes = content.animatesSize
+                motion.sampler.add(NodeMotion.Offset(
+                    AnimatablePair(target.midX, target.midY),
+                    AnimatablePair(resizes ? target.width : 0, resizes ? target.height : 0)
+                ), at: store.now)
+            } else {
+                motion.sampler.reset()
             }
         }
 

@@ -292,6 +292,9 @@ final class AnimationStore {
 final class AnimatedVector {
     private(set) var target: [Double]
     private var motion: Motion<ComponentVector>?
+    /// How fast it moves while changed without animating, for a spring
+    /// that takes over (`Transaction.tracksVelocity`).
+    private var sampler = VelocitySampler<ComponentVector>()
 
     init(_ target: [Double]) {
         self.target = target
@@ -301,12 +304,24 @@ final class AnimatedVector {
         guard newTarget != target else { return }
         if let animation, newTarget.count == target.count {
             let offset = ComponentVector(zip(target, newTarget).map { old, new in old - new })
-            motion = Motion.begin(offset: offset, previous: motion, animation: animation, at: store.now)
+            motion = Motion.begin(
+                offset: offset,
+                previous: motion,
+                tracked: sampler.velocity(at: store.now),
+                animation: animation,
+                at: store.now
+            )
             if let motion {
                 store.noteStarted(motion.run)
             }
+            sampler.reset()
         } else {
             motion = nil
+            if store.transaction.tracksVelocity, newTarget.count == target.count {
+                sampler.add(ComponentVector(newTarget), at: store.now)
+            } else {
+                sampler.reset()
+            }
         }
         target = newTarget
     }

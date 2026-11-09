@@ -824,7 +824,10 @@ public final class ViewHost {
         let target = gesture.hit.target
         let action = ended ? target.onDragEnded : target.onDragChanged
         guard let action else { return }
-        action(DragGesture.Value(
+        // A change is sampled for its speed, as in `GestureArena.report`.
+        var transaction = TransactionScope.current ?? Transaction()
+        transaction.tracksVelocity = !ended
+        withTransaction(transaction) { action(DragGesture.Value(
             id: id,
             startLocation: gesture.start,
             location: local,
@@ -835,7 +838,7 @@ public final class ViewHost {
             // The view's own rect, origin-relative — a fader turns a position
             // into a fraction with it.
             bounds: Rect(origin: .zero, size: gesture.hit.frame.size)
-        ))
+        )) }
     }
 
     /// Tell the `.onHover` node under `point` it is hovered, and the one

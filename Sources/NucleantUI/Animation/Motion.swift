@@ -22,6 +22,8 @@
 //  its velocity, and another curve is combined with it.
 //
 
+import Foundation
+
 /// What is still left of a value's way to its target.
 @MainActor
 final class Motion<Value: VectorArithmetic> {
@@ -53,12 +55,15 @@ final class Motion<Value: VectorArithmetic> {
     /// The motion toward a new target under `animation`, starting at `now`.
     ///
     /// `offset` is how far the old target is from the new one, and
-    /// `previous` what the value was doing toward the old target. `nil`
-    /// when a spring has nothing to do: the value is at the new target and
-    /// not moving.
+    /// `previous` what the value was doing toward the old target.
+    /// `tracked` is how fast the value was moving, per second, when it was
+    /// last changed without animating (`Transaction.tracksVelocity`) — a
+    /// spring sets off at it when nothing is running. `nil` when a spring
+    /// has nothing to do: the value is at the new target and not moving.
     static func begin(
         offset: Value,
         previous: Motion<Value>?,
+        tracked: Value? = nil,
         animation: Animation,
         at now: Double
     ) -> Motion<Value>? {
@@ -97,6 +102,8 @@ final class Motion<Value: VectorArithmetic> {
         if let running {
             start += running.displacement(at: now).value
             velocity = running.velocity(at: now).scaled(by: 1 / animation.speed)
+        } else if let tracked {
+            velocity = tracked.scaled(by: 1 / animation.speed)
         }
         velocity -= start.scaled(by: unitVelocity)
 
@@ -165,6 +172,56 @@ final class Motion<Value: VectorArithmetic> {
             return offset
         }
         return offset + left.value
+    }
+}
+
+/// How fast a value is moving while it is changed without animating, under
+/// `Transaction.tracksVelocity` — a drag — from its last three changes, as
+/// SwiftUI's `VelocitySampler` keeps them. The newer pair of changes counts
+/// for a quarter and the older for three quarters. The speed fades by 0.2%
+/// a millisecond after the last change, and is forgotten 2 s after it.
+///
+/// SwiftUI drives its sampling with an animation that asks for frames for
+/// those 2 s; here the samples simply sit beside the value until an
+/// animated change asks for them, and no frame is drawn for them.
+struct VelocitySampler<Value: VectorArithmetic> {
+    private var samples: [(value: Value, time: Double)] = []
+
+    /// Whether there is nothing to forget.
+    var isEmpty: Bool { samples.isEmpty }
+
+    /// Notes that the value is `value` at `time`. A second change in the
+    /// same frame replaces the first.
+    mutating func add(_ value: Value, at time: Double) {
+        if let last = samples.last {
+            guard time >= last.time else { return }
+            if time - last.time < .ulpOfOne {
+                samples[samples.count - 1] = (value, time)
+                return
+            }
+        }
+        samples.append((value, time))
+        if samples.count > 3 { samples.removeFirst() }
+    }
+
+    mutating func reset() {
+        samples.removeAll()
+    }
+
+    /// The value's speed per second at `now`, or `nil` with fewer than two
+    /// changes or the last more than 2 s ago.
+    func velocity(at now: Double) -> Value? {
+        guard samples.count >= 2, let last = samples.last, now - last.time < 2 else { return nil }
+        func between(_ a: (value: Value, time: Double), _ b: (value: Value, time: Double)) -> Value {
+            (b.value - a.value).scaled(by: 1 / (b.time - a.time))
+        }
+        let n = samples.count
+        var velocity = between(samples[n - 2], samples[n - 1])
+        if n == 3 {
+            let older = between(samples[0], samples[1])
+            velocity += (older - velocity).scaled(by: 0.75)
+        }
+        return velocity.scaled(by: pow(0.998, (now - last.time) * 1000))
     }
 }
 

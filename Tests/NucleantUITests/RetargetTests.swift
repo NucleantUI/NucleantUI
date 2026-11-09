@@ -236,3 +236,106 @@ struct RetargetTests {
         #expect(close(run.progress(at: 0.5).fraction, 0.5, 1e-6))
     }
 }
+
+// MARK: - Velocity tracking
+
+@MainActor
+@Suite
+struct VelocityTrackingTests {
+
+    private func close(_ a: Double, _ b: Double, _ tolerance: Double) -> Bool {
+        abs(a - b) <= tolerance
+    }
+
+    @Test func twoChangesGiveTheirSpeed() {
+        var sampler = VelocitySampler<Double>()
+        #expect(sampler.velocity(at: 0) == nil)
+        sampler.add(0, at: 0)
+        #expect(sampler.velocity(at: 0) == nil)
+        sampler.add(10, at: 0.01)
+        #expect(close(sampler.velocity(at: 0.01) ?? 0, 1000, 1e-9))
+    }
+
+    @Test func theOlderPairCountsForThreeQuarters() {
+        var sampler = VelocitySampler<Double>()
+        sampler.add(0, at: 0)
+        sampler.add(10, at: 0.01)   // 1000 per second
+        sampler.add(30, at: 0.02)   // 2000 per second
+        #expect(close(sampler.velocity(at: 0.02) ?? 0, 0.25 * 2000 + 0.75 * 1000, 1e-9))
+        // A fourth drops the first.
+        sampler.add(60, at: 0.03)   // 3000 per second
+        #expect(close(sampler.velocity(at: 0.03) ?? 0, 0.25 * 3000 + 0.75 * 2000, 1e-9))
+    }
+
+    @Test func aChangeInTheSameFrameReplacesTheLast() {
+        var sampler = VelocitySampler<Double>()
+        sampler.add(0, at: 0)
+        sampler.add(10, at: 0.01)
+        sampler.add(20, at: 0.01)
+        #expect(close(sampler.velocity(at: 0.01) ?? 0, 2000, 1e-9))
+    }
+
+    @Test func theSpeedFadesAndIsForgotten() {
+        var sampler = VelocitySampler<Double>()
+        sampler.add(0, at: 0)
+        sampler.add(10, at: 0.01)
+        // 0.2% a millisecond.
+        #expect(close(sampler.velocity(at: 0.11) ?? 0, 1000 * pow(0.998, 100), 1e-6))
+        #expect(sampler.velocity(at: 2.02) == nil)
+    }
+
+    @Test func aSpringSetsOffAtTheTrackedSpeed() throws {
+        let motion = try #require(Motion<Double>.begin(
+            offset: 100, previous: nil, tracked: 800, animation: .spring(duration: 0.5), at: 0
+        ))
+        #expect(close(motion.velocity(at: 0), 800, 1e-6))
+        // Flung on past where it was let go before turning back.
+        #expect(motion.displacement(at: 0.05).value > 100)
+    }
+
+    @Test func anEaseIgnoresTheTrackedSpeed() throws {
+        let motion = try #require(Motion<Double>.begin(
+            offset: 100, previous: nil, tracked: 800, animation: .easeInOut(duration: 0.5), at: 0
+        ))
+        // An ease starts flat: its own speed, nowhere near the 800 tracked.
+        #expect(abs(motion.velocity(at: 0)) < 5)
+    }
+}
+
+/// A drag that logs whether each of its callbacks ran with velocity
+/// tracked.
+@View
+struct TrackedDrag {
+    let log: Log
+    let simultaneous: Bool
+
+    var body: some View {
+        let drag = DragGesture(minimumDistance: 0)
+            .onChanged { _ in log("changed \(TransactionScope.current?.tracksVelocity == true)") }
+            .onEnded { _ in log("ended \(TransactionScope.current?.tracksVelocity == true)") }
+        let content = Color.red.frame(width: 200, height: 200)
+        if simultaneous {
+            content.simultaneousGesture(drag)
+        } else {
+            content.gesture(drag)
+        }
+    }
+}
+
+extension HostedViews {
+    @MainActor
+    @Suite
+    struct GestureVelocityTrackingTests {
+
+        @Test(arguments: [false, true])
+        func aDragsChangesTrackVelocityAndItsEndDoesNot(simultaneous: Bool) async {
+            let log = Log()
+            let harness = Harness(TrackedDrag(log: log, simultaneous: simultaneous))
+            await harness.drag(from: Point(x: 100, y: 100), through: [Point(x: 120, y: 100), Point(x: 140, y: 100)])
+            let entries = log.take()
+            #expect(entries.contains("changed true"))
+            #expect(!entries.contains("changed false"))
+            #expect(entries.last == "ended false")
+        }
+    }
+}

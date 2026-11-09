@@ -26,6 +26,24 @@ public struct Transaction {
     /// True while the change is one of a continuous stream — a drag.
     public var isContinuous = false
 
+    /// Whether the values this change sets without animating are sampled
+    /// for how fast they move, so that a spring started on them afterwards
+    /// — when a drag ends, say — sets off at that speed instead of from
+    /// rest. A gesture's `onChanged` sets it.
+    ///
+    /// ```swift
+    /// func receive(_ change: Change) {
+    ///     var transaction = Transaction()
+    ///     if change.isFinal {
+    ///         transaction.animation = .spring
+    ///     } else {
+    ///         transaction.tracksVelocity = true
+    ///     }
+    ///     withTransaction(transaction) { model.apply(change) }
+    /// }
+    /// ```
+    public var tracksVelocity = false
+
     /// `withAnimation(_:_:completion:)` callbacks waiting on this change.
     var completions: [AnimationCompletion] = []
 
@@ -43,6 +61,7 @@ public struct Transaction {
             disablesAnimations = later.disablesAnimations
         }
         isContinuous = isContinuous || later.isContinuous
+        tracksVelocity = tracksVelocity || later.tracksVelocity
         completions += later.completions
     }
 }

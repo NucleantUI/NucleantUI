@@ -213,6 +213,9 @@ extension EdgeInsets: Animatable {
 final class AnimatableDataState<Data: VectorArithmetic> {
     private(set) var target: Data
     private var motion: Motion<Data>?
+    /// How fast it moves while changed without animating, for a spring
+    /// that takes over (`Transaction.tracksVelocity`).
+    private var sampler = VelocitySampler<Data>()
 
     init(_ target: Data) {
         self.target = target
@@ -221,12 +224,24 @@ final class AnimatableDataState<Data: VectorArithmetic> {
     func update(to newTarget: Data, animation: Animation?, in store: AnimationStore) {
         guard newTarget != target else { return }
         if let animation {
-            motion = Motion.begin(offset: target - newTarget, previous: motion, animation: animation, at: store.now)
+            motion = Motion.begin(
+                offset: target - newTarget,
+                previous: motion,
+                tracked: sampler.velocity(at: store.now),
+                animation: animation,
+                at: store.now
+            )
             if let motion {
                 store.noteStarted(motion.run)
             }
+            sampler.reset()
         } else {
             motion = nil
+            if store.transaction.tracksVelocity {
+                sampler.add(newTarget, at: store.now)
+            } else {
+                sampler.reset()
+            }
         }
         target = newTarget
     }
