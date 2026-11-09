@@ -16,6 +16,8 @@
 //    35 points across, never below 80% — and dims, and the source itself is
 //    drawn as nothing meanwhile. With no source on screen it plays as
 //    `.automatic`.
+//  * `.shader`: the upper screen is drawn through the shader, its
+//    `progress` how far in it is; the lower one stays as it is.
 //
 //  How far the upper screen is in is one animated number, 0 to 1: up on a
 //  push, down on a pop. The springs are a zoom's usual ones — 0.34 s,
@@ -51,6 +53,9 @@ final class NavigationStackTransition {
         case automatic
         /// The source as it was found, for its corners and background.
         case zoom(MatchedTransitionSourceKey, _MatchedTransitionSourceStyle)
+        /// The shader the upper screen is drawn through, and its arguments
+        /// after `progress`.
+        case shader(ShaderFunction, [ShaderArgument])
     }
 
     private(set) var move: Move?
@@ -148,6 +153,10 @@ final class NavigationStackTransition {
                 animation = .spring(Spring(response: 0.34, dampingRatio: move.isPush ? 1 : 0.92))
             }
         }
+        if case .shader(let function, let arguments, let timing)? = asked?.kind {
+            style = .shader(function, arguments)
+            animation = timing.animation
+        }
         let vector = AnimatedVector([move.isPush ? 0 : 1])
         progress = vector
         // Not under a transaction that asks for no animation: then the move
@@ -178,6 +187,8 @@ final class NavigationStackTransition {
 /// The node over each of a stack's screens: draws it as the move under way
 /// has it — or as it is, with no move or no part in it.
 struct NavigationScreenTransitionContent: NodeContent {
+    /// The node's path: where a shader move keeps its module.
+    let path: [Int]
     let screen: NavigationScreenID
     let transition: NavigationStackTransition
     let storage: NavigationStackStorage
@@ -222,6 +233,24 @@ struct NavigationScreenTransitionContent: NodeContent {
                 node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
                 dim(rect, opacity: 0.15 * p, context: inner, into: &list)
             }
+
+        case .shader(let function, let arguments):
+            guard isUpper else {
+                node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
+                return
+            }
+            let reading = function.reading(
+                [.float("progress", Float(p))] + arguments,
+                textures: [],
+                content: true
+            )
+            ShaderEffectContent(
+                path: path,
+                module: (reading.spirv, reading.input, reading.isAnimated),
+                draw: ShaderDraw(vertices: 6, instances: 1),
+                textures: ShaderTextures(),
+                backdrop: false
+            ).place(node: node, in: rect, proposal: proposal, context: context, into: &list)
         }
     }
 
@@ -302,8 +331,8 @@ extension View {
         _ transition: NavigationStackTransition,
         storage: NavigationStackStorage
     ) -> some View {
-        _ModifierView(content: self, key: ["navigationScreenTransition", screen] as [AnyHashable]) { _ in
-            NavigationScreenTransitionContent(screen: screen, transition: transition, storage: storage)
+        _ModifierView(content: self, key: ["navigationScreenTransition", screen] as [AnyHashable]) { context in
+            NavigationScreenTransitionContent(path: context.path, screen: screen, transition: transition, storage: storage)
         }
     }
 }

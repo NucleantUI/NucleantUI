@@ -157,3 +157,19 @@ Thumbnail(photo: photo)
 Unlike SwiftUI, every platform plays the same transitions, macOS included:
 NucleantUI draws them itself. The source configuration's `shadow` is not
 there yet. The <doc:AtlasExample> app shows both transitions at work.
+
+A screen can also arrive through a shader of your own. `.shader(_:arguments:)`
+draws the new screen through it over the one underneath, which stays put.
+The shader's first argument, `progress`, runs from 0 to 1 on the push and back
+on the pop: at 0 nothing of the screen shows, and at 1 all of it does.
+
+```swift
+PhotoDetail(photo)
+    .navigationTransition(.shader(
+        ShaderFunction("fragColor = layer(uv) * progress;"),
+        timing: .smooth(duration: 0.6)
+    ))
+```
+
+This is not in SwiftUI. The NucleantTransitions package builds its
+ready-made shader transitions on it.

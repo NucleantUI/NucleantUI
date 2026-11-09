@@ -190,3 +190,67 @@ extension HostedViews {
         }
     }
 }
+
+/// Red underneath, blue pushed over it through a shader.
+@View
+struct ShaderPagedStack {
+    @Bindable var pages: Pages
+
+    var body: some View {
+        NavigationStack(path: $pages.path) {
+            Color.red
+                .navigationDestination(for: Int.self) { _ in
+                    Color.blue.navigationTransition(.shader(
+                        ShaderFunction("fragColor = layer(uv) * progress;"),
+                        timing: .smooth(duration: 0.4)
+                    ))
+                }
+        }
+    }
+}
+
+extension HostedViews {
+    @MainActor
+    @Suite
+    struct ShaderNavigationTransitionTests {
+
+        private func isRed(_ p: SIMD4<UInt8>) -> Bool { p.x > 120 && p.z < 120 }
+        private func isBlue(_ p: SIMD4<UInt8>) -> Bool { p.z > 120 && p.x < 80 }
+
+        // A window-less host runs no shaders: the screen a shader move draws
+        // through one is drawn as it is — in place, where `.automatic`
+        // would have it slid aside.
+
+        @Test func aShaderPushDrawsTheNewScreenInPlace() async {
+            let pages = Pages()
+            let painted = PaintedHarness(ShaderPagedStack(pages: pages))
+            pages.push(1)
+            painted.update()
+            await painted.nextFrame()
+            await painted.settle(0.1)
+            #expect(isBlue(painted.pixel(10, 150)))
+            #expect(isBlue(painted.pixel(190, 150)))
+        }
+
+        @Test func aShaderPopKeepsTheScreenUntilItHasPlayed() async {
+            let pages = Pages()
+            let painted = PaintedHarness(ShaderPagedStack(pages: pages))
+            pages.push(1)
+            painted.update()
+            await painted.nextFrame()
+            await painted.settle(0.6)
+            await painted.settle(0.02)
+
+            pages.pop()
+            painted.update()
+            await painted.nextFrame()
+            await painted.settle(0.1)
+            // Still there, in place, while its pop plays.
+            #expect(isBlue(painted.pixel(10, 150)))
+
+            await painted.settle(0.6)
+            await painted.settle(0.02)
+            #expect(isRed(painted.pixel(10, 150)))
+        }
+    }
+}

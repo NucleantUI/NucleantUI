@@ -30,6 +30,9 @@ public struct _NavigationTransitionContent: Hashable {
         /// The new screen grows out of the source marked with the same
         /// namespace and id on the screen below.
         case zoom(namespace: Namespace.ID, sourceID: AnyHashable)
+        /// The new screen is drawn through a shader over the one below,
+        /// which stays where it is.
+        case shader(ShaderFunction, arguments: [ShaderArgument], animation: ShaderNavigationTransition.Timing)
     }
 
     let kind: Kind
@@ -53,6 +56,60 @@ public struct ZoomNavigationTransition: NavigationTransition {
 
     public var _content: _NavigationTransitionContent {
         _NavigationTransitionContent(kind: .zoom(namespace: namespace, sourceID: sourceID))
+    }
+}
+
+/// The new screen drawn through a shader over the screen below, which
+/// stays where it is: the shader's first argument, `progress`, runs from 0
+/// to 1 as the screen is pushed and back to 0 as it is popped.
+///
+/// The shader runs over the screen's pixels as `.shader(_:arguments:)` runs
+/// over a view's — `layer(uv)` reads the screen — and says what the screen
+/// looks like at each `progress`: nothing of it at 0, all of it, as it is,
+/// at 1. Its `arguments` follow `progress`, in the order it declares them.
+public struct ShaderNavigationTransition: NavigationTransition {
+
+    /// How long a move takes and how it eases.
+    public struct Timing: Hashable, Sendable {
+        let duration: Double
+        let bounce: Double
+
+        /// A smooth curve over `duration` seconds, with `bounce` of
+        /// overshoot — 0 for none.
+        public static func smooth(duration: Double = 0.6, extraBounce bounce: Double = 0) -> Timing {
+            Timing(duration: duration, bounce: bounce)
+        }
+
+        var animation: Animation {
+            .smooth(duration: duration, extraBounce: bounce)
+        }
+    }
+
+    let function: ShaderFunction
+    let arguments: [ShaderArgument]
+    let timing: Timing
+
+    public init(_ function: ShaderFunction, arguments: [ShaderArgument] = [], timing: Timing = .smooth()) {
+        self.function = function
+        self.arguments = arguments
+        self.timing = timing
+    }
+
+    public var _content: _NavigationTransitionContent {
+        _NavigationTransitionContent(kind: .shader(function, arguments: arguments, animation: timing))
+    }
+}
+
+extension NavigationTransition where Self == ShaderNavigationTransition {
+    /// The new screen drawn through `function` over the screen below, its
+    /// `progress` argument running from 0 to 1 on the push and back on the
+    /// pop, before `arguments`.
+    public static func shader(
+        _ function: ShaderFunction,
+        arguments: [ShaderArgument] = [],
+        timing: ShaderNavigationTransition.Timing = .smooth()
+    ) -> ShaderNavigationTransition {
+        ShaderNavigationTransition(function, arguments: arguments, timing: timing)
     }
 }
 
