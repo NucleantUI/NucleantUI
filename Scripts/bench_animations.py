@@ -53,6 +53,11 @@ SCENARIOS: dict[str, dict] = {
         "about": "the sidebar's tags, Cloud ⇄ List (geometry motion)",
         "round": [["click", "196", "217"], ["click", "157", "217"]],
     },
+    "flashcards-deal": {
+        "app": "Flashcards",
+        "about": "a card revealed and graded: thrown off, the next dealt in (transitions: asymmetric scale+opacity, opacity)",
+        "round": [["click", "320", "300"], ["click", "450", "510"]],
+    },
     "flashcards-card": {
         "app": "Flashcards",
         "about": "the card flipped and back (animatableData), then dragged short and let go (spring-back)",
