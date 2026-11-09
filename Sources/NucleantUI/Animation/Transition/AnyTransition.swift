@@ -203,6 +203,12 @@ class AnyTransitionBox {
         fatalError("AnyTransitionBox is abstract")
     }
 
+    /// What the held transition draws in `phase`, when it is a built-in
+    /// that can say — a slot then draws it without building the body.
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        fatalError("AnyTransitionBox is abstract")
+    }
+
     /// The held transition with `animation` attached.
     func animated(_ animation: Animation?) -> AnyTransitionBox {
         fatalError("AnyTransitionBox is abstract")
@@ -249,6 +255,10 @@ final class TransitionBox<T: Transition>: AnyTransitionBox {
     override func makeBody(phase: TransitionPhase, content: PlaceholderContent, context: inout BuildContext) -> ViewNode {
         let body = base.body(content: PlaceholderContentView<T>(source: content), phase: phase)
         return buildNode(body, &context)
+    }
+
+    override func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        base.builtinEffects(in: phase)
     }
 
     override func isEquivalent(to other: AnyTransitionBox) -> Bool {

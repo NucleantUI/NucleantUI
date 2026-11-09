@@ -31,6 +31,12 @@ extension CombinedTransition: ViewInput {
 }
 
 extension CombinedTransition: BuiltinTransition {
+    /// `first` inside `second`, as the body has them — `nil` unless both
+    /// can say.
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        guard let inner = first.builtinEffects(in: phase), let outer = second.builtinEffects(in: phase) else { return nil }
+        return inner + outer
+    }
     static var identityLeavesViewUnchanged: Bool {
         First.leavesViewUnchangedAtIdentity && Second.leavesViewUnchangedAtIdentity
     }

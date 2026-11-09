@@ -26,6 +26,24 @@ public struct Transaction {
     /// True while the change is one of a continuous stream — a drag.
     public var isContinuous = false
 
+    /// Whether the values this change sets without animating are sampled
+    /// for how fast they move, so that a spring started on them afterwards
+    /// — when a drag ends, say — sets off at that speed instead of from
+    /// rest. A gesture's `onChanged` sets it.
+    ///
+    /// ```swift
+    /// func receive(_ change: Change) {
+    ///     var transaction = Transaction()
+    ///     if change.isFinal {
+    ///         transaction.animation = .spring
+    ///     } else {
+    ///         transaction.tracksVelocity = true
+    ///     }
+    ///     withTransaction(transaction) { model.apply(change) }
+    /// }
+    /// ```
+    public var tracksVelocity = false
+
     /// `withAnimation(_:_:completion:)` callbacks waiting on this change.
     var completions: [AnimationCompletion] = []
 
@@ -43,6 +61,7 @@ public struct Transaction {
             disablesAnimations = later.disablesAnimations
         }
         isContinuous = isContinuous || later.isContinuous
+        tracksVelocity = tracksVelocity || later.tracksVelocity
         completions += later.completions
     }
 }
@@ -96,19 +115,20 @@ public func withAnimation<Result>(
     _ body: () throws -> Result,
     completion: @escaping @MainActor () -> Void
 ) rethrows -> Result {
-    let tracker = AnimationCompletion(action: completion)
+    let tracker = AnimationCompletion(criteria: completionCriteria, action: completion)
     var transaction = Transaction(animation: animation)
     transaction.completions = [tracker]
     defer { tracker.bodyFinished() }
     return try withTransaction(transaction, body)
 }
 
-/// When `withAnimation`'s completion counts as due. Accepted for SwiftUI
-/// source compatibility; both criteria wait for the animations to end.
+/// When `withAnimation`'s completion counts as due.
 public struct AnimationCompletionCriteria: Hashable, Sendable {
     private let name: String
 
-    /// The animations have reached their final values.
+    /// The animations have visibly arrived, though they may still be
+    /// settling: a spring one response in, an animation given
+    /// `logicallyComplete(after:)` at that time, anything else at its end.
     public static let logicallyComplete = AnimationCompletionCriteria(name: "logicallyComplete")
     /// The animations have finished and been removed.
     public static let removed = AnimationCompletionCriteria(name: "removed")
@@ -124,6 +144,10 @@ public struct AnimationCompletionCriteria: Hashable, Sendable {
 final class AnimationCompletion {
     private let action: @MainActor () -> Void
 
+    /// Whether the callback waits for the animations to be logically
+    /// complete, or wholly over.
+    let criteria: AnimationCompletionCriteria
+
     /// A write inside the body carried this into a frame.
     var isClaimed = false
     /// The frame that served that write has been laid out — every
@@ -136,8 +160,18 @@ final class AnimationCompletion {
     /// Bodies that wrote nothing, waiting for the next frame to call them.
     static var unclaimed: [AnimationCompletion] = []
 
-    init(action: @escaping @MainActor () -> Void) {
+    init(criteria: AnimationCompletionCriteria = .logicallyComplete, action: @escaping @MainActor () -> Void) {
+        self.criteria = criteria
         self.action = action
+    }
+
+    /// Whether every animation started for it has got as far as its
+    /// criteria ask by `now`.
+    func isDue(at now: Double) -> Bool {
+        if criteria == .removed {
+            return runs.allSatisfy { $0.isDone(at: now) }
+        }
+        return runs.allSatisfy { $0.isLogicallyComplete(at: now) }
     }
 
     func bodyFinished() {

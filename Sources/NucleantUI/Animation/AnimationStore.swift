@@ -20,10 +20,12 @@
 //  * geometry — a node placed somewhere other than where it last stood
 //    (`ViewNode.animate`, in NodeMotion.swift);
 //  * transitions — a view inserted into, or removed from, an `if`, a
-//    `switch`, a `ForEach` or a `for`: its transition's body built around
-//    it and moved from phase to phase, the body's own values doing the
-//    animating (Transition/TransitionSlots.swift). A removed one stays
-//    drawn, out of layout, until everything its exit started is over.
+//    `switch`, a `ForEach` or a `for`: the framework's transitions drawn
+//    around it as effects whose numbers animate, any other transition's
+//    body built around it and moved from phase to phase, the body's own
+//    values doing the animating (Transition/TransitionSlots.swift). A
+//    removed one stays drawn, out of layout, until everything its exit
+//    started is over.
 //
 
 import Foundation
@@ -108,10 +110,14 @@ final class AnimationStore {
         for completion in transaction.completions {
             completion.isScheduled = true
         }
-        // A repeat that never ends never completes; waiting on it would
-        // only keep the clock running.
+        // A repeat that never ends never completes — unless it was told
+        // when to count as logically complete, and that is what the
+        // completion waits for; waiting on it would only keep the clock
+        // running.
         pending.removeAll { completion in
-            completion.isScheduled && completion.runs.contains { $0.isEndless }
+            completion.isScheduled && completion.runs.contains { run in
+                run.isEndless && (completion.criteria == .removed || run.animation.logicalCompletionTime == nil)
+            }
         }
         transaction = Transaction()
         isCommitPass = false
@@ -129,7 +135,7 @@ final class AnimationStore {
         var due = AnimationCompletion.unclaimed
         AnimationCompletion.unclaimed.removeAll()
         pending.removeAll { completion in
-            guard completion.isScheduled, completion.runs.allSatisfy({ $0.isDone(at: now) }) else { return false }
+            guard completion.isScheduled, completion.isDue(at: now) else { return false }
             due.append(completion)
             return true
         }
@@ -282,12 +288,15 @@ final class AnimationStore {
 
 /// One animatable parameter of a node: a vector of numbers heading for
 /// `target`. Shared by every build of the node at its path, so a value a
-/// rebuild changes again mid-flight turns from where it is.
+/// rebuild changes again mid-flight turns from where it is, and as fast as
+/// it is going (Motion.swift).
 @MainActor
 final class AnimatedVector {
     private(set) var target: [Double]
-    private var from: [Double] = []
-    private var run: AnimationRun?
+    private var motion: Motion<ComponentVector>?
+    /// How fast it moves while changed without animating, for a spring
+    /// that takes over (`Transaction.tracksVelocity`).
+    private var sampler = VelocitySampler<ComponentVector>()
 
     init(_ target: [Double]) {
         self.target = target
@@ -296,12 +305,25 @@ final class AnimatedVector {
     func update(to newTarget: [Double], animation: Animation?, in store: AnimationStore) {
         guard newTarget != target else { return }
         if let animation, newTarget.count == target.count {
-            from = sample(at: store.now).value
-            let run = AnimationRun(animation, start: store.now)
-            self.run = run
-            store.noteStarted(run)
+            let offset = ComponentVector(zip(target, newTarget).map { old, new in old - new })
+            motion = Motion.begin(
+                offset: offset,
+                previous: motion,
+                tracked: sampler.velocity(at: store.now),
+                animation: animation,
+                at: store.now
+            )
+            if let motion {
+                store.noteStarted(motion.run)
+            }
+            sampler.reset()
         } else {
-            run = nil
+            motion = nil
+            if store.transaction.tracksVelocity, newTarget.count == target.count {
+                sampler.add(ComponentVector(newTarget), at: store.now)
+            } else {
+                sampler.reset()
+            }
         }
         target = newTarget
     }
@@ -311,7 +333,7 @@ final class AnimatedVector {
         guard let store = AnimationStore.current else { return target }
         let sample = sample(at: store.now)
         if sample.isFinished {
-            run = nil
+            motion = nil
         } else {
             store.requestFrame()
         }
@@ -319,11 +341,10 @@ final class AnimatedVector {
     }
 
     private func sample(at now: Double) -> (value: [Double], isFinished: Bool) {
-        guard let run else { return (target, true) }
-        let progress = run.progress(at: now)
-        guard !progress.isFinished else { return (target, true) }
-        let t = progress.fraction
-        return (zip(from, target).map { a, b in a + (b - a) * t }, false)
+        guard let motion else { return (target, true) }
+        let left = motion.displacement(at: now)
+        guard !left.isFinished else { return (target, true) }
+        return (target.indices.map { target[$0] + left.value[$0] }, false)
     }
 }
 

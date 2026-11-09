@@ -38,6 +38,11 @@ public struct PushTransition: Transition, Equatable {
 }
 
 extension PushTransition: BuiltinTransition {
+    /// The move inside the fade, as the body has them.
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        let xy = MoveEffectContent.fraction(towards: edge(in: phase))
+        return [.move(x: xy[0], y: xy[1]), .opacity(phase.isIdentity ? 1 : 0)]
+    }
     static var identityLeavesViewUnchanged: Bool { true }
     static var animatesArrival: Bool { false }
     static var animatesRemoval: Bool { false }

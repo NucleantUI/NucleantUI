@@ -25,6 +25,7 @@ public struct IdentityTransition: Transition, Equatable {
 }
 
 extension IdentityTransition: BuiltinTransition {
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? { [] }
     static var identityLeavesViewUnchanged: Bool { true }
     static var animatesArrival: Bool { false }
     static var animatesRemoval: Bool { false }

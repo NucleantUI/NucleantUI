@@ -24,7 +24,10 @@ public struct Animation: Hashable, Sendable {
         /// A cubic Bézier from (0, 0) to (1, 1) through the two control
         /// points — `linear` is (0, 0, 1, 1).
         case timing(x1: Double, y1: Double, x2: Double, y2: Double, duration: Double)
-        case spring(SpringCurve)
+        /// A spring travelling from 0 to 1, starting at `initialVelocity`
+        /// (in units of the whole change per second), and how long it takes
+        /// to settle — worked out once, not on every frame that asks.
+        case spring(Spring, initialVelocity: Double, settlingDuration: Double)
         /// A `CustomAnimation` — see `Animation(_:)`.
         case custom(CustomCurve)
     }
@@ -38,6 +41,10 @@ public struct Animation: Hashable, Sendable {
     var repeatCount: Int? = 1
     /// Every other repetition plays backwards.
     var autoreverses = false
+    /// Real seconds after the delay at which the animation counts as
+    /// logically complete, whatever its curve says — see
+    /// `logicallyComplete(after:)`.
+    var logicalCompletionTime: Double?
 
     init(curve: Curve) {
         self.curve = curve
@@ -45,9 +52,9 @@ public struct Animation: Hashable, Sendable {
 
     // MARK: - Timing curves
 
-    /// A default animation — the same smooth, bounceless spring SwiftUI
-    /// uses since its springs became the default.
-    public static let `default` = Animation.smooth
+    /// A default animation: a bounceless spring with a half-second
+    /// response, as SwiftUI's default has been since its springs became it.
+    public static let `default` = Animation.spring(Spring(response: 0.5, dampingRatio: 1))
 
     public static func linear(duration: Double) -> Animation {
         timingCurve(0, 0, 1, 1, duration: duration)
@@ -88,17 +95,30 @@ public struct Animation: Hashable, Sendable {
 
     // MARK: - Springs
 
+    static func spring(_ spring: Spring, initialVelocity: Double) -> Animation {
+        Animation(curve: .spring(
+            spring,
+            initialVelocity: initialVelocity,
+            settlingDuration: spring.endOfMotion(target: 1.0, initialVelocity: initialVelocity, epsilon: 0.001)
+        ))
+    }
+
+    /// An animation along `spring`.
+    public static func spring(_ spring: Spring, blendDuration: Double = 0) -> Animation {
+        Animation.spring(spring, initialVelocity: 0)
+    }
+
     /// A spring described by how long it takes to settle and how much it
     /// bounces: 0 is critically damped, up to 1 undamped, and down to -1
     /// increasingly overdamped.
     public static func spring(duration: Double = 0.5, bounce: Double = 0, blendDuration: Double = 0) -> Animation {
-        Animation(curve: .spring(SpringCurve(duration: duration, bounce: bounce)))
+        spring(Spring(duration: duration, bounce: bounce), blendDuration: blendDuration)
     }
 
     /// A spring described by its response (roughly, its period in seconds)
     /// and the fraction of critical damping applied to it.
     public static func spring(response: Double = 0.5, dampingFraction: Double = 0.825, blendDuration: Double = 0) -> Animation {
-        Animation(curve: .spring(SpringCurve(response: response, dampingFraction: dampingFraction)))
+        spring(Spring(response: response, dampingRatio: dampingFraction), blendDuration: blendDuration)
     }
 
     public static var spring: Animation { spring(duration: 0.5, bounce: 0) }
@@ -112,41 +132,42 @@ public struct Animation: Hashable, Sendable {
 
     /// A spring with no bounce.
     public static func smooth(duration: Double = 0.5, extraBounce: Double = 0) -> Animation {
-        spring(duration: duration, bounce: extraBounce)
+        spring(.smooth(duration: duration, extraBounce: extraBounce))
     }
 
     public static var smooth: Animation { smooth() }
 
     /// A spring with a little bounce.
     public static func snappy(duration: Double = 0.5, extraBounce: Double = 0) -> Animation {
-        spring(duration: duration, bounce: 0.15 + extraBounce)
+        spring(.snappy(duration: duration, extraBounce: extraBounce))
     }
 
     public static var snappy: Animation { snappy() }
 
     /// A spring with a visible bounce.
     public static func bouncy(duration: Double = 0.5, extraBounce: Double = 0) -> Animation {
-        spring(duration: duration, bounce: 0.3 + extraBounce)
+        spring(.bouncy(duration: duration, extraBounce: extraBounce))
     }
 
     public static var bouncy: Animation { bouncy() }
 
     /// A spring given as the physics: mass, stiffness and damping, with an
-    /// initial velocity in units of the whole change per second.
+    /// initial velocity in units of the whole change per second. Damping
+    /// that would overdamp it makes it critically damped, as
+    /// `Spring(mass:stiffness:damping:)` does.
     public static func interpolatingSpring(
         mass: Double = 1, stiffness: Double, damping: Double, initialVelocity: Double = 0
     ) -> Animation {
-        Animation(curve: .spring(SpringCurve(
-            mass: mass, stiffness: stiffness, damping: damping, initialVelocity: initialVelocity
-        )))
+        spring(Spring(mass: mass, stiffness: stiffness, damping: damping), initialVelocity: initialVelocity)
     }
 
     public static func interpolatingSpring(duration: Double = 0.5, bounce: Double = 0, initialVelocity: Double = 0) -> Animation {
-        var curve = SpringCurve(duration: duration, bounce: bounce)
-        curve = SpringCurve(
-            mass: curve.mass, stiffness: curve.stiffness, damping: curve.damping, initialVelocity: initialVelocity
-        )
-        return Animation(curve: .spring(curve))
+        spring(Spring(duration: duration, bounce: bounce), initialVelocity: initialVelocity)
+    }
+
+    /// An animation along `spring`, starting at `initialVelocity`.
+    public static func interpolatingSpring(_ spring: Spring, initialVelocity: Double = 0) -> Animation {
+        Animation.spring(spring, initialVelocity: initialVelocity)
     }
 
     public static var interpolatingSpring: Animation { interpolatingSpring() }
@@ -184,6 +205,16 @@ public struct Animation: Hashable, Sendable {
         return copy
     }
 
+    /// Counts as logically complete `duration` seconds after it starts
+    /// moving — what a `withAnimation` completion with the
+    /// `.logicallyComplete` criteria waits for — though the curve itself
+    /// may run on.
+    public func logicallyComplete(after duration: TimeInterval) -> Animation {
+        var copy = self
+        copy.logicalCompletionTime = max(0, duration)
+        return copy
+    }
+
     // MARK: - Evaluation
 
     /// One play of the curve, in the curve's own seconds. Unknown for a
@@ -191,7 +222,7 @@ public struct Animation: Hashable, Sendable {
     var cycleDuration: Double {
         switch curve {
         case .timing(_, _, _, _, let duration): return duration
-        case .spring(let spring): return spring.settlingDuration
+        case .spring(_, _, let settlingDuration): return settlingDuration
         case .custom: return .infinity
         }
     }
@@ -231,101 +262,11 @@ public struct Animation: Hashable, Sendable {
         switch curve {
         case .timing(let x1, let y1, let x2, let y2, let duration):
             return UnitBezier(x1: x1, y1: y1, x2: x2, y2: y2).value(at: time / duration)
-        case .spring(let spring):
-            return spring.value(at: time)
+        case .spring(let spring, let initialVelocity, _):
+            return spring.value(target: 1.0, initialVelocity: initialVelocity, time: time)
         case .custom:
             return 1
         }
-    }
-}
-
-// MARK: - Springs
-
-/// A damped harmonic oscillator pulled from 0 to 1.
-struct SpringCurve: Hashable, Sendable {
-    let mass: Double
-    let stiffness: Double
-    let damping: Double
-    let initialVelocity: Double
-    /// When the value stays within a thousandth of 1 — worked out once,
-    /// here, rather than on every frame that asks.
-    let settlingDuration: Double
-
-    init(mass: Double, stiffness: Double, damping: Double, initialVelocity: Double) {
-        self.mass = max(mass, .leastNonzeroMagnitude)
-        self.stiffness = max(stiffness, .leastNonzeroMagnitude)
-        self.damping = max(damping, 0)
-        self.initialVelocity = initialVelocity
-        settlingDuration = Self.measureSettlingDuration(
-            mass: self.mass, stiffness: self.stiffness, damping: self.damping, initialVelocity: initialVelocity
-        )
-    }
-
-    /// SwiftUI's perceptual parameters: a period and a bounce.
-    init(duration: Double, bounce: Double) {
-        let duration = max(duration, 0.01)
-        let bounce = min(max(bounce, -1), 1)
-        let dampingRatio = bounce >= 0 ? 1 - bounce : 1 / (1 + bounce + 1e-6)
-        self.init(dampingRatio: dampingRatio, period: duration)
-    }
-
-    /// The older parameters: a response (the period) and a damping ratio.
-    init(response: Double, dampingFraction: Double) {
-        self.init(dampingRatio: max(dampingFraction, 0), period: max(response, 0.01))
-    }
-
-    private init(dampingRatio: Double, period: Double) {
-        let omega = 2 * Double.pi / period
-        self.init(mass: 1, stiffness: omega * omega, damping: 2 * dampingRatio * omega, initialVelocity: 0)
-    }
-
-    /// The position `time` seconds in, starting at 0.
-    func value(at time: Double) -> Double {
-        1 + Self.displacement(
-            at: time, mass: mass, stiffness: stiffness, damping: damping, initialVelocity: initialVelocity
-        )
-    }
-
-    /// Distance from 1. Closed form for each of the three damping regimes.
-    private static func displacement(
-        at time: Double, mass: Double, stiffness: Double, damping: Double, initialVelocity: Double
-    ) -> Double {
-        let omega = (stiffness / mass).squareRoot()
-        let zeta = damping / (2 * (stiffness * mass).squareRoot())
-        let x0 = -1.0
-        let v0 = initialVelocity
-        if zeta < 1 {
-            let omegaD = omega * (1 - zeta * zeta).squareRoot()
-            let b = (v0 + zeta * omega * x0) / omegaD
-            return exp(-zeta * omega * time) * (x0 * cos(omegaD * time) + b * sin(omegaD * time))
-        } else if zeta == 1 {
-            return exp(-omega * time) * (x0 + (v0 + omega * x0) * time)
-        } else {
-            let root = (zeta * zeta - 1).squareRoot()
-            let r1 = -omega * (zeta - root)
-            let r2 = -omega * (zeta + root)
-            let c2 = (v0 - r1 * x0) / (r2 - r1)
-            let c1 = x0 - c2
-            return c1 * exp(r1 * time) + c2 * exp(r2 * time)
-        }
-    }
-
-    /// The last moment the spring is more than a thousandth away, sampled
-    /// at 120 Hz up to ten seconds — past that it is treated as done.
-    private static func measureSettlingDuration(
-        mass: Double, stiffness: Double, damping: Double, initialVelocity: Double
-    ) -> Double {
-        let step = 1.0 / 120
-        var last = 0.0
-        var time = step
-        while time <= 10 {
-            let offset = displacement(
-                at: time, mass: mass, stiffness: stiffness, damping: damping, initialVelocity: initialVelocity
-            )
-            if abs(offset) >= 0.001 { last = time }
-            time += step
-        }
-        return last + step
     }
 }
 

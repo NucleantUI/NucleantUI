@@ -811,6 +811,19 @@ final class GestureArena {
 
     // MARK: - Reporting
 
+    /// Hands `value` to the gesture's callback. A change runs with its
+    /// velocity tracked, as SwiftUI's `onChanged` does: whatever it sets
+    /// at once is sampled, so a spring started when the gesture ends sets
+    /// off at the speed the finger was moving (`Transaction.tracksVelocity`).
+    private func report<Value>(_ action: (@MainActor (Value) -> Void)?, _ value: Value, ended: Bool) {
+        guard let action else { return }
+        if ended {
+            action(value)
+        } else {
+            withTransaction(\.tracksVelocity, true) { action(value) }
+        }
+    }
+
     private func reportDrag(_ participant: Participant, pointer: Int, ended: Bool) {
         guard case .drag(let gesture) = participant.kind else { return }
         let value: DragGesture.Value
@@ -828,7 +841,7 @@ final class GestureArena {
             return
         }
         participant.lastDrag = value
-        (ended ? gesture.endedAction : gesture.changedAction)?(value)
+        report(ended ? gesture.endedAction : gesture.changedAction, value, ended: ended)
     }
 
     private func reportMagnify(_ participant: Participant, magnification: Double, ended: Bool) {
@@ -841,7 +854,7 @@ final class GestureArena {
             startLocation: participant.startLocation
         )
         participant.lastMagnify = value
-        (ended ? gesture.endedAction : gesture.changedAction)?(value)
+        report(ended ? gesture.endedAction : gesture.changedAction, value, ended: ended)
     }
 
     private func reportRotate(_ participant: Participant, radians: Double, ended: Bool) {
@@ -854,7 +867,7 @@ final class GestureArena {
             startLocation: participant.startLocation
         )
         participant.lastRotate = value
-        (ended ? gesture.endedAction : gesture.changedAction)?(value)
+        report(ended ? gesture.endedAction : gesture.changedAction, value, ended: ended)
     }
 
     /// The scale between the two fingers now and when they started.

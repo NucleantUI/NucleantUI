@@ -25,6 +25,9 @@ public struct OpacityTransition: Transition, Equatable {
 }
 
 extension OpacityTransition: BuiltinTransition {
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        [.opacity(phase.isIdentity ? 1 : 0)]
+    }
     static var identityLeavesViewUnchanged: Bool { true }
     static var animatesArrival: Bool { false }
     static var animatesRemoval: Bool { false }

@@ -32,6 +32,10 @@ public struct SlideTransition: Transition, Equatable {
 }
 
 extension SlideTransition: BuiltinTransition {
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        let xy = MoveEffectContent.fraction(towards: Self.edge(in: phase))
+        return [.move(x: xy[0], y: xy[1])]
+    }
     static var identityLeavesViewUnchanged: Bool { true }
     static var animatesArrival: Bool { false }
     static var animatesRemoval: Bool { false }

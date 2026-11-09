@@ -223,6 +223,11 @@ protocol BuiltinTransition: Transition {
     /// The same for the view's removal, and for its return while it is
     /// leaving.
     static var animatesRemoval: Bool { get }
+
+    /// What the body draws in `phase`, as effects a container's slot can
+    /// draw itself — so no body is built (TransitionEffect.swift). `nil`
+    /// when the body has to be built.
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]?
 }
 
 extension Transition {

@@ -59,6 +59,14 @@ extension AsymmetricTransition: ViewInput {
 }
 
 extension AsymmetricTransition: BuiltinTransition {
+    /// The insertion half inside the removal half, each in its own phase,
+    /// as the body has them — `nil` unless both can say.
+    func effects(in phase: TransitionPhase) -> [TransitionEffect]? {
+        guard let inner = insertion.builtinEffects(in: phase == .willAppear ? .willAppear : .identity),
+              let outer = removal.builtinEffects(in: phase == .didDisappear ? .didDisappear : .identity)
+        else { return nil }
+        return inner + outer
+    }
     static var identityLeavesViewUnchanged: Bool {
         Insertion.leavesViewUnchangedAtIdentity && Removal.leavesViewUnchangedAtIdentity
     }
