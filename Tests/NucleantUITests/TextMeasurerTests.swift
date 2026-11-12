@@ -39,7 +39,9 @@ struct TextMeasurerTests {
     static let lineLimits: [Int?] = [nil, 0, 1, 2, 3]
     static let fonts: [Font] = [.system(size: 13), .system(size: 22), .system(size: 15).italic()]
 
-    /// The word-at-a-time algorithm, as it was before lines became ranges.
+    /// The word-at-a-time algorithm: a string built per word, words joined
+    /// by single spaces. A paragraph's indent stays on its first line with
+    /// its first word; a line begun by a break drops the spaces before it.
     static func referenceWrap(_ string: String, font: Font, maxWidth: Double?, lineLimit: Int?) -> [String] {
         let paragraphs = string.components(separatedBy: "\n")
         func limited(_ lines: [String]) -> [String] {
@@ -52,7 +54,15 @@ struct TextMeasurerTests {
         for paragraph in paragraphs {
             var current = ""
             var currentWidth = 0.0
-            for word in paragraph.split(separator: " ", omittingEmptySubsequences: false) {
+            var inIndent = true
+            for (index, word) in paragraph.split(separator: " ", omittingEmptySubsequences: false).enumerated() {
+                if inIndent {
+                    let piece = index == 0 ? String(word) : " " + word
+                    current += piece
+                    currentWidth += TextMeasurer.width(of: piece, font: font)
+                    inIndent = word.isEmpty
+                    continue
+                }
                 let piece = current.isEmpty ? String(word) : " " + word
                 let pieceWidth = TextMeasurer.width(of: piece, font: font)
                 if !current.isEmpty && currentWidth + pieceWidth > maxWidth {

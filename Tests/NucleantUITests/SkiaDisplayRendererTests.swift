@@ -272,6 +272,18 @@ struct SkiaDisplayRendererTests {
         #expect(abs((spacedLast - spacedFirst) - (plainLast - plainFirst) - 16) <= 1)
     }
 
+    @Test func anIndentedLineStartsPastItsSpaces() {
+        drawText("    ab\nab", size: 14)
+        let lineHeight = TextMeasurer.lineMetrics(for: .system(size: 14)).lineHeight
+        let split = 4 + Int(lineHeight)
+        guard let indented = inkColumns(rows: 4..<split).first, let flush = inkColumns(rows: split..<100).first else {
+            Issue.record("nothing drawn")
+            return
+        }
+        let indent = TextMeasurer.width(of: "    ", font: .system(size: 14))
+        #expect(abs(Double(indented - flush) - indent) <= 1)
+    }
+
     @Test func lineSpacingMovesTheLaterLinesDown() {
         drawText("one\ntwo", size: 14)
         let plain = inkRows()

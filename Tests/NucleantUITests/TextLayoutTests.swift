@@ -146,6 +146,48 @@ struct TextLayoutTests {
         #expect(limited.hasSuffix("…") && width(limited) <= 60)
     }
 
+    // MARK: - Indents
+
+    /// Indented lines, one long enough to wrap at 200 points and none at 560.
+    static let json = "{\n    \"name\": \"a value long enough to wrap\",\n    \"id\": 7\n}"
+
+    private func jsonLines(width: Double) -> [String] {
+        TextMeasurer.layout(
+            TextLayoutInput(string: Self.json, font: .system(size: 15, design: .monospaced)),
+            proposal: ProposedSize(width: width, height: nil)
+        ).lines
+    }
+
+    @Test func eachParagraphKeepsItsIndent() {
+        for width in [200.0, 560] {
+            let lines = jsonLines(width: width)
+            #expect(lines.first == "{", "\(width)")
+            #expect(lines.contains { $0.hasPrefix("    \"name\": ") }, "\(width)")
+            #expect(lines.dropLast().last == "    \"id\": 7", "\(width)")
+            #expect(lines.last == "}", "\(width)")
+        }
+        // Where nothing wraps, the lines are the paragraphs, as with no width.
+        #expect(jsonLines(width: 560) == Self.json.components(separatedBy: "\n"))
+    }
+
+    @Test func aLineBegunByABreakStartsAtItsWord() {
+        let lines = jsonLines(width: 200)
+        #expect(lines.count > 4)
+        // Between the name's first line and the id's: where the name wrapped.
+        let wrapped = lines[2..<(lines.count - 2)]
+        #expect(!wrapped.isEmpty)
+        #expect(wrapped.allSatisfy { !$0.hasPrefix(" ") })
+    }
+
+    @Test func anIndentStaysWithTheFirstWord() {
+        // Too narrow for both: they overflow together rather than leave a
+        // line of spaces.
+        #expect(layout("        word and more", width: 40).lines.first == "        word")
+        // A paragraph of spaces is kept as it is.
+        #expect(layout("   ", width: 100).lines == ["   "])
+        #expect(layout("a\n   \nb", width: 100).lines == ["a", "   ", "b"])
+    }
+
     @Test func anEllipsisAloneWhenNothingElseFits() {
         #expect(layout(width: 4, paragraph: TextParagraphStyle(lineLimit: 1)).lines == ["…"])
     }

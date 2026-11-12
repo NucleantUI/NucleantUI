@@ -79,9 +79,10 @@ extension TextMeasurer {
         /// words then break the same way anywhere in between. The lines a
         /// height has room for, and a tail cut, follow the same rule.
         ///
-        /// A width of 0 or none isn't broken at all, and keeps the spaces a
-        /// line starts with that breaking drops; a layout made with one
-        /// answers only that same width, and none other answers it.
+        /// A width of 0 or none isn't broken at all. Its lines are whole
+        /// paragraphs, each measured in one sum, where breaking adds a line
+        /// up word by word and can come out a hair wider; a layout made with
+        /// one answers only that same width, and none other answers it.
         func answers(_ other: ProposedSize) -> Bool {
             guard layout.holdsBetween else { return other == proposal }
             guard Self.breaks(proposal.width), Self.breaks(other.width) else {

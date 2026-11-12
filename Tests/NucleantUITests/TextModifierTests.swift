@@ -133,6 +133,19 @@ struct TextModifierTests {
         #expect(text(VStack { Text("A").lineLimit(...5) }.lineLimit(3...))?.frame.height == bodyLineHeight)
     }
 
+    @Test func aTextKeepsTheIndentOfEachLine() {
+        // Issue #26: whether a line wraps (200) or none does (560).
+        let json = "{\n    \"name\": \"a value long enough to wrap\",\n    \"id\": 7\n}"
+        for width in [200.0, 560] {
+            let draw = text(
+                Text(json).font(.system(size: 15, design: .monospaced)).frame(width: width, alignment: .leading),
+                size: Size(width: 600, height: 300)
+            )
+            #expect(draw?.string.contains("\n    \"name\": ") == true, "\(width)")
+            #expect(draw?.string.hasSuffix("\n    \"id\": 7\n}") == true, "\(width)")
+        }
+    }
+
     @Test func aHeightLimitsTheLinesShown() {
         let draw = text(Text(Self.sentence).frame(width: 120, height: 2 * bodyLineHeight + 1))
         #expect(draw?.string.split(separator: "\n").count == 2)

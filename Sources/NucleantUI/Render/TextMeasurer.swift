@@ -204,8 +204,12 @@ enum TextMeasurer {
 
     /// The lines `paragraph` breaks into at `maxWidth`, handed to `line` in
     /// order as ranges of it — word by word, a line's words joined by the
-    /// single spaces between them; a line that is still empty takes a word
-    /// without the space before it.
+    /// single spaces between them.
+    ///
+    /// The paragraph's first line keeps the spaces it starts with: they are
+    /// its indent, and stay with the first word however wide. A line begun
+    /// by a break takes its first word without the spaces before it, which
+    /// are where the line before ended.
     ///
     /// Each line is a range rather than a string built a word at a time, so
     /// breaking costs one walk of the characters and no allocation. The sums
@@ -221,8 +225,18 @@ enum TextMeasurer {
         var lineStart = paragraph.startIndex
         var lineEnd = paragraph.startIndex
         var currentWidth = 0.0
+        // Until the paragraph's first word, each space is part of its indent.
+        var inIndent = true
 
         for word in paragraph.split(separator: " ", omittingEmptySubsequences: false) {
+            if inIndent {
+                currentWidth += word.startIndex == paragraph.startIndex
+                    ? width(of: word, face: face)
+                    : width(of: word, face: face, from: space)
+                lineEnd = word.endIndex
+                inIndent = word.isEmpty
+                continue
+            }
             let isEmpty = lineStart == lineEnd
             let pieceWidth = isEmpty ? width(of: word, face: face) : width(of: word, face: face, from: space)
             if !isEmpty && currentWidth + pieceWidth > maxWidth {
