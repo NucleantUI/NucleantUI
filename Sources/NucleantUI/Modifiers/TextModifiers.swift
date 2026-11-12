@@ -91,85 +91,80 @@ extension View {
 
 // MARK: - Environment
 
-private struct TruncationModeKey: EnvironmentKey {
-    static let defaultValue = Text.TruncationMode.tail
+/// Everything the text modifiers above write, in one environment value: a
+/// `Text` reads them in one lookup, and its view and every view around it
+/// note one key read rather than ten. Each public value below reads and
+/// writes its own field; a write reads the value first, so the modifier
+/// that wrote it is rebuilt when a field set further out changes.
+struct TextSettings: Hashable {
+    var truncationMode = Text.TruncationMode.tail
+    var lineSpacing = 0.0
+    var allowsTightening = false
+    var minimumScaleFactor = 1.0
+    var textCase: Text.Case? = nil
+    /// `.kerning(_:)` on a view: for the texts below that set none.
+    var kerning: Double? = nil
+    /// `.tracking(_:)` on a view: for the texts below that set none.
+    var tracking: Double? = nil
+    /// `.baselineOffset(_:)` on a view: for the texts below that set none.
+    var baselineOffset: Double? = nil
+    /// `.underline(_:pattern:color:)` on a view: for the texts below that
+    /// set none. `nil` when turned off.
+    var underline: Text.LineStyle? = nil
+    /// `.strikethrough(_:pattern:color:)` on a view: for the texts below
+    /// that set none. `nil` when turned off.
+    var strikethrough: Text.LineStyle? = nil
 }
 
-private struct LineSpacingKey: EnvironmentKey {
-    static let defaultValue = 0.0
-}
-
-private struct AllowsTighteningKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-private struct MinimumScaleFactorKey: EnvironmentKey {
-    static let defaultValue = 1.0
-}
-
-private struct TextCaseKey: EnvironmentKey {
-    static let defaultValue: Text.Case? = nil
+private struct TextSettingsKey: EnvironmentKey {
+    static let defaultValue = TextSettings()
 }
 
 private struct LocaleKey: EnvironmentKey {
     static let defaultValue = Locale.autoupdatingCurrent
 }
 
-private struct DefaultKerningKey: EnvironmentKey {
-    static let defaultValue: Double? = nil
-}
-
-private struct DefaultTrackingKey: EnvironmentKey {
-    static let defaultValue: Double? = nil
-}
-
-private struct DefaultBaselineOffsetKey: EnvironmentKey {
-    static let defaultValue: Double? = nil
-}
-
-private struct DefaultUnderlineKey: EnvironmentKey {
-    static let defaultValue: Text.LineStyle? = nil
-}
-
-private struct DefaultStrikethroughKey: EnvironmentKey {
-    static let defaultValue: Text.LineStyle? = nil
-}
-
 extension EnvironmentValues {
+
+    /// The text settings, all at once — what a `Text` reads.
+    var textSettings: TextSettings {
+        get { self[TextSettingsKey.self] }
+        set { self[TextSettingsKey.self] = newValue }
+    }
 
     /// Where a text cuts the last line it shows when it doesn't fit.
     /// `.tail` unless set.
     public var truncationMode: Text.TruncationMode {
-        get { self[TruncationModeKey.self] }
-        set { self[TruncationModeKey.self] = newValue }
+        get { self[TextSettingsKey.self].truncationMode }
+        set { self[TextSettingsKey.self].truncationMode = newValue }
     }
 
     /// The space between the bottom of one line of text and the top of the
     /// next, in points. Laid out as 0 when negative.
     public var lineSpacing: Double {
-        get { self[LineSpacingKey.self] }
-        set { self[LineSpacingKey.self] = newValue }
+        get { self[TextSettingsKey.self].lineSpacing }
+        set { self[TextSettingsKey.self].lineSpacing = newValue }
     }
 
     /// Whether text may move its characters closer together to fit a line
     /// before it is cut. `false` unless set.
     public var allowsTightening: Bool {
-        get { self[AllowsTighteningKey.self] }
-        set { self[AllowsTighteningKey.self] = newValue }
+        get { self[TextSettingsKey.self].allowsTightening }
+        set { self[TextSettingsKey.self].allowsTightening = newValue }
     }
 
     /// The smallest fraction of its font size a text may be set at to fit.
     /// Above 0 and at most 1; anything else is stored as 1, which never
     /// shrinks.
     public var minimumScaleFactor: Double {
-        get { self[MinimumScaleFactorKey.self] }
-        set { self[MinimumScaleFactorKey.self] = newValue > 0 && newValue <= 1 ? newValue : 1 }
+        get { self[TextSettingsKey.self].minimumScaleFactor }
+        set { self[TextSettingsKey.self].minimumScaleFactor = newValue > 0 && newValue <= 1 ? newValue : 1 }
     }
 
     /// The case texts are shown in; `nil` shows them as written.
     public var textCase: Text.Case? {
-        get { self[TextCaseKey.self] }
-        set { self[TextCaseKey.self] = newValue }
+        get { self[TextSettingsKey.self].textCase }
+        set { self[TextSettingsKey.self].textCase = newValue }
     }
 
     /// The locale text is shown for: what `textCase` changes the case
@@ -179,35 +174,28 @@ extension EnvironmentValues {
         set { self[LocaleKey.self] = newValue }
     }
 
-    /// `.kerning(_:)` on a view: for the texts below that set none.
     var defaultKerning: Double? {
-        get { self[DefaultKerningKey.self] }
-        set { self[DefaultKerningKey.self] = newValue }
+        get { self[TextSettingsKey.self].kerning }
+        set { self[TextSettingsKey.self].kerning = newValue }
     }
 
-    /// `.tracking(_:)` on a view: for the texts below that set none.
     var defaultTracking: Double? {
-        get { self[DefaultTrackingKey.self] }
-        set { self[DefaultTrackingKey.self] = newValue }
+        get { self[TextSettingsKey.self].tracking }
+        set { self[TextSettingsKey.self].tracking = newValue }
     }
 
-    /// `.baselineOffset(_:)` on a view: for the texts below that set none.
     var defaultBaselineOffset: Double? {
-        get { self[DefaultBaselineOffsetKey.self] }
-        set { self[DefaultBaselineOffsetKey.self] = newValue }
+        get { self[TextSettingsKey.self].baselineOffset }
+        set { self[TextSettingsKey.self].baselineOffset = newValue }
     }
 
-    /// `.underline(_:pattern:color:)` on a view: for the texts below that
-    /// set none. `nil` when turned off.
     var defaultUnderline: Text.LineStyle? {
-        get { self[DefaultUnderlineKey.self] }
-        set { self[DefaultUnderlineKey.self] = newValue }
+        get { self[TextSettingsKey.self].underline }
+        set { self[TextSettingsKey.self].underline = newValue }
     }
 
-    /// `.strikethrough(_:pattern:color:)` on a view: for the texts below
-    /// that set none. `nil` when turned off.
     var defaultStrikethrough: Text.LineStyle? {
-        get { self[DefaultStrikethroughKey.self] }
-        set { self[DefaultStrikethroughKey.self] = newValue }
+        get { self[TextSettingsKey.self].strikethrough }
+        set { self[TextSettingsKey.self].strikethrough = newValue }
     }
 }

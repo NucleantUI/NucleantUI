@@ -190,3 +190,54 @@ struct TextModifierTests {
         #expect(text(VStack { Text("a") }.underline().underline(false))?.underline == .single)
     }
 }
+
+// MARK: - Settings changed further out
+
+/// What the view text settings are where it is built.
+@View
+private struct SettingsReader {
+    let log: Log
+    @Environment(\.lineSpacing) private var lineSpacing
+    @Environment(\.truncationMode) private var truncationMode
+
+    var body: some View {
+        let _ = log("spacing \(lineSpacing) \(truncationMode)")
+        Color.blue
+            .frame(width: 200, height: 200)
+    }
+}
+
+/// An outer line spacing that changes on a tap, over an inner truncation
+/// mode set once: the two settings share one environment value.
+@View
+private struct SettingsHost {
+    let log: Log
+    @State private var spacing = 2.0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsReader(log: log)
+                .truncationMode(.head)
+        }
+        .lineSpacing(spacing)
+        .onTapGesture { spacing = 9 }
+    }
+}
+
+extension HostedViews {
+
+    @MainActor
+    @Suite
+    struct TextSettingsChanges {
+
+        /// A setting changed further out reaches past a modifier nearer the
+        /// view that set another one, and the nearer one keeps its own.
+        @Test func anOuterChangeReachesPastAnInnerSetting() async {
+            let log = Log()
+            let harness = Harness(SettingsHost(log: log))
+            #expect(log.take() == ["spacing 2.0 head"])
+            await harness.tap(center)
+            #expect(log.take() == ["spacing 9.0 head"])
+        }
+    }
+}

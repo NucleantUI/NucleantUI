@@ -176,39 +176,42 @@ extension Text: BuiltinView {
         if let explicitWeight { font.weight = explicitWeight }
         if isItalic { font.isItalic = true }
 
+        // Every setting the view text modifiers write, in one read.
+        let settings = environment.textSettings
+
         // The case is changed before anything is measured, in the
         // environment's language: "straße" is "STRASSE", and in Turkish
         // "istanbul" is "İSTANBUL".
         let string: String
-        switch environment.textCase {
+        switch settings.textCase {
         case .uppercase?: string = content.uppercased(with: environment.locale)
         case .lowercase?: string = content.lowercased(with: environment.locale)
         case nil: string = content
         }
 
         let style = explicitStyle ?? environment.foregroundStyle
-        let tracking = explicitTracking ?? environment.defaultTracking
-        let kerning = explicitKerning ?? environment.defaultKerning
+        let tracking = explicitTracking ?? settings.tracking
+        let kerning = explicitKerning ?? settings.kerning
         let input = TextLayoutInput(
             string: string,
             font: font,
             letterSpacing: tracking ?? kerning ?? 0,
-            baselineOffset: explicitBaselineOffset ?? environment.defaultBaselineOffset ?? 0,
+            baselineOffset: explicitBaselineOffset ?? settings.baselineOffset ?? 0,
             paragraph: TextParagraphStyle(
                 lineLimit: explicitLineLimit ?? environment.lineLimit,
                 reservedLines: environment.reservedLineCount,
-                truncationMode: environment.truncationMode,
-                lineSpacing: environment.lineSpacing,
-                allowsTightening: environment.allowsTightening,
-                minimumScaleFactor: environment.minimumScaleFactor
+                truncationMode: settings.truncationMode,
+                lineSpacing: settings.lineSpacing,
+                allowsTightening: settings.allowsTightening,
+                minimumScaleFactor: settings.minimumScaleFactor
             )
         )
         return ViewNode(content: TextContent(
             input: input,
             style: style,
             alignment: alignment ?? environment.multilineTextAlignment,
-            underline: explicitUnderline ?? environment.defaultUnderline,
-            strikethrough: explicitStrikethrough ?? environment.defaultStrikethrough,
+            underline: explicitUnderline ?? settings.underline,
+            strikethrough: explicitStrikethrough ?? settings.strikethrough,
             animatedColor: context.animatedValue(.textColor, style.animatableVector)
         ))
     }
