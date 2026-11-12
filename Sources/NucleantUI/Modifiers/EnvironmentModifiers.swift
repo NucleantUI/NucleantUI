@@ -69,15 +69,15 @@ extension View {
     }
 
     /// At most `limit` lines — and, with `reservesSpace`, room for all of
-    /// them even when fewer are used. The room is kept by a vertical
-    /// `TextField`; a `Text` takes only the upper limit.
+    /// them even when fewer are used: a `Text` is then at least `limit`
+    /// lines tall, and a vertical `TextField` keeps the room too.
     public func lineLimit(_ limit: Int, reservesSpace: Bool) -> some View {
         lineLimits(lower: reservesSpace ? limit : 0, upper: limit)
     }
 
-    /// Between `limit.lowerBound` and `limit.upperBound` lines. A vertical
-    /// `TextField` keeps room for the lower bound and grows to the upper,
-    /// then scrolls; a `Text` takes only the upper limit.
+    /// Between `limit.lowerBound` and `limit.upperBound` lines. A `Text`
+    /// keeps room for the lower bound however few lines it has; a vertical
+    /// `TextField` keeps it too, and grows to the upper, then scrolls.
     public func lineLimit(_ limit: ClosedRange<Int>) -> some View {
         lineLimits(lower: limit.lowerBound, upper: limit.upperBound)
     }

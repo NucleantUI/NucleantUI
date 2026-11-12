@@ -205,6 +205,8 @@ extension DrawCommand {
             return .shape(draw)
         case .text(var draw):
             draw.color = context.resolve(draw.color)
+            if let color = draw.underline?.color { draw.underline?.color = context.resolve(color) }
+            if let color = draw.strikethrough?.color { draw.strikethrough?.color = context.resolve(color) }
             return .text(draw)
         case .image(var draw):
             draw.opacity *= context.opacity

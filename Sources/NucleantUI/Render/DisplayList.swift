@@ -169,6 +169,19 @@ public struct TextDraw: Equatable, Sendable {
     /// wider than the summed advances did, and would break a fitted single
     /// line in two.
     public var wraps: Bool
+    /// Points after every character, as layout measured them: kerning or
+    /// tracking.
+    public var letterSpacing: Double
+    /// Points added to `letterSpacing` on the last line only: below 0 when
+    /// layout tightened that line to fit.
+    public var lastLineTightening: Double
+    /// Points between the bottom of one line and the top of the next.
+    public var lineSpacing: Double
+    /// A line along each line's baseline; `nil` for none. Its color, when
+    /// `nil`, is `color`.
+    public var underline: Text.LineStyle?
+    /// A line through each line's middle; `nil` for none.
+    public var strikethrough: Text.LineStyle?
     public var transform: Transform
     public var clip: Rect?
     public var clipCornerRadius: Double
@@ -184,6 +197,11 @@ public struct TextDraw: Equatable, Sendable {
         lineLimit: Int? = nil,
         isTruncated: Bool = false,
         wraps: Bool = true,
+        letterSpacing: Double = 0,
+        lastLineTightening: Double = 0,
+        lineSpacing: Double = 0,
+        underline: Text.LineStyle? = nil,
+        strikethrough: Text.LineStyle? = nil,
         transform: Transform = .identity,
         clip: Rect? = nil,
         clipCornerRadius: Double = 0,
@@ -197,6 +215,11 @@ public struct TextDraw: Equatable, Sendable {
         self.lineLimit = lineLimit
         self.isTruncated = isTruncated
         self.wraps = wraps
+        self.letterSpacing = letterSpacing
+        self.lastLineTightening = lastLineTightening
+        self.lineSpacing = lineSpacing
+        self.underline = underline
+        self.strikethrough = strikethrough
         self.transform = transform
         self.clip = clip
         self.clipCornerRadius = clipCornerRadius

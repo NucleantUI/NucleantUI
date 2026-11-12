@@ -19,6 +19,10 @@ enum TextMeasurer {
         let family: String?
         let size: Double
         let italic: Bool
+        /// Points added to every advance: kerning or tracking. A face with
+        /// spacing has its own table, so every width summed from it —
+        /// breaking lines, cutting one — has the spacing in it.
+        let spacing: Double
     }
 
     /// Everything measured for one face, filled in as it is asked for.
@@ -43,9 +47,9 @@ enum TextMeasurer {
     private static var faces: [Face] = []
     private static var faceIndices: [FaceKey: Int] = [:]
 
-    private static func face(for font: Font) -> Int {
+    static func face(for font: Font, spacing: Double = 0) -> Int {
         if PerfTrace.isEnabled { PerfTrace.textMeasures += 1 }
-        let key = FaceKey(family: FontRegistry.resolve(font), size: font.size, italic: font.isItalic)
+        let key = FaceKey(family: FontRegistry.resolve(font), size: font.size, italic: font.isItalic, spacing: spacing)
         if let index = faceIndices[key] { return index }
         faces.append(Face(key: key))
         faceIndices[key] = faces.count - 1
@@ -73,7 +77,7 @@ enum TextMeasurer {
         lineMetrics(face: face(for: font))
     }
 
-    private static func lineMetrics(face: Int) -> (ascent: Double, descent: Double, lineHeight: Double) {
+    static func lineMetrics(face: Int) -> (ascent: Double, descent: Double, lineHeight: Double) {
         if let cached = faces[face].lineMetrics { return cached }
 
         let size = faces[face].key.size
@@ -94,7 +98,7 @@ enum TextMeasurer {
 
     /// The advance width of one character, in points.
     @inline(__always)
-    private static func advance(_ character: Character, face: Int) -> Double {
+    static func advance(_ character: Character, face: Int) -> Double {
         // `"\r\n"` is one character whose `asciiValue` is that of `"\n"`;
         // it goes the long way, as anything else that isn't one ASCII byte.
         if let code = character.asciiValue, code != 0x0A || character.utf8.count == 1 {
@@ -123,7 +127,7 @@ enum TextMeasurer {
                 width = Double(metrics.advance)
             }
         }
-        return width
+        return width + faces[face].key.spacing
     }
 
     /// The summed advances of `characters`, starting from `start`, added in
@@ -137,7 +141,7 @@ enum TextMeasurer {
     /// character at a time from the start of the character held back. A
     /// character the ASCII table doesn't have yet goes through `advance`,
     /// which measures and files it.
-    private static func width<S: StringProtocol>(of characters: S, face: Int, from start: Double = 0) -> Double {
+    static func width<S: StringProtocol>(of characters: S, face: Int, from start: Double = 0) -> Double {
         let ascii = faces[face].ascii
         var width = start
         let utf8 = characters.utf8
@@ -170,7 +174,7 @@ enum TextMeasurer {
     /// `string` split at its line feeds, as `components(separatedBy:)`
     /// splits it — without the trip through Foundation for the usual string
     /// that has none.
-    private static func paragraphs(of string: String) -> [String] {
+    static func paragraphs(of string: String) -> [String] {
         string.utf8.contains(0x0A) ? string.components(separatedBy: "\n") : [string]
     }
 
@@ -207,7 +211,7 @@ enum TextMeasurer {
     /// breaking costs one walk of the characters and no allocation. The sums
     /// are taken in the same order as summing the advances of the joined
     /// string, so a line breaks exactly where it would.
-    private static func breakLines(
+    static func breakLines(
         _ paragraph: String,
         face: Int,
         maxWidth: Double,
@@ -238,66 +242,6 @@ enum TextMeasurer {
     private static func limited(_ lines: [String], to lineLimit: Int?) -> [String] {
         guard let lineLimit, lineLimit > 0, lines.count > lineLimit else { return lines }
         return Array(lines.prefix(lineLimit))
-    }
-
-    /// Measured boxes, keyed by everything that decides one. Text sizing is
-    /// the leaf of every layout pass and by far its most expensive step, so it
-    /// is worth remembering across passes as well as within one — the same
-    /// label re-measured after a state change has not changed shape.
-    private struct SizeKey: Hashable {
-        let string: String
-        let font: Font
-        let proposal: ProposedSize
-        let lineLimit: Int?
-    }
-
-    private static var sizes: [SizeKey: Size] = [:]
-
-    /// The box `string` occupies under `proposal`.
-    static func size(of string: String, font: Font, proposal: ProposedSize, lineLimit: Int?) -> Size {
-        let key = SizeKey(string: string, font: font, proposal: proposal, lineLimit: lineLimit)
-        if let cached = sizes[key] { return cached }
-        let measured = measure(key)
-        // A miss only: a long-running app showing ever-new strings (a
-        // clock, a counter) would otherwise keep every one it ever showed.
-        if sizes.count >= 4096 { sizes.removeAll(keepingCapacity: true) }
-        sizes[key] = measured
-        return measured
-    }
-
-    /// The lines `wrap` would give, measured where they stand in the string
-    /// rather than built: how many there are, and the widest.
-    private static func measure(_ key: SizeKey) -> Size {
-        let (string, font, proposal, lineLimit) = (key.string, key.font, key.proposal, key.lineLimit)
-        let face = Self.face(for: font)
-        guard !string.isEmpty else {
-            return Size(width: 0, height: lineMetrics(face: face).lineHeight)
-        }
-        let limit = lineLimit.flatMap { $0 > 0 ? $0 : nil } ?? .max
-        var widest = 0.0
-        var count = 0
-
-        let paragraphs = Self.paragraphs(of: string)
-        if let maxWidth = proposal.width, maxWidth > 0 {
-            for paragraph in paragraphs where count < limit {
-                breakLines(paragraph, face: face, maxWidth: maxWidth) { line in
-                    guard count < limit else { return }
-                    widest = max(widest, width(of: paragraph[line], face: face))
-                    count += 1
-                }
-            }
-        } else {
-            for paragraph in paragraphs.prefix(limit) {
-                widest = max(widest, width(of: paragraph, face: face))
-                count += 1
-            }
-        }
-
-        let lineHeight = lineMetrics(face: face).lineHeight
-        return Size(
-            width: proposal.width.map { min(widest, $0) } ?? widest,
-            height: lineHeight * Double(count)
-        )
     }
 }
 

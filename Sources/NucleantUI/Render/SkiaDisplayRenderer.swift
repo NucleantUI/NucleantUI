@@ -373,16 +373,69 @@ public final class SkiaDisplayRenderer {
         canvas.save()
         begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         // The first baseline an ascent below the box's top, the rest a line
-        // height apart — the metrics layout sized the box with.
+        // height and the line spacing apart — the metrics layout sized the
+        // box with.
         let metrics = TextMeasurer.lineMetrics(for: draw.font)
+        let step = metrics.lineHeight + draw.lineSpacing
         let factor = alignFactor(draw.alignment)
         for (index, line) in lines.enumerated() where !line.isEmpty {
-            let width = Double(font.measureText(line))
-            let x = draw.frame.minX + (draw.frame.width - width) * factor
-            let y = draw.frame.minY + metrics.ascent + Double(index) * metrics.lineHeight
-            canvas.drawString(line, x: Float(x), y: Float(y), font: font, paint: paint)
+            let y = draw.frame.minY + metrics.ascent + Double(index) * step
+            let spacing = draw.letterSpacing + (index == lines.count - 1 ? draw.lastLineTightening : 0)
+            if spacing == 0 {
+                let width = Double(font.measureText(line))
+                let x = draw.frame.minX + (draw.frame.width - width) * factor
+                canvas.drawString(line, x: Float(x), y: Float(y), font: font, paint: paint)
+                decorate(draw, from: x, to: x + width, baseline: y, on: canvas)
+            } else {
+                let run = spaced(line, by: spacing, font: font)
+                let x = draw.frame.minX + (draw.frame.width - run.advance) * factor
+                canvas.drawGlyphs(run.glyphs, positions: run.positions, origin: SIMD2(Float(x), Float(y)), font: font, paint: paint)
+                decorate(draw, from: x, to: x + run.advance - spacing, baseline: y, on: canvas)
+            }
         }
         canvas.restore()
+    }
+
+    /// `line`'s glyphs placed a character at a time with `spacing` after
+    /// each, and the advance of the whole, the last spacing included, as
+    /// layout measured it.
+    private func spaced(_ line: String, by spacing: Double, font: SkFont) -> (glyphs: [UInt16], positions: [SIMD2<Float>], advance: Double) {
+        var glyphs: [UInt16] = []
+        var positions: [SIMD2<Float>] = []
+        var pen = 0.0
+        for character in line {
+            let ids = font.textToGlyphs(String(character))
+            for (id, width) in zip(ids, font.getWidths(ids)) {
+                glyphs.append(id)
+                positions.append(SIMD2(Float(pen), 0))
+                pen += Double(width)
+            }
+            pen += spacing
+        }
+        return (glyphs, positions, pen)
+    }
+
+    /// One line's underline and strikethrough, from `start` to `end` along
+    /// its baseline, each in its own color or the text's.
+    private func decorate(_ draw: TextDraw, from start: Double, to end: Double, baseline: Double, on canvas: SkCanvas) {
+        guard draw.underline != nil || draw.strikethrough != nil, end > start else { return }
+        let metrics = TextMeasurer.decorationMetrics(for: draw.font)
+        let paint = textPaint
+        for (style, offset) in [(draw.underline, metrics.underline), (draw.strikethrough, metrics.strikethrough)] {
+            guard let style else { continue }
+            let (r, g, b, a) = (style.color ?? draw.color).rgba8
+            paint.setColor(SIMD4(r, g, b, a))
+            let top = baseline + offset - metrics.thickness / 2
+            for dash in TextMeasurer.decorationDashes(length: end - start, thickness: metrics.thickness, pattern: style.pattern) {
+                canvas.drawRect(
+                    x: Float(start + dash.start), y: Float(top),
+                    w: Float(dash.end - dash.start), h: Float(metrics.thickness),
+                    paint: paint
+                )
+            }
+        }
+        let (r, g, b, a) = draw.color.rgba8
+        paint.setColor(SIMD4(r, g, b, a))
     }
 
     private func font(family: String?, size: Double, slanted: Bool) -> SkFont {

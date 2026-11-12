@@ -232,6 +232,106 @@ struct SkiaDisplayRendererTests {
         #expect(inkColumns(rows: first..<min(100, Int(lineHeight * 2) + 1)).count > 0)
     }
 
+    /// The rows holding any ink.
+    private func inkRows() -> [Int] {
+        (0..<100).filter { y in (0..<100).contains { pixel($0, y).w > 0 } }
+    }
+
+    private func drawText(
+        _ string: String,
+        size: Double = 20,
+        letterSpacing: Double = 0,
+        lineSpacing: Double = 0,
+        underline: Text.LineStyle? = nil,
+        strikethrough: Text.LineStyle? = nil
+    ) {
+        renderer().render(list(.text(TextDraw(
+            string: string,
+            frame: Rect(x: 4, y: 4, width: 92, height: 92),
+            font: .system(size: size),
+            color: .init(red: 0, green: 0, blue: 0),
+            wraps: false,
+            letterSpacing: letterSpacing,
+            lineSpacing: lineSpacing,
+            underline: underline,
+            strikethrough: strikethrough
+        ))))
+    }
+
+    @Test func letterSpacingSpreadsTheGlyphs() {
+        drawText("Hello")
+        let plain = inkColumns(rows: 0..<100)
+        drawText("Hello", letterSpacing: 4)
+        let spaced = inkColumns(rows: 0..<100)
+        guard let plainFirst = plain.first, let plainLast = plain.last, let spacedFirst = spaced.first, let spacedLast = spaced.last else {
+            Issue.record("nothing drawn")
+            return
+        }
+        #expect(spacedFirst == plainFirst)
+        // Four gaps between five characters, 4 points each.
+        #expect(abs((spacedLast - spacedFirst) - (plainLast - plainFirst) - 16) <= 1)
+    }
+
+    @Test func lineSpacingMovesTheLaterLinesDown() {
+        drawText("one\ntwo", size: 14)
+        let plain = inkRows()
+        drawText("one\ntwo", size: 14, lineSpacing: 12)
+        let spaced = inkRows()
+        #expect(spaced.first == plain.first)
+        #expect(spaced.last.map { $0 - (plain.last ?? 0) } == 12)
+    }
+
+    @Test func underlineDrawsUnderTheBaseline() {
+        let font = Font.system(size: 20)
+        let baseline = 4 + TextMeasurer.lineMetrics(for: font).ascent
+        let lines = TextMeasurer.decorationMetrics(for: font)
+        let row = Int(baseline + lines.underline)
+        drawText("Hi")
+        let glyphs = inkColumns(rows: 0..<100)
+        #expect(inkColumns(rows: row..<(row + 1)).isEmpty)
+        drawText("Hi", underline: .single)
+        let underline = inkColumns(rows: row..<(row + 1))
+        // Under the whole word, gaps included.
+        #expect(underline.count >= (glyphs.last ?? 0) - (glyphs.first ?? 0) - 2)
+    }
+
+    @Test func strikethroughCrossesTheMiddle() {
+        let font = Font.system(size: 20)
+        let baseline = 4 + TextMeasurer.lineMetrics(for: font).ascent
+        let row = Int(baseline + TextMeasurer.decorationMetrics(for: font).strikethrough)
+        drawText("Hi")
+        let plain = inkColumns(rows: row..<(row + 1)).count
+        drawText("Hi", strikethrough: .single)
+        let struck = inkColumns(rows: row..<(row + 1)).count
+        #expect(struck > plain + 5)
+    }
+
+    @Test func aDashedLineHasGaps() {
+        let font = Font.system(size: 20)
+        let baseline = 4 + TextMeasurer.lineMetrics(for: font).ascent
+        let row = Int(baseline + TextMeasurer.decorationMetrics(for: font).underline)
+        drawText("Hello", underline: .single)
+        let solid = inkColumns(rows: row..<(row + 1))
+        drawText("Hello", underline: Text.LineStyle(pattern: .dash))
+        let dashed = inkColumns(rows: row..<(row + 1))
+        #expect(!dashed.isEmpty)
+        #expect(dashed.count < solid.count)
+        #expect(dashed.first == solid.first)
+    }
+
+    @Test func aLineInItsOwnColor() {
+        let font = Font.system(size: 20)
+        let baseline = 4 + TextMeasurer.lineMetrics(for: font).ascent
+        let row = Int(baseline + TextMeasurer.decorationMetrics(for: font).underline)
+        drawText("Hi", underline: Text.LineStyle(color: .init(red: 1, green: 0, blue: 0)))
+        guard let column = inkColumns(rows: row..<(row + 1)).dropFirst(2).first else {
+            Issue.record("no underline")
+            return
+        }
+        let red = pixel(column, row)
+        #expect(red.x > 200 && red.y < 40 && red.z < 40)
+    }
+
     @Test func packsListsAtTheirOffsets() {
         let square = list(rect(Rect(x: 0, y: 0, width: 10, height: 10)))
         renderer().render(packed: [(square, 0, 0), (square, 50, 60)])

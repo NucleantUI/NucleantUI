@@ -3,6 +3,8 @@
 //  NucleantUI
 //
 
+import Foundation
+
 /// A view that displays one or more lines of text.
 ///
 /// ```swift
@@ -14,14 +16,24 @@
 public struct Text {
     public let content: String
 
-    /// Set by `.font(_:)` on the `Text` itself; `nil` inherits from the
-    /// environment, which is what `.font(_:)` applied further up sets.
+    // What the text's own modifiers set; `nil` inherits from the
+    // environment, which is what the same modifier on a view around it
+    // sets. Each is set by the modifier nearest the text, as in SwiftUI:
+    // `Text("a").font(.title).font(.body)` is in the title font, and one
+    // further out only fills in what is still unset.
     var explicitFont: Font?
     var explicitStyle: ShapeStyle?
     var explicitWeight: FontWeight?
     var isItalic = false
     var alignment: TextAlignment?
     var explicitLineLimit: Int??
+    var explicitKerning: Double?
+    var explicitTracking: Double?
+    var explicitBaselineOffset: Double?
+    /// `.some(nil)` when turned off on the text itself, over a line asked
+    /// for by a view around it.
+    var explicitUnderline: Text.LineStyle??
+    var explicitStrikethrough: Text.LineStyle??
 
     public init(_ content: String, _viewID: ViewID = #viewID) {
         self.content = content
@@ -39,25 +51,25 @@ public struct Text {
 extension Text {
     public func font(_ font: Font) -> Text {
         var copy = self
-        copy.explicitFont = font
+        if copy.explicitFont == nil { copy.explicitFont = font }
         return copy
     }
 
     public func foregroundColor(_ color: Color) -> Text {
         var copy = self
-        copy.explicitStyle = .color(color)
+        if copy.explicitStyle == nil { copy.explicitStyle = .color(color) }
         return copy
     }
 
     public func foregroundStyle(_ style: ShapeStyle) -> Text {
         var copy = self
-        copy.explicitStyle = style
+        if copy.explicitStyle == nil { copy.explicitStyle = style }
         return copy
     }
 
     public func fontWeight(_ weight: FontWeight) -> Text {
         var copy = self
-        copy.explicitWeight = weight
+        if copy.explicitWeight == nil { copy.explicitWeight = weight }
         return copy
     }
 
@@ -71,13 +83,79 @@ extension Text {
 
     public func multilineTextAlignment(_ alignment: TextAlignment) -> Text {
         var copy = self
-        copy.alignment = alignment
+        if copy.alignment == nil { copy.alignment = alignment }
         return copy
     }
 
     public func lineLimit(_ limit: Int?) -> Text {
         var copy = self
-        copy.explicitLineLimit = .some(limit)
+        if copy.explicitLineLimit == nil { copy.explicitLineLimit = .some(limit) }
+        return copy
+    }
+
+    /// Moves the characters apart by `kerning` points after each one, or
+    /// closer together when negative. 0 is the font's own spacing. A text
+    /// with both kerning and tracking uses the tracking.
+    public func kerning(_ kerning: Double) -> Text {
+        var copy = self
+        if copy.explicitKerning == nil { copy.explicitKerning = kerning }
+        return copy
+    }
+
+    /// Adds `tracking` points after every character, or takes them away
+    /// when negative. 0 is the font's own spacing. A text with both kerning
+    /// and tracking uses the tracking.
+    public func tracking(_ tracking: Double) -> Text {
+        var copy = self
+        if copy.explicitTracking == nil { copy.explicitTracking = tracking }
+        return copy
+    }
+
+    /// Moves the text up from its baseline by `baselineOffset` points, or
+    /// down when negative. The text's box grows to keep it inside.
+    public func baselineOffset(_ baselineOffset: Double) -> Text {
+        var copy = self
+        if copy.explicitBaselineOffset == nil { copy.explicitBaselineOffset = baselineOffset }
+        return copy
+    }
+
+    /// A solid line along the baseline, in `color` or, when that is `nil`,
+    /// in the text's own color.
+    public func underline(_ isActive: Bool = true, color: Color? = nil) -> Text {
+        var copy = self
+        if copy.explicitUnderline == nil {
+            copy.explicitUnderline = .some(isActive ? Text.LineStyle(pattern: .solid, color: color) : nil)
+        }
+        return copy
+    }
+
+    /// A line along the baseline in `pattern`, in `color` or, when that is
+    /// `nil`, in the text's own color.
+    public func underline(_ isActive: Bool = true, pattern: Text.LineStyle.Pattern, color: Color? = nil) -> Text {
+        var copy = self
+        if copy.explicitUnderline == nil {
+            copy.explicitUnderline = .some(isActive ? Text.LineStyle(pattern: pattern, color: color) : nil)
+        }
+        return copy
+    }
+
+    /// A solid line through the middle of the text, in `color` or, when that
+    /// is `nil`, in the text's own color.
+    public func strikethrough(_ isActive: Bool = true, color: Color? = nil) -> Text {
+        var copy = self
+        if copy.explicitStrikethrough == nil {
+            copy.explicitStrikethrough = .some(isActive ? Text.LineStyle(pattern: .solid, color: color) : nil)
+        }
+        return copy
+    }
+
+    /// A line through the middle of the text in `pattern`, in `color` or,
+    /// when that is `nil`, in the text's own color.
+    public func strikethrough(_ isActive: Bool = true, pattern: Text.LineStyle.Pattern, color: Color? = nil) -> Text {
+        var copy = self
+        if copy.explicitStrikethrough == nil {
+            copy.explicitStrikethrough = .some(isActive ? Text.LineStyle(pattern: pattern, color: color) : nil)
+        }
         return copy
     }
 }
@@ -93,17 +171,44 @@ extension Text {
 
 extension Text: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        var font = explicitFont ?? context.environment.font
+        let environment = context.environment
+        var font = explicitFont ?? environment.font
         if let explicitWeight { font.weight = explicitWeight }
         if isItalic { font.isItalic = true }
 
-        let style = explicitStyle ?? context.environment.foregroundStyle
-        return ViewNode(content: TextContent(
-            string: content,
+        // The case is changed before anything is measured, in the
+        // environment's language: "straße" is "STRASSE", and in Turkish
+        // "istanbul" is "İSTANBUL".
+        let string: String
+        switch environment.textCase {
+        case .uppercase?: string = content.uppercased(with: environment.locale)
+        case .lowercase?: string = content.lowercased(with: environment.locale)
+        case nil: string = content
+        }
+
+        let style = explicitStyle ?? environment.foregroundStyle
+        let tracking = explicitTracking ?? environment.defaultTracking
+        let kerning = explicitKerning ?? environment.defaultKerning
+        let input = TextLayoutInput(
+            string: string,
             font: font,
+            letterSpacing: tracking ?? kerning ?? 0,
+            baselineOffset: explicitBaselineOffset ?? environment.defaultBaselineOffset ?? 0,
+            paragraph: TextParagraphStyle(
+                lineLimit: explicitLineLimit ?? environment.lineLimit,
+                reservedLines: environment.reservedLineCount,
+                truncationMode: environment.truncationMode,
+                lineSpacing: environment.lineSpacing,
+                allowsTightening: environment.allowsTightening,
+                minimumScaleFactor: environment.minimumScaleFactor
+            )
+        )
+        return ViewNode(content: TextContent(
+            input: input,
             style: style,
-            alignment: alignment ?? context.environment.multilineTextAlignment,
-            lineLimit: explicitLineLimit ?? context.environment.lineLimit,
+            alignment: alignment ?? environment.multilineTextAlignment,
+            underline: explicitUnderline ?? environment.defaultUnderline,
+            strikethrough: explicitStrikethrough ?? environment.defaultStrikethrough,
             animatedColor: context.animatedValue(.textColor, style.animatableVector)
         ))
     }
