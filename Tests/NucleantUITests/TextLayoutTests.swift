@@ -225,6 +225,17 @@ struct TextLayoutTests {
         #expect(version.first == "v1/2")
     }
 
+    @Test func aWidthOfZeroIsAsNarrowAsTheTextGoes() {
+        // As SwiftUI's: how a stack learns how far a text can shrink.
+        let laid = layout("Hi there", width: 0)
+        #expect(laid.lines == ["H", "i", "t", "h", "e", "r", "e"])
+        #expect(laid.size.width == 0)
+        #expect(laid.size.height == 7 * Self.lineHeight)
+        // No width, or an infinite one, is still a line a paragraph.
+        #expect(layout("Hi there", width: nil).lines == ["Hi there"])
+        #expect(layout("Hi there", width: .infinity).lines == ["Hi there"])
+    }
+
     @Test func aWideWordIsKeptWholeWithoutAWidth() {
         let word = "Supercalifragilisticexpialidocious"
         #expect(layout(word, width: nil).lines == [word])

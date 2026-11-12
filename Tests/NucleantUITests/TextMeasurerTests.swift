@@ -58,7 +58,10 @@ struct TextMeasurerTests {
             guard let lineLimit, lineLimit > 0, lines.count > lineLimit else { return lines }
             return Array(lines.prefix(lineLimit))
         }
-        guard let maxWidth, maxWidth > 0 else { return limited(paragraphs) }
+        // No width, or an infinite one, is a line a paragraph; 0 is as
+        // narrow as the text goes.
+        guard let proposed = maxWidth, proposed < .infinity else { return limited(paragraphs) }
+        let room = max(proposed, 0)
         func width(_ string: String) -> Double { TextMeasurer.width(of: string, font: font) }
 
         var lines: [String] = []
@@ -76,7 +79,7 @@ struct TextMeasurerTests {
         /// The word's characters from `offset` on, starting a line.
         func start(_ characters: [Character], from offset: Int, places: [Int]) {
             let rest = String(characters[offset...])
-            if width(rest) <= maxWidth {
+            if width(rest) <= room {
                 current = rest
                 currentWidth = width(rest)
                 return
@@ -85,12 +88,12 @@ struct TextMeasurerTests {
             var cut: Int?
             for index in offset..<characters.count {
                 let character = String(characters[index])
-                if !current.isEmpty && width(current + character) > maxWidth, let at = cut {
+                if !current.isEmpty && width(current + character) > room, let at = cut {
                     lines.append(String(current.prefix(at)))
                     current = String(current.dropFirst(at))
                     cut = nil
                 }
-                if !current.isEmpty && width(current + character) > maxWidth {
+                if !current.isEmpty && width(current + character) > room {
                     lines.append(current)
                     current = ""
                 }
@@ -103,7 +106,7 @@ struct TextMeasurerTests {
         /// The word after a space on a line that has something on it.
         func append(_ word: Substring) {
             let piece = " " + word
-            if currentWidth + width(piece) <= maxWidth {
+            if currentWidth + width(piece) <= room {
                 current += piece
                 currentWidth += width(piece)
                 return
@@ -112,7 +115,7 @@ struct TextMeasurerTests {
             let places = places(in: characters)
             var fitting: Int?
             for place in places {
-                guard currentWidth + width(" " + String(characters[..<place])) <= maxWidth else { break }
+                guard currentWidth + width(" " + String(characters[..<place])) <= room else { break }
                 fitting = place
             }
             if let fitting {
@@ -185,7 +188,7 @@ struct TextMeasurerTests {
                         let input = TextLayoutInput(string: string, font: font, paragraph: TextParagraphStyle(lineLimit: lineLimit))
                         let layout = TextMeasurer.layout(input, proposal: ProposedSize(width: width, height: nil))
                         let all = Self.referenceWrap(string, font: font, maxWidth: width, lineLimit: nil)
-                        let room = width.flatMap { $0 > 0 ? $0 : nil } ?? .infinity
+                        let room = width.map { max($0, 0) } ?? .infinity
                         #expect(layout.size.height == lineHeight * Double(layout.lines.count), context)
 
                         let limit = lineLimit.map { max($0, 1) }

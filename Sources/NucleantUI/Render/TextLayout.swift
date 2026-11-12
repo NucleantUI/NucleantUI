@@ -79,10 +79,10 @@ extension TextMeasurer {
         /// words then break the same way anywhere in between. The lines a
         /// height has room for, and a tail cut, follow the same rule.
         ///
-        /// A width of 0 or none isn't broken at all. Its lines are whole
-        /// paragraphs, each measured in one sum, where breaking adds a line
-        /// up word by word and can come out a hair wider; a layout made with
-        /// one answers only that same width, and none other answers it.
+        /// No width, or an infinite one, isn't broken at all. Its lines are
+        /// whole paragraphs, each measured in one sum, where breaking adds a
+        /// line up word by word and can come out a hair wider; a layout made
+        /// with one answers only that same width, and none other answers it.
         func answers(_ other: ProposedSize) -> Bool {
             guard layout.holdsBetween else { return other == proposal }
             guard Self.breaks(proposal.width), Self.breaks(other.width) else {
@@ -94,7 +94,7 @@ extension TextMeasurer {
         }
 
         private static func breaks(_ width: Double?) -> Bool {
-            width.map { $0 > 0 } ?? false
+            width.map { $0 < .infinity } ?? false
         }
 
         /// An unspecified axis is an unbounded one.
@@ -203,13 +203,15 @@ extension TextMeasurer {
         )
 
         // The lines up to one past the last shown: enough to tell whether
-        // any are left out. A width of 0 or none breaks only at line feeds.
+        // any are left out. No width, or an infinite one, breaks only at
+        // line feeds. A width of 0 breaks as narrow as the text goes, which
+        // is how a stack learns how far a text can shrink, as in SwiftUI.
         let paragraphs = Self.paragraphs(of: input.string)
         var lines: [(paragraph: Int, range: Range<String.Index>)] = []
         for (index, text) in paragraphs.enumerated() {
             guard lines.count <= shown else { break }
-            if let maxWidth, maxWidth > 0 {
-                breakLines(text, face: face, maxWidth: maxWidth) { range in
+            if let maxWidth, maxWidth < .infinity {
+                breakLines(text, face: face, maxWidth: max(maxWidth, 0)) { range in
                     if lines.count <= shown { lines.append((index, range)) }
                 }
             } else {
@@ -232,7 +234,7 @@ extension TextMeasurer {
         let last = lines[lastShown]
         let lastText = paragraphs[last.paragraph][last.range]
         let lastWidth = Self.width(of: lastText, face: face)
-        let room = maxWidth.flatMap { $0 > 0 ? $0 : nil } ?? .infinity
+        let room = maxWidth.map { max($0, 0) } ?? .infinity
         // A text left as long as it is keeps a character too wide for its
         // line, as every line before it does; one held to a line count or a
         // height cuts it.
@@ -274,7 +276,7 @@ extension TextMeasurer {
         let count = Double(drawn.count)
         layout.lines = drawn
         layout.size = Size(
-            width: maxWidth.map { min(widest, $0) } ?? widest,
+            width: maxWidth.map { min(widest, max($0, 0)) } ?? widest,
             height: lineHeight * count + lineSpacing * (count - 1)
         )
         return layout

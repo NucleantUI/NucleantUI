@@ -2,15 +2,15 @@
 //  StackContent.swift
 //  NucleantUI
 //
-//  The stack layout. Children are sized in flexibility order — least flexible
-//  first — and a group only ever sees what the stricter groups left behind:
-//  a `Spacer` gets leftovers, never a share. Within the content group each
-//  child is offered its ideal extent when all of them fit, and an equal share
-//  of what is left when they don't. That is what makes
-//  `HStack { Text("a"); Spacer(); Text("b") }` put the texts at their natural
-//  widths and give the rest to the spacer, rather than splitting the width
-//  three ways. A node's flexibility is that of what it wraps (a stack: its
-//  most flexible child), so a padded row of fixed frames is fixed too.
+//  The stack layout, sized the way SwiftUI's stacks are: children in order of
+//  flexibility — how far each stretches along the axis, from what it takes
+//  when offered nothing to what it takes when offered everything — the least
+//  flexible first, each offered an equal share of what the ones before it
+//  left. A fixed `.frame` takes its own size first; texts follow, the shorter
+//  first, so a row that fits puts each at its natural width, and one that
+//  doesn't squeezes the longest; a `Spacer`, stretching without end, comes
+//  last and gets what is left. `HStack { Text("a"); Spacer(); Text("b") }`
+//  puts the texts at their natural widths and the rest in the spacer.
 //
 
 struct StackContent: NodeContent {
@@ -39,11 +39,16 @@ struct StackContent: NodeContent {
         let children = node.layoutChildren
         guard !children.isEmpty else { return }
 
-        // A stack fills the rect it was given, so that is what its children are
-        // measured against — but each child is then *placed* with the very
-        // proposal it was measured under, which `layout` hands back.
-        let result = layout(ProposedSize(rect.size), children: children)
+        // Laid out again under the proposal the stack was sized by along its
+        // axis, as SwiftUI does, so each child gets the share it was measured
+        // with — the rect is the stack's own size, and a share of that can
+        // come out differently. Across the axis, the rect's extent when none
+        // was proposed. Each child is then placed with the very proposal it
+        // was measured under, which `layout` hands back.
         let crossAxis = axis.cross
+        var placing = proposal
+        placing[crossAxis] = proposal[crossAxis] ?? rect.size[crossAxis]
+        let result = layout(placing, children: children)
 
         // Extra room along the main axis when the children ended up smaller
         // than the rect (a stack of fixed-size views inside a bigger frame).
@@ -103,63 +108,26 @@ struct StackContent: NodeContent {
         let crossAxis = axis.cross
         let totalSpacing = resolvedSpacing * Double(children.count - 1)
 
-        // What's left for the children themselves. An unspecified main axis
-        // means nobody is constraining the stack, so each child sizes itself.
-        var remaining = proposal[axis].map { max(0, $0 - totalSpacing) }
-
         var sizes = [Size](repeating: .zero, count: children.count)
         var proposals = [ProposedSize](repeating: proposal, count: children.count)
-        var sized = [Bool](repeating: false, count: children.count)
 
-        // Least flexible first: a fixed `.frame` before a `Text` before a
-        // `Spacer`, so each group only sees what the stricter ones left behind.
-        for group in [LayoutPriorityClass.fixed, .content, .flexible] {
-            let members = children.indices.filter {
-                !sized[$0] && children[$0].flexibility(along: axis) == group
-            }
-
-            // Content children — text, mostly — are offered their ideal
-            // extent when all of those fit in what is left, so a row of
-            // labels and buttons that plainly fits never wraps one of them
-            // just because it came first and was handed an equal share.
-            // When they don't all fit, the equal share below decides who
-            // shrinks. A child whose ideal is unbounded (a colour, a shape)
-            // makes the sum infinite and lands in the same fallback.
-            var ideals: [Int: Double] = [:]
-            if group == .content, let remaining {
-                var hi = proposal
-                hi[axis] = .infinity
-                var sum = 0.0
-                for index in members {
-                    let ideal = children[index].sizeThatFits(hi)[axis]
-                    ideals[index] = ideal
-                    sum += ideal
-                }
-                if !(sum <= remaining) { ideals.removeAll() }
-            }
-
-            var unsizedInGroup = members.count
-            for index in members {
-                let child = children[index]
+        if var remaining = proposal[axis].map({ max(0, $0 - totalSpacing) }) {
+            // Least flexible first, each offered an equal share of what the
+            // ones before it left — not the whole of it, or the first child
+            // that takes all it is offered leaves nothing for the rest.
+            for (position, index) in fittingOrder(children, proposal: proposal).enumerated() {
                 var childProposal = proposal
-                if let ideal = ideals[index] {
-                    childProposal[axis] = ideal
-                } else if let remaining {
-                    // An equal share of what's left among the children still
-                    // to size *in this group* — not the whole thing, or the
-                    // first greedy child eats everything; and not a share
-                    // with the more flexible groups, which only ever get
-                    // what is left over, the way a `Spacer` does in SwiftUI.
-                    childProposal[axis] = remaining / Double(unsizedInGroup)
-                }
-                let size = child.sizeThatFits(childProposal)
+                childProposal[axis] = remaining / Double(children.count - position)
+                let size = children[index].sizeThatFits(childProposal)
                 sizes[index] = size
                 proposals[index] = childProposal
-                sized[index] = true
-                unsizedInGroup -= 1
-                if remaining != nil {
-                    remaining = max(0, remaining! - size[axis])
-                }
+                remaining = max(0, remaining - size[axis])
+            }
+        } else {
+            // Nobody constrains the stack along its axis, so each child
+            // sizes itself.
+            for (index, child) in children.enumerated() {
+                sizes[index] = child.sizeThatFits(proposal)
             }
         }
 
@@ -176,6 +144,37 @@ struct StackContent: NodeContent {
         if let limit = proposal[crossAxis] { total[crossAxis] = min(total[crossAxis], max(limit, 0)) }
 
         return LayoutResult(sizes: sizes, proposals: proposals, total: total)
+    }
+
+    /// The order the children are offered space in, as SwiftUI's stacks
+    /// offer it: the least flexible first. A child's flexibility is how far
+    /// it stretches along the axis, from its length when offered none to its
+    /// length when offered all there is; among those that stretch without
+    /// end, the one that needs more goes first. Ties keep the children's
+    /// own order.
+    private func fittingOrder(_ children: [ViewNode], proposal: ProposedSize) -> [Int] {
+        var least = proposal
+        least[axis] = 0
+        var most = proposal
+        most[axis] = .infinity
+        let ranges = children.map { child -> (min: Double, span: Double) in
+            let min = child.sizeThatFits(least)[axis]
+            return (min, child.sizeThatFits(most)[axis] - min)
+        }
+        func precedes(_ a: Int, _ b: Int) -> Bool {
+            guard ranges[a].span == ranges[b].span else { return ranges[a].span < ranges[b].span }
+            return ranges[a].span == .infinity && ranges[a].min > ranges[b].min
+        }
+        // An insertion sort: stable, and a stack's children are few.
+        var order = Array(children.indices)
+        for next in order.indices.dropFirst() {
+            var position = next
+            while position > 0, precedes(order[position], order[position - 1]) {
+                order.swapAt(position, position - 1)
+                position -= 1
+            }
+        }
+        return order
     }
 }
 

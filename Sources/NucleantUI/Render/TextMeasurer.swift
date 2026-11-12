@@ -184,18 +184,20 @@ enum TextMeasurer {
     }
 
     /// Break `string` into lines that fit `maxWidth`, at word boundaries where
-    /// possible. `maxWidth == nil` means one line, however long.
+    /// possible. `maxWidth == nil` or infinite means a line a paragraph,
+    /// however long; 0 means as narrow as the text goes.
     static func wrap(_ string: String, font: Font, maxWidth: Double?, lineLimit: Int?) -> [String] {
         let paragraphs = Self.paragraphs(of: string)
-        guard let maxWidth, maxWidth > 0 else {
+        guard let maxWidth, maxWidth < .infinity else {
             return limited(paragraphs, to: lineLimit)
         }
+        let room = max(maxWidth, 0)
 
         let face = Self.face(for: font)
         var lines: [String] = []
 
         for paragraph in paragraphs {
-            breakLines(paragraph, face: face, maxWidth: maxWidth) { line in
+            breakLines(paragraph, face: face, maxWidth: room) { line in
                 lines.append(String(paragraph[line]))
             }
         }
