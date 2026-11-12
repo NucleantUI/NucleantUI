@@ -6,9 +6,12 @@
 //  agree. Widths come from summing per-glyph advances
 //  (`tvg_text_get_glyph_metrics`) rather than from a paint's AABB: the AABB is
 //  only valid once a canvas has updated the paint, and layout runs before
-//  anything is on a canvas.
+//  anything is on a canvas. A character the face has no glyph for is
+//  measured in the face it falls back to (`FontFallback`), which is the face
+//  it draws in.
 //
 
+import NucleantSkia
 import NucleantThorVG
 
 @MainActor
@@ -18,6 +21,7 @@ enum TextMeasurer {
     private struct FaceKey: Hashable {
         let family: String?
         let size: Double
+        let bold: Bool
         let italic: Bool
         /// Points added to every advance: kerning or tracking. A face with
         /// spacing has its own table, so every width summed from it —
@@ -49,7 +53,13 @@ enum TextMeasurer {
 
     static func face(for font: Font, spacing: Double = 0) -> Int {
         if PerfTrace.isEnabled { PerfTrace.textMeasures += 1 }
-        let key = FaceKey(family: FontRegistry.resolve(font), size: font.size, italic: font.isItalic, spacing: spacing)
+        let key = FaceKey(
+            family: FontRegistry.resolve(font),
+            size: font.size,
+            bold: font.weight.isBoldFace,
+            italic: font.isItalic,
+            spacing: spacing
+        )
         if let index = faceIndices[key] { return index }
         faces.append(Face(key: key))
         faceIndices[key] = faces.count - 1
@@ -115,6 +125,14 @@ enum TextMeasurer {
     }
 
     private static func measureAdvance(_ character: Character, face: Int) -> Double {
+        let key = faces[face].key
+        // A character the face has no glyph for draws in the face the
+        // platform falls back to for it, and is as wide as it is there.
+        if let fallback = FontFallback.shared.font(
+            for: character, family: key.family, size: key.size, bold: key.bold, italic: key.italic
+        ) {
+            return Double(fallback.measureText(String(character))) + key.spacing
+        }
         // Fallback ratio for a face ThorVG can't measure — roughly the average
         // advance of a proportional Latin face at a given em size.
         var width = faces[face].key.size * 0.5
