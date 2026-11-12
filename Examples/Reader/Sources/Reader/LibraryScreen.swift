@@ -55,17 +55,23 @@ struct ContinueCard {
             HStack(spacing: 16) {
                 Cover(book: book, width: 64)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("CONTINUE READING")
+                    Text("Continue Reading")
                         .font(.system(size: 11, weight: .semibold))
+                        .tracking(1.2)
                         .foregroundColor(Theme.accent)
+                        .textCase(.uppercase)
                     Text(book.title)
                         .font(.system(size: 20, weight: .bold, design: .serif))
                         .foregroundStyle(Theme.ink)
                         .lineLimit(2)
+                    // Cut in the middle, so a long chapter title still
+                    // shows where in the book it is: "The Pool… · Chapter
+                    // 2 of 2".
                     Text(book.place(ofChapter: chapter))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                     ChapterProgress(count: book.chapters.count, current: chapter)
                         .padding(.top, 4)
                 }
@@ -87,14 +93,22 @@ struct BookRow {
         HStack(spacing: 14) {
             Cover(book: book, width: 44)
             VStack(alignment: .leading, spacing: 3) {
+                // A title a little too long draws its letters closer
+                // rather than losing its end.
                 Text(book.title)
                     .font(.system(size: 16, weight: .semibold, design: .serif))
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
+                    .allowsTightening(true)
                 Text("\(book.author) · \(book.year)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                // What the book is, in two lines, the second cut short.
+                Text(book.blurb)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
                 Text(statusLine)
                     .font(.caption)
                     .foregroundStyle(status == .new ? .secondary : .color(Theme.accent))

@@ -35,10 +35,15 @@ struct BookScreen {
             VStack(spacing: 10) {
                 Cover(book: book, width: 120)
                     .padding(.bottom, 10)
+                // Display type set a little tighter, and on two lines at
+                // most, shrinking rather than cut.
                 Text(book.title)
                     .font(.system(size: 26, weight: .bold, design: .serif))
+                    .kerning(-0.4)
                     .foregroundColor(book.coverInk)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
                 Text("\(book.author) · \(book.year)")
                     .font(.subheadline)
                     .foregroundColor(book.coverInk.opacity(0.75))
@@ -58,7 +63,12 @@ struct BookScreen {
     }
 
     var backButton: some View {
-        Text("‹ Library")
+        // The chevron sits low beside the word; raised a point, it lines
+        // up with the middle of the capitals.
+        HStack(spacing: 4) {
+            Text("‹").baselineOffset(1)
+            Text("Library")
+        }
             .font(.system(size: 14, weight: .semibold))
             .foregroundColor(book.coverInk)
             .padding(horizontal: 12, vertical: 6)
@@ -97,6 +107,7 @@ struct BookScreen {
                             minutes: book.chapters[index].minutes,
                             secondsRead: library.secondsRead(book, chapter: index),
                             isOpen: library.status(of: book) == .reading(chapter: index),
+                            isRead: isRead(chapter: index),
                             isLast: index == book.chapters.count - 1
                         )
                     }
@@ -106,6 +117,16 @@ struct BookScreen {
             .cornerRadius(10)
         }
         .padding(20)
+    }
+
+    /// Behind the reader: before the chapter the book was left at, or any
+    /// chapter of a finished book.
+    func isRead(chapter index: Int) -> Bool {
+        switch library.status(of: book) {
+        case .new:                  false
+        case .reading(let chapter): index < chapter
+        case .finished:             true
+        }
     }
 
     var readTitle: String {
@@ -126,6 +147,8 @@ struct ChapterRow {
     let secondsRead: Int
     /// The chapter the book was left at.
     let isOpen: Bool
+    /// Read already: crossed off the contents.
+    let isRead: Bool
     let isLast: Bool
 
     var body: some View {
@@ -136,7 +159,8 @@ struct ChapterRow {
                 .frame(width: 22, alignment: .leading)
             Text(name)
                 .font(.system(size: 15, design: .serif))
-                .foregroundStyle(Theme.ink)
+                .strikethrough(isRead, color: Theme.accent.opacity(0.7))
+                .foregroundStyle(isRead ? Theme.faint : Theme.ink)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if isOpen {

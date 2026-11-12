@@ -14,9 +14,15 @@
 //  on every turn, and a `.task(id: chapter)` counts the seconds the chapter
 //  is open — restarted for each new chapter, so the seconds go to the one on
 //  screen, and cancelled when the screen is popped. A change of text size
-//  shows the size over the page until the buttons have been left alone for
-//  a moment: `.onChange` brings it up, and a `.task(id:)` on the size, which
-//  starts over with every press, takes it down.
+//  or line spacing shows both over the page until the buttons have been
+//  left alone for a moment: `.onChange` brings them up, and a `.task(id:)`
+//  on them, which starts over with every press, takes them down.
+//
+//  The page is set like a book's: the chapter's number in small capitals,
+//  upper-cased with `.textCase(.uppercase)` and spaced with `.tracking`;
+//  its paragraphs as far apart line to line as the reader chose
+//  (`.lineSpacing`, ¶ in the controls); the way on to the next chapter an
+//  underlined link (`.underline()` on the button, which its label takes).
 //
 
 import NucleantUI
@@ -44,7 +50,12 @@ struct ReadingScreen {
             ForEach([chapter], id: \.self) { index in
                 ScrollView(.vertical) {
                     VStack(spacing: 0) {
-                        ChapterPage(book: book, index: index, textSize: library.textSize)
+                        ChapterPage(
+                            book: book,
+                            index: index,
+                            textSize: library.textSize,
+                            lineSpacing: library.lineSpacing.points(at: library.textSize)
+                        )
                             .onTapGesture { isImmersive.toggle() }
                         endOfChapter(index)
                     }
@@ -53,7 +64,7 @@ struct ReadingScreen {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .top) {
                 if isShowingTextSize {
-                    Text("\(Int(library.textSize)) pt")
+                    Text(textSettings)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.ink)
                         .padding(horizontal: 14, vertical: 6)
@@ -87,17 +98,23 @@ struct ReadingScreen {
                 library.recordSecond(of: book, chapter: chapter)
             }
         }
-        .onChange(of: library.textSize) {
+        .onChange(of: textSettings) {
             withAnimation(.easeOut) { isShowingTextSize = true }
         }
-        .task(id: library.textSize) {
+        .task(id: textSettings) {
             try? await Task.sleep(for: .seconds(1.2))
             guard !Task.isCancelled else { return }
             withAnimation(.easeOut) { isShowingTextSize = false }
         }
     }
 
-    /// Under the page: the previous and next chapter, the text size.
+    /// "21 pt · Relaxed lines": what the text-size and spacing buttons set.
+    var textSettings: String {
+        "\(Int(library.textSize)) pt · \(library.lineSpacing.name) lines"
+    }
+
+    /// Under the page: the previous and next chapter, the text size and the
+    /// line spacing.
     var controls: some View {
         HStack(spacing: 8) {
             Button("‹ Previous") { turn(to: chapter - 1) }
@@ -123,6 +140,8 @@ struct ReadingScreen {
             Button("A+") { library.enlargeText() }
                 .tint(Theme.control)
                 .disabled(!library.canEnlargeText)
+            Button("¶") { library.changeLineSpacing() }
+                .tint(Theme.control)
 
             Button("Next ›") { turn(to: chapter + 1) }
                 .tint(Theme.accent)
@@ -147,6 +166,7 @@ struct ReadingScreen {
                     .foregroundStyle(Theme.faint)
                 Button("\(book.name(ofChapter: index + 1)) ›") { turn(to: index + 1) }
                     .tint(Theme.accent)
+                    .underline()
             } else {
                 Text("End of the sample")
                     .font(.system(size: 15, design: .serif).italic())
@@ -190,12 +210,16 @@ struct ChapterPage {
     let book: Book
     let index: Int
     let textSize: Double
+    /// Between the lines of each paragraph, in points.
+    let lineSpacing: Double
 
     var body: some View {
         VStack(alignment: .leading, spacing: textSize * 0.8) {
-            Text("CHAPTER \(index + 1)")
+            Text("Chapter \(index + 1)")
                 .font(.system(size: 12, weight: .semibold))
+                .tracking(1.6)
                 .foregroundStyle(Theme.faint)
+                .textCase(.uppercase)
             if let title = book.chapters[index].title {
                 Text(title)
                     .font(.system(size: textSize * 1.5, weight: .bold, design: .serif))
@@ -205,6 +229,7 @@ struct ChapterPage {
                 Text(book.chapters[index].paragraphs[paragraph])
                     .font(.system(size: textSize, design: .serif))
                     .foregroundStyle(Theme.ink)
+                    .lineSpacing(lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
