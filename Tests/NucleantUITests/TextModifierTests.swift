@@ -177,6 +177,17 @@ struct TextModifierTests {
         }
     }
 
+    @Test func aParagraphCutAfterSeveralLinesEndsInAnEllipsis() {
+        // #28: a limit of two or more lines ends its last line in "…", as
+        // a limit of one does, rather than cutting the text after it.
+        let summary = "A summary that needs more than two lines to say what it has to say in full."
+        let draw = text(Text(summary).lineLimit(2).frame(width: 200, alignment: .leading))
+        let lines = draw?.string.split(separator: "\n") ?? []
+        #expect(lines.count == 2)
+        #expect(lines.first?.hasPrefix("A summary") == true)
+        #expect(lines.last?.hasSuffix("…") == true)
+    }
+
     @Test func aHeightLimitsTheLinesShown() {
         let draw = text(Text(Self.sentence).frame(width: 120, height: 2 * bodyLineHeight + 1))
         #expect(draw?.string.split(separator: "\n").count == 2)
