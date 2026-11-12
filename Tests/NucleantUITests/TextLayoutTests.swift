@@ -139,11 +139,95 @@ struct TextLayoutTests {
         #expect(layout("Short\n", width: 300, paragraph: TextParagraphStyle(lineLimit: 1)).lines == ["Short"])
     }
 
-    @Test func aWordTooLongIsCutOnlyWhenTheTextIsLimited() {
+    @Test func aWordTooLongBreaksBetweenCharacters() {
         let word = "Supercalifragilisticexpialidocious"
-        #expect(layout(word, width: 60).lines == [word])
-        let limited = layout(word, width: 60, paragraph: TextParagraphStyle(lineLimit: 1)).lines[0]
-        #expect(limited.hasSuffix("…") && width(limited) <= 60)
+        let lines = layout(word, width: 60).lines
+        #expect(lines.count > 1)
+        #expect(lines.joined() == word)
+        #expect(lines.allSatisfy { width($0) <= 60 })
+        // Each line but the last is as full as it can be.
+        for (line, next) in zip(lines, lines.dropFirst()) {
+            #expect(width(line + String(next.first!)) > 60, "\(line)")
+        }
+        // Limited to one line, it is cut instead.
+        let limited = layout(word, width: 60, paragraph: TextParagraphStyle(lineLimit: 1)).lines
+        #expect(limited.count == 1)
+        #expect(limited[0].hasSuffix("…") && width(limited[0]) <= 60)
+    }
+
+    @Test func aWordTooLongStartsItsOwnLine() {
+        // It isn't begun on the end of a line that already has a word.
+        let lines = layout("a Supercalifragilisticexpialidocious b", width: 60).lines
+        #expect(lines.first == "a")
+        #expect(lines.dropFirst().joined().hasPrefix("Supercalifragilisticexpialidocious"))
+        // Its last piece goes on with the words after it.
+        #expect(lines.last?.hasSuffix(" b") == true)
+    }
+
+    @Test func aBrokenWordIsCutOnItsLastLineShown() {
+        let word = "Supercalifragilisticexpialidocious"
+        let lines = layout(word, width: 60, paragraph: TextParagraphStyle(lineLimit: 2)).lines
+        #expect(lines.count == 2)
+        #expect(lines[1].hasSuffix("…"))
+        #expect(word.hasPrefix(lines[0] + String(lines[1].dropLast())))
+    }
+
+    @Test func aCharacterWiderThanTheLineStillGetsOne() {
+        #expect(layout("WWW", width: 2).lines == ["W", "W", "W"])
+    }
+
+    @Test func aWordBreaksAfterAHyphenOrASlash() {
+        // Each line holds as many pieces as fit.
+        let hyphenated = "well-known-identifier-name"
+        let lines = layout(hyphenated, width: width("well-known-") + 1).lines
+        #expect(lines.first == "well-known-")
+        #expect(lines.joined() == hyphenated)
+        let path = "path/to/some/file/name"
+        #expect(layout(path, width: width("path/to/") + 1).lines.first == "path/to/")
+        #expect(layout("one–two—three", width: width("one–two—") + 1).lines.first == "one–two—")
+    }
+
+    @Test func aWordAfterOthersBreaksAtItsHyphen() {
+        // Rather than move to the next line whole.
+        let lines = layout("the well-known name", width: width("the well-") + 1).lines
+        #expect(lines == ["the well-", "known", "name"])
+    }
+
+    @Test func theURLBreaksAfterItsSlashes() {
+        let url = "nucleantshowcase://category/sensors"
+        let lines = layout(url, width: width("nucleantshowcase://category") - 1).lines
+        #expect(lines == ["nucleantshowcase://", "category/sensors"])
+    }
+
+    @Test func placesAWordMayBreak() {
+        #expect(TextMeasurer.breaksAfter("-", before: "k"))
+        #expect(TextMeasurer.breaksAfter("/", before: "c"))
+        #expect(TextMeasurer.breaksAfter("\u{2013}", before: "t"))
+        #expect(TextMeasurer.breaksAfter("\u{2014}", before: "t"))
+        // Not before a digit, more of the same, or closing punctuation.
+        #expect(!TextMeasurer.breaksAfter("-", before: "3"))
+        #expect(!TextMeasurer.breaksAfter("/", before: "2"))
+        #expect(!TextMeasurer.breaksAfter("/", before: "/"))
+        #expect(!TextMeasurer.breaksAfter("-", before: "-"))
+        #expect(!TextMeasurer.breaksAfter("-", before: ")"))
+        #expect(!TextMeasurer.breaksAfter("/", before: "."))
+        // Nor after anything else.
+        for character: Character in ["_", ".", ":", "?", "&", "=", "a", "東"] {
+            #expect(!TextMeasurer.breaksAfter(character, before: "x"), "\(character)")
+        }
+    }
+
+    @Test func noBreakAfterAWordsFirstCharacterOrBeforeADigit() {
+        // "-flag" keeps its hyphen; "v1/2024" its slash.
+        let flag = layout("-flagname", width: width("-f") + 0.5).lines
+        #expect(flag.first == "-f")
+        let version = layout("v1/2024", width: width("v1/2") + 0.5).lines
+        #expect(version.first == "v1/2")
+    }
+
+    @Test func aWideWordIsKeptWholeWithoutAWidth() {
+        let word = "Supercalifragilisticexpialidocious"
+        #expect(layout(word, width: nil).lines == [word])
     }
 
     // MARK: - Indents
@@ -179,10 +263,16 @@ struct TextLayoutTests {
         #expect(wrapped.allSatisfy { !$0.hasPrefix(" ") })
     }
 
-    @Test func anIndentStaysWithTheFirstWord() {
-        // Too narrow for both: they overflow together rather than leave a
-        // line of spaces.
-        #expect(layout("        word and more", width: 40).lines.first == "        word")
+    @Test func anIndentTooWideForItsWordIsALineOfItsOwn() {
+        // As in SwiftUI: the line breaks after the indent, and the word
+        // starts the next one, broken only if it doesn't fit there either.
+        let lines = layout("        word and more", width: 40).lines
+        #expect(lines.first?.allSatisfy { $0 == " " } == true)
+        #expect(lines.dropFirst().first == "word")
+        #expect(String(lines.joined().filter { $0 != " " }) == "wordandmore")
+        let narrow = layout("        word", width: 1).lines
+        #expect(narrow.first?.allSatisfy { $0 == " " } == true)
+        #expect(Array(narrow.dropFirst()) == ["w", "o", "r", "d"])
         // A paragraph of spaces is kept as it is.
         #expect(layout("   ", width: 100).lines == ["   "])
         #expect(layout("a\n   \nb", width: 100).lines == ["a", "   ", "b"])

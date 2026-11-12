@@ -146,6 +146,37 @@ struct TextModifierTests {
         }
     }
 
+    @Test func aWordWiderThanItsBoxBreaksInsideIt() {
+        // Issue #27.
+        let url = "nucleantshowcase://category/sensors"
+        let font = Font.system(size: 15, design: .monospaced)
+        let draw = text(Text(url).font(font).frame(width: 200, alignment: .leading), size: Size(width: 600, height: 300))
+        let lines = draw?.string.components(separatedBy: "\n") ?? []
+        #expect(lines.count > 1)
+        #expect(lines.joined() == url)
+        #expect(lines.allSatisfy { TextMeasurer.width(of: $0, font: font) <= 200 })
+    }
+
+    @Test func squeezedLabelsStayInsideTheirShare() {
+        // Issue #27: three labels in a row too narrow for the first.
+        let row = HStack(spacing: 8) {
+            Text("Follow the system").font(.system(size: 15)).padding(horizontal: 10, vertical: 8)
+            Text("Light").font(.system(size: 15)).padding(horizontal: 10, vertical: 8)
+            Text("Dark").font(.system(size: 15)).padding(horizontal: 10, vertical: 8)
+        }
+        .frame(width: 200, alignment: .leading)
+        let draws = texts(row).sorted { $0.frame.minX < $1.frame.minX }
+        #expect(draws.count == 3)
+        for draw in draws {
+            for line in draw.string.components(separatedBy: "\n") {
+                #expect(TextMeasurer.width(of: line, font: draw.font) <= draw.frame.width + 0.5, "\(line) in \(draw.frame)")
+            }
+        }
+        for (left, right) in zip(draws, draws.dropFirst()) {
+            #expect(left.frame.maxX <= right.frame.minX, "\(left.string) runs into \(right.string)")
+        }
+    }
+
     @Test func aHeightLimitsTheLinesShown() {
         let draw = text(Text(Self.sentence).frame(width: 120, height: 2 * bodyLineHeight + 1))
         #expect(draw?.string.split(separator: "\n").count == 2)

@@ -33,6 +33,9 @@ struct TextMeasurerTests {
         "windows\r\nline ends\r\nand a lone\rcarriage return",
         "ascii then combining: cafe\u{301} and n\u{303}o, then more ascii",
         "\u{301}starts with a combining mark",
+        "nucleantshowcase://category/sensors",
+        "a well-known path/to/some/file — one–two—three, v1/2024/v2-3 and -flag",
+        "    indented, with a-very-long-hyphenated-identifier-that-wraps",
     ]
 
     static let widths: [Double?] = [nil, 0, 1, 24, 60, 97.5, 140, 220, 1000, .infinity]
@@ -40,8 +43,15 @@ struct TextMeasurerTests {
     static let fonts: [Font] = [.system(size: 13), .system(size: 22), .system(size: 15).italic()]
 
     /// The word-at-a-time algorithm: a string built per word, words joined
-    /// by single spaces. A paragraph's indent stays on its first line with
-    /// its first word; a line begun by a break drops the spaces before it.
+    /// by single spaces, each line measured whole. A paragraph's indent is
+    /// kept, on a line of its own when the first word doesn't fit after it;
+    /// a line begun by a break drops the spaces before it.
+    ///
+    /// A word that doesn't fit after a space ends the line after as many of
+    /// its pieces — up to each place it may break — as fit, or before it.
+    /// What then starts a line and is too wide for it is added a character
+    /// at a time, a line ended at the last place it may break before the
+    /// character that overflows it, or right before that character.
     static func referenceWrap(_ string: String, font: Font, maxWidth: Double?, lineLimit: Int?) -> [String] {
         let paragraphs = string.components(separatedBy: "\n")
         func limited(_ lines: [String]) -> [String] {
@@ -49,30 +59,94 @@ struct TextMeasurerTests {
             return Array(lines.prefix(lineLimit))
         }
         guard let maxWidth, maxWidth > 0 else { return limited(paragraphs) }
+        func width(_ string: String) -> Double { TextMeasurer.width(of: string, font: font) }
 
         var lines: [String] = []
+        var current = ""
+        var currentWidth = 0.0
+
+        /// How many of the word's characters come before each place it
+        /// may break.
+        func places(in characters: [Character]) -> [Int] {
+            (0..<max(0, characters.count - 1)).filter { index in
+                index > 0 && TextMeasurer.breaksAfter(characters[index], before: characters[index + 1])
+            }.map { $0 + 1 }
+        }
+
+        /// The word's characters from `offset` on, starting a line.
+        func start(_ characters: [Character], from offset: Int, places: [Int]) {
+            let rest = String(characters[offset...])
+            if width(rest) <= maxWidth {
+                current = rest
+                currentWidth = width(rest)
+                return
+            }
+            current = ""
+            var cut: Int?
+            for index in offset..<characters.count {
+                let character = String(characters[index])
+                if !current.isEmpty && width(current + character) > maxWidth, let at = cut {
+                    lines.append(String(current.prefix(at)))
+                    current = String(current.dropFirst(at))
+                    cut = nil
+                }
+                if !current.isEmpty && width(current + character) > maxWidth {
+                    lines.append(current)
+                    current = ""
+                }
+                current += character
+                if places.contains(index + 1) { cut = current.count }
+            }
+            currentWidth = width(current)
+        }
+
+        /// The word after a space on a line that has something on it.
+        func append(_ word: Substring) {
+            let piece = " " + word
+            if currentWidth + width(piece) <= maxWidth {
+                current += piece
+                currentWidth += width(piece)
+                return
+            }
+            let characters = Array(word)
+            let places = places(in: characters)
+            var fitting: Int?
+            for place in places {
+                guard currentWidth + width(" " + String(characters[..<place])) <= maxWidth else { break }
+                fitting = place
+            }
+            if let fitting {
+                lines.append(current + " " + String(characters[..<fitting]))
+                start(characters, from: fitting, places: places)
+            } else {
+                lines.append(current)
+                start(characters, from: 0, places: places)
+            }
+        }
+
         for paragraph in paragraphs {
-            var current = ""
-            var currentWidth = 0.0
+            current = ""
+            currentWidth = 0.0
             var inIndent = true
             for (index, word) in paragraph.split(separator: " ", omittingEmptySubsequences: false).enumerated() {
                 if inIndent {
-                    let piece = index == 0 ? String(word) : " " + word
-                    current += piece
-                    currentWidth += TextMeasurer.width(of: piece, font: font)
-                    inIndent = word.isEmpty
+                    if index == 0 {
+                        guard !word.isEmpty else { continue }
+                        inIndent = false
+                        start(Array(word), from: 0, places: places(in: Array(word)))
+                        continue
+                    }
+                    if word.isEmpty {
+                        current += " "
+                        currentWidth += width(" ")
+                        continue
+                    }
+                    inIndent = false
+                } else if current.isEmpty {
+                    start(Array(word), from: 0, places: places(in: Array(word)))
                     continue
                 }
-                let piece = current.isEmpty ? String(word) : " " + word
-                let pieceWidth = TextMeasurer.width(of: piece, font: font)
-                if !current.isEmpty && currentWidth + pieceWidth > maxWidth {
-                    lines.append(current)
-                    current = String(word)
-                    currentWidth = TextMeasurer.width(of: String(word), font: font)
-                } else {
-                    current += piece
-                    currentWidth += pieceWidth
-                }
+                append(word)
             }
             lines.append(current)
         }
@@ -204,15 +278,17 @@ struct TextMeasurerTests {
     }
 
     /// A wrapped line is never wider than the line it was wrapped to, unless
-    /// it is a single word that can't be broken.
+    /// it is one character, after the paragraph's indent, too wide on its
+    /// own — or a paragraph of nothing but spaces.
     @Test
-    func wrappedLinesFitUnlessOneWord() {
+    func wrappedLinesFitUnlessOneCharacter() {
         let font = Font.system(size: 14)
-        let string = Self.strings[1]
-        for width in [40.0, 80, 120, 200] {
-            for line in TextMeasurer.wrap(string, font: font, maxWidth: width, lineLimit: nil) {
-                let fits = TextMeasurer.width(of: line, font: font) <= width
-                #expect(fits || !line.contains(" "), "\(line.debugDescription) at \(width)")
+        for string in Self.strings {
+            for width in [4.0, 12, 24, 40, 80, 120, 200] {
+                for line in TextMeasurer.wrap(string, font: font, maxWidth: width, lineLimit: nil) {
+                    let fits = TextMeasurer.width(of: line, font: font) <= width
+                    #expect(fits || line.drop(while: { $0 == " " }).count <= 1, "\(line.debugDescription) at \(width)")
+                }
             }
         }
     }

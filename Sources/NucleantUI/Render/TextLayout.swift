@@ -233,8 +233,8 @@ extension TextMeasurer {
         let lastText = paragraphs[last.paragraph][last.range]
         let lastWidth = Self.width(of: lastText, face: face)
         let room = maxWidth.flatMap { $0 > 0 ? $0 : nil } ?? .infinity
-        // A text left as long as it is keeps a word too long for its line
-        // whole, as every line before it does; one held to a line count or a
+        // A text left as long as it is keeps a character too wide for its
+        // line, as every line before it does; one held to a line count or a
         // height cuts it.
         if isCut || (shown != .max && lastWidth > room) {
             let start = last.range.lowerBound
