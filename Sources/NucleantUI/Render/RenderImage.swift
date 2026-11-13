@@ -5,18 +5,15 @@
 //  A view tree rendered to a bitmap, on the CPU — SwiftUI's `ImageRenderer`,
 //  as a function.
 //
-//  No engine, no window, no GPU: the tree is laid out by `OffscreenRender`
-//  and the display list is rasterized by a ThorVG software canvas straight
-//  into a `RasterImage`'s own buffer. ThorVG's `ARGB8888` is exactly
-//  `RasterImage`'s contract — premultiplied, row-major from the top-left — so
-//  nothing is converted on the way out.
+//  No window and no engine: the tree is laid out by `OffscreenRender`, and
+//  the display list is drawn on the GPU by Skia, through the same
+//  `SkiaDisplayRenderer` the window uses, on a windowless Vulkan device of
+//  its own (`OffscreenGPU`), then read back.
 //
-//  Being headless is the point: this path runs in a test target, on every
-//  platform, before any window exists. `RenderTexture` is its GPU sibling,
-//  for pixels a shader has to sample.
+//  Needing no window is the point: this runs in a test target and before
+//  any window exists. `RenderTexture` is its sibling for pixels that stay
+//  on the GPU, for a shader to sample.
 //
-
-import NucleantThorVG
 
 /// `content` laid out at `size` points and rasterized at `scale` pixels per
 /// point.
@@ -80,55 +77,18 @@ extension View {
     }
 }
 
-/// The display list → pixels step, on a ThorVG software canvas.
+/// The display list → pixels step, on the GPU.
 @MainActor
 enum OffscreenRaster {
 
-    /// `list` (in point coordinates, origin at the top-left) rasterized into
-    /// an image `size × scale` pixels.
+    /// `list` (in point coordinates, origin at the top-left) drawn into an
+    /// image `size × scale` pixels. Transparent when there is no GPU to draw
+    /// on, which `OffscreenGPU` reports.
     static func image(of list: DisplayList, size: Size, scale: Double) -> RasterImage {
         let width = max(0, Int((size.width * scale).rounded()))
         let height = max(0, Int((size.height * scale).rounded()))
         guard width > 0, height > 0 else { return RasterImage(width: 0, height: 0, pixels: []) }
-
-        // Before the canvas: `tvg_swcanvas_create` needs the engine up, and
-        // `ThorDisplayRenderer`'s own call comes too late for it.
-        ThorEngine.ensureInitialized()
-
-        // ThorVG holds this pointer for as long as it is the canvas target,
-        // so it is allocated rather than a local array's storage, and freed
-        // only after the canvas is destroyed.
-        let pixels = UnsafeMutableBufferPointer<UInt32>.allocate(capacity: width * height)
-        defer { pixels.deallocate() }
-        pixels.initialize(repeating: 0)
-
-        guard let canvas = tvg_swcanvas_create(TVG_ENGINE_OPTION_DEFAULT) else {
-            nucleantLogError("NucleantUI: renderImage — no ThorVG software canvas\n")
-            return RasterImage(width: width, height: height, pixels: Array(pixels))
-        }
-        defer { _ = tvg_canvas_destroy(canvas) }
-
-        let target = tvg_swcanvas_set_target(
-            canvas,
-            pixels.baseAddress,
-            UInt32(width),          // stride, in pixels: tightly packed
-            UInt32(width),
-            UInt32(height),
-            TVG_COLORSPACE_ARGB8888 // premultiplied ARGB — `RasterImage`'s own
-        )
-        guard target == TVG_RESULT_SUCCESS else {
-            nucleantLogError("NucleantUI: renderImage — ThorVG target \(width)x\(height) refused (\(target))\n")
-            return RasterImage(width: width, height: height, pixels: Array(pixels))
-        }
-
-        let renderer = ThorDisplayRenderer(canvas: canvas)
-        renderer.scale = scale
-        renderer.render(list)
-        _ = tvg_canvas_draw(canvas, true)
-        // Blocking by definition: the pixels are the return value, and
-        // ThorVG may be writing them on its own threads until this returns.
-        _ = tvg_canvas_sync(canvas)
-
-        return RasterImage(width: width, height: height, pixels: Array(pixels))
+        return OffscreenGPU.shared.image(of: list, width: width, height: height, scale: scale)
+            ?? RasterImage(width: width, height: height, pixels: Array(repeating: 0, count: width * height))
     }
 }
