@@ -107,15 +107,36 @@ extension ViewNode {
         }
 
         guard let value = select(self) else { return nil }
-        guard let local = mapIntoLocalSpace(point), frame.contains(local) else { return nil }
+        // Where its content is drawn, through any effect between the two.
+        let drawn = contentTransform
+        guard let local = drawn.inverseApplied(to: point), frame.contains(local) else { return nil }
         guard wrappedContentAccepts(point) else { return nil }
         return Hit(
             value: value,
             node: self,
             localPoint: Point(x: local.x - frame.minX, y: local.y - frame.minY),
             frame: frame,
-            transform: transform
+            transform: drawn
         )
+    }
+
+    /// The transform this node's content is drawn under: the one at the end
+    /// of the run of single children below it.
+    ///
+    /// An effect in that run (`.offset`, `.scaleEffect`, `.rotationEffect`,
+    /// a transition's move) moves what is drawn without moving this node's
+    /// frame. A gesture attached after one is on the moved view, as in
+    /// SwiftUI, so it is hit where the view is drawn, not where layout put
+    /// it. Layout alone (`.frame`, `.padding`, a `ScrollView`) places by
+    /// rect and never changes a transform, so with no effect in the run this
+    /// is the node's own.
+    var contentTransform: Transform {
+        var probe = self
+        while true {
+            let inner = probe.layoutChildren
+            guard inner.count == 1 else { return probe.transform }
+            probe = inner[0]
+        }
     }
 
     /// Whether what this node wraps takes a hit at `point` — false when a
@@ -171,5 +192,14 @@ extension Hit {
         if transform.isIdentity { return frame.contains(windowPoint) }
         guard let inverse = transform.inverted() else { return false }
         return frame.contains(inverse.apply(to: windowPoint))
+    }
+}
+
+extension Transform {
+    /// `point` with this transform undone: `nil` for a degenerate transform
+    /// (a zero `scaleEffect`), which can't be hit.
+    func inverseApplied(to point: Point) -> Point? {
+        guard !isIdentity else { return point }
+        return inverted()?.apply(to: point)
     }
 }
