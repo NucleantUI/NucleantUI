@@ -214,7 +214,7 @@ extension View {
     /// when there is room, else below, else trailing, else leading — kept
     /// inside the parent's rect, and draws an arrow from it to the anchor.
     func _popoverPlaced(around anchor: PopoverHandle?) -> some View {
-        _ModifierView(content: self) { _ in PopoverPlacementContent(anchor: anchor) }
+        _ModifierView(content: self, modifier: PopoverPlacementModifier(anchor: anchor))
     }
 }
 
@@ -367,4 +367,15 @@ struct PopoverPlacementContent: NodeContent {
             transformedClips: context.transformedClips
         )))
     }
+}
+
+/// `._popoverPlaced(around:)`. Built again whenever its parent is.
+struct PopoverPlacementModifier: PrimitiveModifier {
+    weak var anchor: PopoverHandle?
+
+    func makeContent(_ context: inout BuildContext) -> PopoverPlacementContent {
+        PopoverPlacementContent(anchor: anchor)
+    }
+
+    func _isEquivalent(to other: PopoverPlacementModifier) -> Bool { false }
 }

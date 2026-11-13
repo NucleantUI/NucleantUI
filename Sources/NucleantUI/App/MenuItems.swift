@@ -137,13 +137,13 @@ extension AnyView: MenuItemSource {
     }
 }
 
-extension _ModifierView: MenuItemSource {
+extension _ModifierView: MenuItemSource where Modifier: PrimitiveModifier {
     /// The modifier's environment change applies to the rows inside, as it
     /// would to the views: `.disabled(true)` over a `Group` greys out every
     /// button in it.
     func _menuItems(_ lowering: inout MenuLowering) -> [MenuBar.Item] {
         var inner = lowering
-        modifyEnvironment?(&inner.environment)
+        modifier.modifyEnvironment(&inner.environment)
         return menuItems(of: content, &inner)
     }
 }

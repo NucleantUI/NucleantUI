@@ -27,15 +27,7 @@ extension View {
         initial: Bool = false,
         _ action: @escaping @MainActor (_ oldValue: V, _ newValue: V) -> Void
     ) -> some View {
-        _ModifierView(content: self) { context in
-            context.effects.onChange(
-                StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(OnChangeMarker.self)),
-                of: value,
-                initial: initial,
-                action
-            )
-            return EnvironmentContent(colorScheme: context.environment.colorScheme)
-        }
+        _ModifierView(content: self, modifier: OnChangeModifier(value: value, initial: initial, action: action))
     }
 
     /// Runs `action` when `value` changes from one build of this view to
@@ -51,3 +43,24 @@ extension View {
 
 /// Stands in for a view type in the key, as `OnAppearMarker` does.
 private enum OnChangeMarker {}
+
+/// `.onChange(of:initial:_:)`. Built again whenever its parent is: each
+/// build compares its value with the one last seen here, and the action is
+/// that build's.
+struct OnChangeModifier<V: Equatable>: PrimitiveModifier {
+    let value: V
+    let initial: Bool
+    let action: @MainActor (V, V) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        context.effects.onChange(
+            StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(OnChangeMarker.self)),
+            of: value,
+            initial: initial,
+            action
+        )
+        return environmentContent(context)
+    }
+
+    func _isEquivalent(to other: OnChangeModifier<V>) -> Bool { false }
+}

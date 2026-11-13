@@ -69,16 +69,11 @@ extension View {
         priority: GestureAttachment.Priority,
         mask: GestureMask
     ) -> some View {
-        let recognition = gesture._recognition
-        return _ModifierView(content: self) { context in
-            GestureContent(attachment: GestureAttachment(
-                path: context.path,
-                priority: priority,
-                recognition: recognition,
-                includesGesture: mask.contains(.gesture) && context.environment.isEnabled,
-                includesSubviews: mask.contains(.subviews)
-            ))
-        }
+        _ModifierView(content: self, modifier: GestureModifier(
+            recognition: gesture._recognition,
+            priority: priority,
+            mask: mask
+        ))
     }
 }
 
@@ -96,21 +91,7 @@ extension View {
     ///     .onTapGesture { select(photo) }
     /// ```
     public func onTapGesture(count: Int, perform action: @escaping @MainActor () -> Void) -> some View {
-        _ModifierView(content: self) { context -> any NodeContent in
-            guard count > 1 else {
-                return InteractionContent(target: HitTarget(
-                    isEnabled: context.environment.isEnabled,
-                    onRelease: { _, inside in if inside { action() } }
-                ))
-            }
-            return GestureContent(attachment: GestureAttachment(
-                path: context.path,
-                priority: .normal,
-                recognition: TapGesture(count: count).onEnded(action)._recognition,
-                includesGesture: context.environment.isEnabled,
-                includesSubviews: true
-            ))
-        }
+        _ModifierView(content: self, modifier: CountedTapModifier(count: count, action: action))
     }
 
     /// Runs `action` with the last tap's location, in the view's own
@@ -119,23 +100,7 @@ extension View {
         count: Int,
         perform action: @escaping @MainActor (Point) -> Void
     ) -> some View {
-        _ModifierView(content: self) { context -> any NodeContent in
-            guard count > 1 else {
-                return InteractionContent(target: HitTarget(
-                    isEnabled: context.environment.isEnabled,
-                    onRelease: { point, inside in if inside { action(point) } }
-                ))
-            }
-            var tap = TapGesture(count: count)
-            tap.locatedAction = action
-            return GestureContent(attachment: GestureAttachment(
-                path: context.path,
-                priority: .normal,
-                recognition: tap._recognition,
-                includesGesture: context.environment.isEnabled,
-                includesSubviews: true
-            ))
-        }
+        _ModifierView(content: self, modifier: LocatedCountedTapModifier(count: count, action: action))
     }
 
     /// Runs `action` once a press on this view has been held for
@@ -217,5 +182,93 @@ final class GestureAttachment {
 struct GestureContent: NodeContent {
     let attachment: GestureAttachment
 
+    var gestureAttachment: GestureAttachment? { attachment }
+}
+
+// MARK: - The modifiers
+//
+// Each holds a gesture's actions, which say nothing comparable about
+// themselves, so each is built again whenever its parent is — with the
+// latest actions.
+
+/// `.gesture`, `.highPriorityGesture` and `.simultaneousGesture`.
+struct GestureModifier: PrimitiveModifier {
+    let recognition: _GestureRecognition
+    let priority: GestureAttachment.Priority
+    let mask: GestureMask
+
+    func makeContent(_ context: inout BuildContext) -> GestureContent {
+        GestureContent(attachment: GestureAttachment(
+            path: context.path,
+            priority: priority,
+            recognition: recognition,
+            includesGesture: mask.contains(.gesture) && context.environment.isEnabled,
+            includesSubviews: mask.contains(.subviews)
+        ))
+    }
+
+    func _isEquivalent(to other: GestureModifier) -> Bool { false }
+}
+
+/// `.onTapGesture(count:perform:)`: a single tap is a plain pointer
+/// target; more taps are a gesture the arena runs.
+struct CountedTapModifier: PrimitiveModifier {
+    let count: Int
+    let action: @MainActor () -> Void
+
+    func makeContent(_ context: inout BuildContext) -> CountedTapContent {
+        let action = self.action
+        guard count > 1 else {
+            return CountedTapContent(target: HitTarget(
+                isEnabled: context.environment.isEnabled,
+                onRelease: { _, inside in if inside { action() } }
+            ))
+        }
+        return CountedTapContent(attachment: GestureAttachment(
+            path: context.path,
+            priority: .normal,
+            recognition: TapGesture(count: count).onEnded(action)._recognition,
+            includesGesture: context.environment.isEnabled,
+            includesSubviews: true
+        ))
+    }
+
+    func _isEquivalent(to other: CountedTapModifier) -> Bool { false }
+}
+
+/// `.onTapGesture(count:perform:)` with the location.
+struct LocatedCountedTapModifier: PrimitiveModifier {
+    let count: Int
+    let action: @MainActor (Point) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> CountedTapContent {
+        let action = self.action
+        guard count > 1 else {
+            return CountedTapContent(target: HitTarget(
+                isEnabled: context.environment.isEnabled,
+                onRelease: { point, inside in if inside { action(point) } }
+            ))
+        }
+        var tap = TapGesture(count: count)
+        tap.locatedAction = action
+        return CountedTapContent(attachment: GestureAttachment(
+            path: context.path,
+            priority: .normal,
+            recognition: tap._recognition,
+            includesGesture: context.environment.isEnabled,
+            includesSubviews: true
+        ))
+    }
+
+    func _isEquivalent(to other: LocatedCountedTapModifier) -> Bool { false }
+}
+
+/// A counted tap's node: the pointer target of a single tap, or the
+/// gesture of more — whichever its count made it.
+struct CountedTapContent: NodeContent {
+    var target: HitTarget? = nil
+    var attachment: GestureAttachment? = nil
+
+    var hitTarget: HitTarget? { target }
     var gestureAttachment: GestureAttachment? { attachment }
 }

@@ -85,9 +85,7 @@ extension View {
     /// at the proportions of its own ideal size — sized to fit or fill
     /// what it is offered.
     public func aspectRatio(_ aspectRatio: Double? = nil, contentMode: ContentMode) -> some View {
-        _ModifierView(content: self, key: ["aspectRatio", aspectRatio, contentMode] as [AnyHashable]) { _ in
-            AspectRatioContent(ratio: aspectRatio, contentMode: contentMode)
-        }
+        _ModifierView(content: self, modifier: AspectRatioModifier(ratio: aspectRatio, contentMode: contentMode))
     }
 
     /// `.aspectRatio(contentMode: .fit)`.
@@ -155,5 +153,15 @@ struct AspectRatioContent: NodeContent {
             context: context,
             into: &list
         )
+    }
+}
+
+/// `.aspectRatio(_:contentMode:)`.
+struct AspectRatioModifier: PrimitiveModifier, Equatable {
+    let ratio: Double?
+    let contentMode: ContentMode
+
+    func makeContent(_ context: inout BuildContext) -> AspectRatioContent {
+        AspectRatioContent(ratio: ratio, contentMode: contentMode)
     }
 }

@@ -11,13 +11,7 @@ extension View {
     /// row.onHover { hovering in isHighlighted = hovering }
     /// ```
     public func onHover(perform action: @escaping @MainActor (Bool) -> Void) -> some View {
-        _ModifierView(content: self) { context in
-            HoverContent(target: HoverTarget(
-                path: context.path,
-                isEnabled: context.environment.isEnabled,
-                action: action
-            ))
-        }
+        _ModifierView(content: self, modifier: HoverModifier(action: action))
     }
 }
 
@@ -44,4 +38,20 @@ struct HoverContent: NodeContent {
     let target: HoverTarget
 
     var hoverTarget: HoverTarget? { target.isEnabled ? target : nil }
+}
+
+/// `.onHover(perform:)`. Built again whenever its parent is, for the
+/// latest action.
+struct HoverModifier: PrimitiveModifier {
+    let action: @MainActor (Bool) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> HoverContent {
+        HoverContent(target: HoverTarget(
+            path: context.path,
+            isEnabled: context.environment.isEnabled,
+            action: action
+        ))
+    }
+
+    func _isEquivalent(to other: HoverModifier) -> Bool { false }
 }

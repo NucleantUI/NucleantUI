@@ -18,9 +18,7 @@ extension View {
     /// )
     /// ```
     public func allowsHitTesting(_ enabled: Bool) -> some View {
-        _ModifierView(content: self, key: ["allowsHitTesting", enabled] as [AnyHashable]) { _ in
-            HitTestingContent(allowsHitTesting: enabled)
-        }
+        _ModifierView(content: self, modifier: AllowsHitTestingModifier(enabled: enabled))
     }
 
     /// Makes `shape`, laid over this view's frame, the area a press must
@@ -42,14 +40,7 @@ extension View {
         _ shape: S,
         eoFill: Bool = false
     ) -> some View {
-        _ModifierView(content: self) { _ in
-            HitTestingContent(
-                allowsHitTesting: true,
-                hitShape: kinds.contains(.interaction)
-                    ? HitShape(path: { rect in shape.path(in: rect) }, eoFill: eoFill)
-                    : nil
-            )
-        }
+        _ModifierView(content: self, modifier: ContentShapeModifier(kinds: kinds, shape: shape, eoFill: eoFill))
     }
 }
 
@@ -88,4 +79,33 @@ struct HitShape {
 struct HitTestingContent: NodeContent {
     let allowsHitTesting: Bool
     var hitShape: HitShape? = nil
+}
+
+/// `.allowsHitTesting(_:)`.
+struct AllowsHitTestingModifier: PrimitiveModifier, Equatable {
+    let enabled: Bool
+
+    func makeContent(_ context: inout BuildContext) -> HitTestingContent {
+        HitTestingContent(allowsHitTesting: enabled)
+    }
+}
+
+/// `.contentShape(_:_:eoFill:)`. Built again whenever its parent is: a
+/// shape is not compared.
+struct ContentShapeModifier<S: Shape>: PrimitiveModifier {
+    let kinds: ContentShapeKinds
+    let shape: S
+    let eoFill: Bool
+
+    func makeContent(_ context: inout BuildContext) -> HitTestingContent {
+        let shape = self.shape
+        return HitTestingContent(
+            allowsHitTesting: true,
+            hitShape: kinds.contains(.interaction)
+                ? HitShape(path: { rect in shape.path(in: rect) }, eoFill: eoFill)
+                : nil
+        )
+    }
+
+    func _isEquivalent(to other: ContentShapeModifier<S>) -> Bool { false }
 }

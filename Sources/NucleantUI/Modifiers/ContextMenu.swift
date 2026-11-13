@@ -33,13 +33,7 @@ extension View {
     public func contextMenu<MenuItems: View>(
         @ViewBuilder menuItems: () -> MenuItems
     ) -> some View {
-        let items = AnyView(menuItems())
-        return _ModifierView(content: self) { context in
-            ContextMenuContent(source: ContextMenuSource(
-                isEnabled: context.environment.isEnabled,
-                items: items
-            ))
-        }
+        _ModifierView(content: self, modifier: ContextMenuModifier(items: AnyView(menuItems())))
     }
 
     /// Adds a menu that opens on a right click (a long press on touch), with
@@ -66,12 +60,7 @@ extension View {
     public func contextMenu<MenuItems: View>(
         @ViewBuilder menuItems: @escaping @MainActor (Point) -> MenuItems
     ) -> some View {
-        _ModifierView(content: self) { context in
-            ContextMenuContent(source: ContextMenuSource(
-                isEnabled: context.environment.isEnabled,
-                items: { location in AnyView(menuItems(location)) }
-            ))
-        }
+        _ModifierView(content: self, modifier: LocatedContextMenuModifier(items: { location in AnyView(menuItems(location)) }))
     }
 }
 
@@ -275,16 +264,14 @@ extension View {
     /// With `flippingTo`, a view that would overflow on the right is put
     /// with its *right* edge there instead — how a submenu swaps sides.
     func _anchored(at anchor: Point, flippingTo flipX: Double? = nil) -> some View {
-        _ModifierView(content: self, key: ["anchored", anchor.x, anchor.y, flipX] as [AnyHashable?]) { _ in
-            AnchoredContent(anchor: anchor, flipX: flipX)
-        }
+        _ModifierView(content: self, modifier: AnchoredModifier(anchor: anchor, flipX: flipX))
     }
 
     /// Writes this view's placed frame (window coordinates) into `box` on
     /// every layout pass, for a view that needs to know where it is — a
     /// `Menu` row opening its submenu beside itself.
     func _recordFrame(into box: FrameBox) -> some View {
-        _ModifierView(content: self) { _ in FrameRecorderContent(box: box) }
+        _ModifierView(content: self, modifier: FrameRecorderModifier(box: box))
     }
 }
 
@@ -338,4 +325,51 @@ struct FrameRecorderContent: NodeContent {
         box.frame = rect
         node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
     }
+}
+
+// MARK: - The modifiers
+
+/// `.contextMenu(menuItems:)`. Built again whenever its parent is: the
+/// items are views, which are not compared.
+struct ContextMenuModifier: PrimitiveModifier {
+    let items: AnyView
+
+    func makeContent(_ context: inout BuildContext) -> ContextMenuContent {
+        ContextMenuContent(source: ContextMenuSource(isEnabled: context.environment.isEnabled, items: items))
+    }
+
+    func _isEquivalent(to other: ContextMenuModifier) -> Bool { false }
+}
+
+/// `.contextMenu(menuItems:)` with the click's location. Built again
+/// whenever its parent is, for the latest closure.
+struct LocatedContextMenuModifier: PrimitiveModifier {
+    let items: @MainActor (Point) -> AnyView
+
+    func makeContent(_ context: inout BuildContext) -> ContextMenuContent {
+        ContextMenuContent(source: ContextMenuSource(isEnabled: context.environment.isEnabled, items: items))
+    }
+
+    func _isEquivalent(to other: LocatedContextMenuModifier) -> Bool { false }
+}
+
+/// `._anchored(at:flippingTo:)`.
+struct AnchoredModifier: PrimitiveModifier, Equatable {
+    let anchor: Point
+    let flipX: Double?
+
+    func makeContent(_ context: inout BuildContext) -> AnchoredContent {
+        AnchoredContent(anchor: anchor, flipX: flipX)
+    }
+}
+
+/// `._recordFrame(into:)`. Built again whenever its parent is.
+struct FrameRecorderModifier: PrimitiveModifier {
+    let box: FrameBox
+
+    func makeContent(_ context: inout BuildContext) -> FrameRecorderContent {
+        FrameRecorderContent(box: box)
+    }
+
+    func _isEquivalent(to other: FrameRecorderModifier) -> Bool { false }
 }

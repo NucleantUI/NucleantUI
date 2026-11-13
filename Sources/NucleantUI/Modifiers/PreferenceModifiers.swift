@@ -18,7 +18,7 @@ extension View {
     ///     .preference(key: UnreadCountKey.self, value: message.isRead ? 0 : 1)
     /// ```
     public func preference<K: PreferenceKey>(key: K.Type = K.self, value: K.Value) -> some View {
-        _ModifierView(content: self) { _ in PreferenceWriterContent<K>(value: value) }
+        _ModifierView(content: self, modifier: PreferenceModifier<K>(value: value))
     }
 
     /// Edits the value for `key` that this view's subtree produced, as it
@@ -28,7 +28,7 @@ extension View {
         _ key: K.Type = K.self,
         _ callback: @escaping (inout K.Value) -> Void
     ) -> some View {
-        _ModifierView(content: self) { _ in PreferenceTransformContent<K>(transform: callback) }
+        _ModifierView(content: self, modifier: TransformPreferenceModifier<K>(transform: callback))
     }
 
     /// Runs `action` with the value this view's subtree produces for `key`
@@ -101,3 +101,27 @@ extension _PreferenceChangeView: BuiltinView {
 
 /// Lays out as what it wraps; it is only here to be observed.
 struct PreferenceObserverContent: NodeContent {}
+
+/// `.preference(key:value:)`. Built again whenever its parent is: a
+/// preference value is not compared.
+struct PreferenceModifier<K: PreferenceKey>: PrimitiveModifier {
+    let value: K.Value
+
+    func makeContent(_ context: inout BuildContext) -> PreferenceWriterContent<K> {
+        PreferenceWriterContent<K>(value: value)
+    }
+
+    func _isEquivalent(to other: PreferenceModifier<K>) -> Bool { false }
+}
+
+/// `.transformPreference(_:_:)`. Built again whenever its parent is, for
+/// the latest closure.
+struct TransformPreferenceModifier<K: PreferenceKey>: PrimitiveModifier {
+    let transform: (inout K.Value) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> PreferenceTransformContent<K> {
+        PreferenceTransformContent<K>(transform: transform)
+    }
+
+    func _isEquivalent(to other: TransformPreferenceModifier<K>) -> Bool { false }
+}

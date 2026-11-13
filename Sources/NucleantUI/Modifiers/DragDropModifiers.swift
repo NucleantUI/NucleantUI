@@ -26,14 +26,7 @@ extension View {
     public func draggable<T: Transferable>(
         _ payload: @autoclosure @escaping () -> T
     ) -> some View {
-        _ModifierView(content: self) { context in
-            DragSourceContent(source: DragSource(
-                isEnabled: context.environment.isEnabled,
-                path: context.path,
-                makePayload: { TransferPayload(payload()) },
-                makePreview: nil
-            ))
-        }
+        _ModifierView(content: self, modifier: DraggableModifier(makePayload: { TransferPayload(payload()) }, makePreview: nil))
     }
 
     /// As above, with a view of your own as the preview, centred on the
@@ -42,14 +35,10 @@ extension View {
         _ payload: @autoclosure @escaping () -> T,
         @ViewBuilder preview: @escaping () -> Preview
     ) -> some View {
-        _ModifierView(content: self) { context in
-            DragSourceContent(source: DragSource(
-                isEnabled: context.environment.isEnabled,
-                path: context.path,
-                makePayload: { TransferPayload(payload()) },
-                makePreview: { AnyView(preview()) }
-            ))
-        }
+        _ModifierView(content: self, modifier: DraggableModifier(
+            makePayload: { TransferPayload(payload()) },
+            makePreview: { AnyView(preview()) }
+        ))
     }
 
     /// Lets a drag carrying a `T` end on this view.
@@ -71,23 +60,7 @@ extension View {
         action: @escaping @MainActor ([T], Point) -> Bool,
         isTargeted: @escaping @MainActor (Bool) -> Void = { _ in }
     ) -> some View {
-        _ModifierView(content: self) { context in
-            DropTargetContent(target: DropTarget(
-                path: context.path,
-                isEnabled: context.environment.isEnabled,
-                accepts: { payload in payload.canImport(T.self) },
-                perform: { payload, location in
-                    do {
-                        guard let item = try payload.load(T.self) else { return false }
-                        return action([item], location)
-                    } catch {
-                        InputTrace.log("drop of \(payload.itemName) as \(T.self) failed: \(error)")
-                        return false
-                    }
-                },
-                setTargeted: isTargeted
-            ))
-        }
+        _ModifierView(content: self, modifier: DropDestinationModifier<T>(action: action, isTargeted: isTargeted))
     }
 }
 
@@ -173,4 +146,50 @@ struct DropTargetContent: NodeContent {
     let target: DropTarget
 
     var dropTarget: DropTarget? { target.isEnabled ? target : nil }
+}
+
+/// `.draggable(_:)` and `.draggable(_:preview:)`. Built again whenever its
+/// parent is, for the latest closures.
+struct DraggableModifier: PrimitiveModifier {
+    let makePayload: @MainActor () -> TransferPayload
+    let makePreview: (@MainActor () -> AnyView)?
+
+    func makeContent(_ context: inout BuildContext) -> DragSourceContent {
+        DragSourceContent(source: DragSource(
+            isEnabled: context.environment.isEnabled,
+            path: context.path,
+            makePayload: makePayload,
+            makePreview: makePreview
+        ))
+    }
+
+    func _isEquivalent(to other: DraggableModifier) -> Bool { false }
+}
+
+/// `.dropDestination(for:action:isTargeted:)`. Built again whenever its
+/// parent is, for the latest closures.
+struct DropDestinationModifier<T: Transferable>: PrimitiveModifier {
+    let action: @MainActor ([T], Point) -> Bool
+    let isTargeted: @MainActor (Bool) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> DropTargetContent {
+        let action = self.action
+        return DropTargetContent(target: DropTarget(
+            path: context.path,
+            isEnabled: context.environment.isEnabled,
+            accepts: { payload in payload.canImport(T.self) },
+            perform: { payload, location in
+                do {
+                    guard let item = try payload.load(T.self) else { return false }
+                    return action([item], location)
+                } catch {
+                    InputTrace.log("drop of \(payload.itemName) as \(T.self) failed: \(error)")
+                    return false
+                }
+            },
+            setTargeted: isTargeted
+        ))
+    }
+
+    func _isEquivalent(to other: DropDestinationModifier<T>) -> Bool { false }
 }

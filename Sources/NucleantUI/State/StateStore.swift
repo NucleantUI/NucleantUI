@@ -43,9 +43,13 @@ final class StateStorage<Value>: AnyStateStorage {
     /// state, which builds the node that will be placed again.
     private(set) var isReadDuringPlacement = false
 
+    /// How two values of `Value` compare — see `set(_:via:)`.
+    private let isSameValue: EquivalenceWitness
+
     init(_ value: Value, ownerPath: [Int]) {
         self.value = value
         self.ownerPath = ownerPath
+        self.isSameValue = equivalenceWitness(for: Value.self)
     }
 
     /// The single write path — `@State`'s setter and any `Binding` derived from
@@ -64,13 +68,16 @@ final class StateStorage<Value>: AnyStateStorage {
     ///
     /// A write of the value already held is no write: nothing is bumped and
     /// nothing is dirtied, as in SwiftUI. "The same" is decided the way view
-    /// inputs are (`_dynamicallyEquivalent`): `==` for an `Equatable` value,
+    /// inputs are (`equivalenceWitness`): `==` for an `Equatable` value,
     /// identity for an object, the bytes for plain data. A value with no way
     /// to tell counts as changed. A `withAnimation` whose writes were all
     /// equal claims no frame, and its completion runs on the next one, as
     /// for a body that wrote nothing.
     func set(_ newValue: Value, via chain: [AnyKeyPath] = []) {
-        if _dynamicallyEquivalent(value, newValue) { return }
+        let isSame = withUnsafePointer(to: value) { old in
+            withUnsafePointer(to: newValue) { new in isSameValue(UnsafeRawPointer(old), UnsafeRawPointer(new)) }
+        }
+        if isSame { return }
         value = newValue
         version &+= 1
         if isReadDuringPlacement {

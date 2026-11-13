@@ -21,53 +21,85 @@ extension View {
     ///     .animation(.bouncy, value: isOn)
     /// ```
     public func animation<V: Equatable>(_ animation: Animation?, value: V) -> some View {
-        _ModifierView(content: self) { context in
-            let changed = context.animations.valueChanged(value, at: context.path)
-            // `disablesAnimations` is the change asking to be animated only
-            // by its own transaction.
-            let overrides = changed && !context.transaction.disablesAnimations
-            if overrides {
-                context.transaction.animation = animation
-            }
-            return AnimationScopeContent(
-                frame: context.animations.frame,
-                adjust: overrides ? { $0 = animation } : nil
-            )
-        }
+        _ModifierView(content: self, modifier: AnimationValueModifier(animation: animation, value: value))
     }
 
     /// Animates every change to this view with `animation`.
     @available(*, deprecated, message: "Use withAnimation or animation(_:value:) instead.")
     public func animation(_ animation: Animation?) -> some View {
-        _ModifierView(content: self) { context in
-            let overrides = !context.transaction.disablesAnimations
-            if overrides {
-                context.transaction.animation = animation
-            }
-            return AnimationScopeContent(
-                frame: context.animations.frame,
-                adjust: overrides ? { $0 = animation } : nil,
-                appliesToEveryBuild: true
-            )
-        }
+        _ModifierView(content: self, modifier: AnimationModifier(animation: animation))
     }
 
     /// Adjusts the transaction of any change that reaches this view —
     /// `$0.animation = nil` to have this view jump while the rest animates.
     public func transaction(_ transform: @escaping (inout Transaction) -> Void) -> some View {
-        _ModifierView(content: self) { context in
-            transform(&context.transaction)
-            return AnimationScopeContent(
-                frame: context.animations.frame,
-                adjust: { animation in
-                    var transaction = Transaction(animation: animation)
-                    transform(&transaction)
-                    animation = transaction.animation
-                },
-                appliesToEveryBuild: true
-            )
-        }
+        _ModifierView(content: self, modifier: TransactionModifier(transform: transform))
     }
+}
+
+/// `.animation(_:value:)`. Built again whenever its parent is — the value
+/// it last saw is filed by path, and each build asks whether it changed.
+struct AnimationValueModifier<V: Equatable>: PrimitiveModifier {
+    let animation: Animation?
+    let value: V
+
+    func makeContent(_ context: inout BuildContext) -> AnimationScopeContent {
+        let changed = context.animations.valueChanged(value, at: context.path)
+        // `disablesAnimations` is the change asking to be animated only
+        // by its own transaction.
+        let overrides = changed && !context.transaction.disablesAnimations
+        let animation = self.animation
+        if overrides {
+            context.transaction.animation = animation
+        }
+        return AnimationScopeContent(
+            frame: context.animations.frame,
+            adjust: overrides ? { $0 = animation } : nil
+        )
+    }
+
+    func _isEquivalent(to other: AnimationValueModifier<V>) -> Bool { false }
+}
+
+/// `.animation(_:)`, value-free: applies to every change that is built.
+struct AnimationModifier: PrimitiveModifier {
+    let animation: Animation?
+
+    func makeContent(_ context: inout BuildContext) -> AnimationScopeContent {
+        let overrides = !context.transaction.disablesAnimations
+        let animation = self.animation
+        if overrides {
+            context.transaction.animation = animation
+        }
+        return AnimationScopeContent(
+            frame: context.animations.frame,
+            adjust: overrides ? { $0 = animation } : nil,
+            appliesToEveryBuild: true
+        )
+    }
+
+    func _isEquivalent(to other: AnimationModifier) -> Bool { false }
+}
+
+/// `.transaction(_:)`.
+struct TransactionModifier: PrimitiveModifier {
+    let transform: (inout Transaction) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> AnimationScopeContent {
+        transform(&context.transaction)
+        let transform = self.transform
+        return AnimationScopeContent(
+            frame: context.animations.frame,
+            adjust: { animation in
+                var transaction = Transaction(animation: animation)
+                transform(&transaction)
+                animation = transaction.animation
+            },
+            appliesToEveryBuild: true
+        )
+    }
+
+    func _isEquivalent(to other: TransactionModifier) -> Bool { false }
 }
 
 /// Places its child under an adjusted animation in the frame the change

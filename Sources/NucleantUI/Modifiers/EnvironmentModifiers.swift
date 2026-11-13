@@ -10,62 +10,51 @@ extension View {
         _ keyPath: WritableKeyPath<EnvironmentValues, Value>,
         _ value: Value
     ) -> some View {
-        _ModifierView(
-            content: self,
-            // Comparable only when the value is — a closure or a class put
-            // into the environment makes this modifier, and so its subtree,
-            // always rebuild.
-            key: (value as? AnyHashable).map { ["environment", AnyHashable(keyPath), $0] as [AnyHashable] },
-            environment: { $0[keyPath: keyPath] = value },
-            // The scheme in effect below this point, whether or not this is
-            // the modifier that set it: dynamic colors are resolved at draw
-            // time, so it has to travel with the draw context.
-            node: { context in EnvironmentContent(colorScheme: context.environment.colorScheme) }
-        )
+        _ModifierView(content: self, modifier: EnvironmentKeyPathModifier(keyPath: keyPath, value: value))
     }
 
     /// Fixes the appearance for this view and everything inside it,
     /// whatever the system is set to.
     public func colorScheme(_ scheme: ColorScheme) -> some View {
-        environment(\.colorScheme, scheme)
+        _ModifierView(content: self, modifier: ColorSchemeModifier(scheme: scheme))
     }
 
     public func font(_ font: Font) -> some View {
-        environment(\.font, font)
+        _ModifierView(content: self, modifier: FontModifier(font: font))
     }
 
     public func foregroundColor(_ color: Color) -> some View {
-        environment(\.foregroundStyle, .color(color))
+        _ModifierView(content: self, modifier: ForegroundColorModifier(color: color))
     }
 
     /// The foreground for text and shapes below — a semantic style such as
     /// `.secondary`, a light/dark pair, a gradient.
     public func foregroundStyle(_ style: ShapeStyle) -> some View {
-        environment(\.foregroundStyle, style)
+        _ModifierView(content: self, modifier: ForegroundStyleModifier(style: style))
     }
 
     public func foregroundStyle(_ color: Color) -> some View {
-        environment(\.foregroundStyle, .color(color))
+        _ModifierView(content: self, modifier: ForegroundStyleColorModifier(color: color))
     }
 
     public func tint(_ color: Color) -> some View {
-        environment(\.tint, .color(color))
+        _ModifierView(content: self, modifier: TintColorModifier(color: color))
     }
 
     public func tint(_ style: ShapeStyle) -> some View {
-        environment(\.tint, style)
+        _ModifierView(content: self, modifier: TintModifier(style: style))
     }
 
     public func disabled(_ isDisabled: Bool = true) -> some View {
-        environment(\.isEnabled, !isDisabled)
+        _ModifierView(content: self, modifier: DisabledModifier(isDisabled: isDisabled))
     }
 
     public func multilineTextAlignment(_ alignment: TextAlignment) -> some View {
-        environment(\.multilineTextAlignment, alignment)
+        _ModifierView(content: self, modifier: MultilineTextAlignmentModifier(alignment: alignment))
     }
 
     public func lineLimit(_ limit: Int?) -> some View {
-        environment(\.lineLimit, limit)
+        _ModifierView(content: self, modifier: LineLimitModifier(limit: limit))
     }
 
     /// At most `limit` lines — and, with `reservesSpace`, room for all of
@@ -93,15 +82,182 @@ extension View {
     }
 
     private func lineLimits(lower: Int, upper: Int?) -> some View {
-        _ModifierView(
-            content: self,
-            key: ["lineLimits", lower, upper] as [AnyHashable],
-            environment: { values in
-                values.lineLimit = upper
-                values.reservedLineCount = lower
-            },
-            node: { context in EnvironmentContent(colorScheme: context.environment.colorScheme) }
-        )
+        _ModifierView(content: self, modifier: LineLimitsModifier(lower: lower, upper: upper))
+    }
+}
+
+// MARK: - The modifiers
+//
+// Each writes its value where it goes. The node they put in the tree is
+// an `EnvironmentContent`: almost everything they set is read while the
+// views below are built, but dynamic colors are resolved as they are drawn,
+// so the scheme in effect below travels with the draw context — whether or
+// not the modifier is the one that set it.
+
+/// `.environment(_:_:)`. Two applications are the same when the key path
+/// is, and the values are equivalent as view inputs: equal, the same
+/// object, the same bytes. A value there is no telling about — a closure —
+/// makes it a new one each time.
+struct EnvironmentKeyPathModifier<Value>: PrimitiveModifier {
+    let keyPath: WritableKeyPath<EnvironmentValues, Value>
+    let value: Value
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment[keyPath: keyPath] = value
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+
+    func _isEquivalent(to other: EnvironmentKeyPathModifier<Value>) -> Bool {
+        keyPath == other.keyPath && _areEquivalent(value, other.value)
+    }
+}
+
+/// `.colorScheme(_:)`.
+struct ColorSchemeModifier: PrimitiveModifier, Equatable {
+    let scheme: ColorScheme
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.colorScheme = scheme
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.font(_:)`.
+struct FontModifier: PrimitiveModifier, Equatable {
+    let font: Font
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.font = font
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.foregroundColor(_:)`.
+struct ForegroundColorModifier: PrimitiveModifier, Equatable {
+    let color: Color
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.foregroundStyle = .color(color)
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.foregroundStyle(_:)` with a style.
+struct ForegroundStyleModifier: PrimitiveModifier, Equatable {
+    let style: ShapeStyle
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.foregroundStyle = style
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.foregroundStyle(_:)` with a color.
+struct ForegroundStyleColorModifier: PrimitiveModifier, Equatable {
+    let color: Color
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.foregroundStyle = .color(color)
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.tint(_:)` with a color.
+struct TintColorModifier: PrimitiveModifier, Equatable {
+    let color: Color
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.tint = .color(color)
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.tint(_:)` with a style.
+struct TintModifier: PrimitiveModifier, Equatable {
+    let style: ShapeStyle
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.tint = style
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.disabled(_:)`.
+struct DisabledModifier: PrimitiveModifier, Equatable {
+    let isDisabled: Bool
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.isEnabled = !isDisabled
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.multilineTextAlignment(_:)`.
+struct MultilineTextAlignmentModifier: PrimitiveModifier, Equatable {
+    let alignment: TextAlignment
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.multilineTextAlignment = alignment
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.lineLimit(_:)` with a count, or `nil` for none.
+struct LineLimitModifier: PrimitiveModifier, Equatable {
+    let limit: Int?
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.lineLimit = limit
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// `.lineLimit(_:reservesSpace:)` and the ranges: the upper limit, and the
+/// lines kept room for.
+struct LineLimitsModifier: PrimitiveModifier, Equatable {
+    let lower: Int
+    let upper: Int?
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.lineLimit = upper
+        environment.reservedLineCount = lower
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
     }
 }
 

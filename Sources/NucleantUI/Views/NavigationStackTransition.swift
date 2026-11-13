@@ -331,8 +331,26 @@ extension View {
         _ transition: NavigationStackTransition,
         storage: NavigationStackStorage
     ) -> some View {
-        _ModifierView(content: self, key: ["navigationScreenTransition", screen] as [AnyHashable]) { context in
-            NavigationScreenTransitionContent(path: context.path, screen: screen, transition: transition, storage: storage)
-        }
+        _ModifierView(content: self, modifier: NavigationScreenTransitionModifier(
+            screen: screen,
+            transition: transition,
+            storage: storage
+        ))
+    }
+}
+
+/// `navigationScreenTransition(_:_:storage:)`: the same screen is the same
+/// modifier — its move and its stack are read as it is placed.
+struct NavigationScreenTransitionModifier: PrimitiveModifier {
+    let screen: NavigationScreenID
+    let transition: NavigationStackTransition
+    let storage: NavigationStackStorage
+
+    func makeContent(_ context: inout BuildContext) -> NavigationScreenTransitionContent {
+        NavigationScreenTransitionContent(path: context.path, screen: screen, transition: transition, storage: storage)
+    }
+
+    func _isEquivalent(to other: NavigationScreenTransitionModifier) -> Bool {
+        screen == other.screen
     }
 }

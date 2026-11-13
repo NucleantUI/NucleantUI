@@ -1042,12 +1042,7 @@ extension View {
     /// Runs `action` when a text field inside this view is submitted — its
     /// Return pressed. Actions set further out run too, outermost first.
     public func onSubmit(of triggers: SubmitTriggers = .text, _ action: @escaping @MainActor () -> Void) -> some View {
-        _ModifierView(
-            content: self,
-            key: nil,
-            environment: { $0.submitActions.append(SubmitAction(triggers: triggers, perform: action)) },
-            node: { context in EnvironmentContent(colorScheme: context.environment.colorScheme) }
-        )
+        _ModifierView(content: self, modifier: OnSubmitModifier(triggers: triggers, action: action))
     }
 }
 
@@ -1251,4 +1246,21 @@ struct TextFieldLineContent: NodeContent {
             )))
         }
     }
+}
+
+/// `.onSubmit(of:_:)`. Built again whenever its parent is, for the latest
+/// action.
+struct OnSubmitModifier: PrimitiveModifier {
+    let triggers: SubmitTriggers
+    let action: @MainActor () -> Void
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.submitActions.append(SubmitAction(triggers: triggers, perform: action))
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+
+    func _isEquivalent(to other: OnSubmitModifier) -> Bool { false }
 }

@@ -59,9 +59,7 @@ extension View {
     /// This view drawn one of its own widths or heights towards `edge`, or
     /// where it is for `nil`. Animates its own amount.
     func moveEffect(towards edge: Edge?) -> some View {
-        _ModifierView(content: self, key: ["moveEffect", edge] as [AnyHashable]) { context in
-            MoveEffectContent(fraction: context.animatedValue(.move, MoveEffectContent.fraction(towards: edge)))
-        }
+        _ModifierView(content: self, modifier: MoveEffectModifier(edge: edge))
     }
 }
 
@@ -90,5 +88,14 @@ struct MoveEffectContent: NodeContent {
             inner.transform = context.transform.concatenating(.translation(x: dx, y: dy))
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
+    }
+}
+
+/// `moveEffect(towards:)`, animated.
+struct MoveEffectModifier: PrimitiveModifier, Equatable {
+    let edge: Edge?
+
+    func makeContent(_ context: inout BuildContext) -> MoveEffectContent {
+        MoveEffectContent(fraction: context.animatedValue(.move, MoveEffectContent.fraction(towards: edge)))
     }
 }
