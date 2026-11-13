@@ -23,8 +23,9 @@
 /// host, a window reading its own environment — is nobody's.
 ///
 /// The keys are kept as bits (`EnvironmentKeySet`): each key gets a number
-/// the first time it is read, so noting a read sets a bit, closing a frame
-/// is an OR, and a view's record holds two words.
+/// the first time it is read or written, so noting a read sets a bit,
+/// closing a frame is an OR, and a view's record holds two words. An
+/// environment's entries carry the same bits, for the keys written in them.
 final class EnvironmentReads {
 
     /// The `EnvironmentValues` subscript is not isolated, and the reads it
@@ -57,10 +58,13 @@ final class EnvironmentReads {
         return keys
     }
 
-    /// `key` was read by the view being built.
-    func note(_ key: ObjectIdentifier) {
-        guard !frames.isEmpty else { return }
-        frames[frames.count - 1].insert(index(of: key))
+    /// `key` was read, by the view being built if there is one; its number.
+    func noteRead(_ key: ObjectIdentifier) -> Int {
+        let index = index(of: key)
+        if !frames.isEmpty {
+            frames[frames.count - 1].insert(index)
+        }
+        return index
     }
 
     /// A standing subtree that read `keys` is kept inside the view being
@@ -70,8 +74,9 @@ final class EnvironmentReads {
         frames[frames.count - 1].formUnion(keys)
     }
 
-    /// `key`'s number, given it the first time it is asked for.
-    private func index(of key: ObjectIdentifier) -> Int {
+    /// `key`'s number, given it the first time it is asked for — read or
+    /// written.
+    func index(of key: ObjectIdentifier) -> Int {
         if let known = indices[key] { return known }
         let index: Int
         if keys.count < EnvironmentKeySet.overflowBit {
@@ -106,6 +111,11 @@ struct EnvironmentKeySet: Equatable, Sendable {
     static let overflowBit = 127
 
     var isEmpty: Bool { low == 0 && high == 0 }
+
+    @inline(__always)
+    func contains(_ index: Int) -> Bool {
+        index < 64 ? low & (1 << UInt64(index)) != 0 : high & (1 << UInt64(index - 64)) != 0
+    }
 
     mutating func insert(_ index: Int) {
         if index < 64 {

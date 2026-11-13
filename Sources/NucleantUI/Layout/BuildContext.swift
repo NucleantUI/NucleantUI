@@ -802,33 +802,38 @@ final class RebuildRecords {
         }
 
         let old = candidate.node.value.unsafelyUnwrapped.environment
-        let changed = keysDiffering(old, environment)
-        if !changed.isEmpty {
-            rebase(candidate.node, from: old, to: environment, keys: changed)
+        if differs(old, environment) {
+            var relinked: [ObjectIdentifier: (from: EnvironmentEntry, to: EnvironmentEntry)] = [:]
+            rebase(candidate.node, from: old, to: environment, relinked: &relinked)
         }
     }
 
-    /// The last pair of environments compared by `keysDiffering`, by
-    /// version, and the answer: the rows of a `ForEach` are all kept under
-    /// the same new environment, having been built under the same old one.
-    private var lastDifference: (old: UInt64, new: UInt64, keys: [ObjectIdentifier])?
+    /// The last pair of environments compared by `differs`, by version, and
+    /// the answer: the rows of a `ForEach` are all kept under the same new
+    /// environment, having been built under the same old one.
+    private var lastDifference: (old: UInt64, new: UInt64, differs: Bool)?
 
-    private func keysDiffering(_ old: EnvironmentValues, _ new: EnvironmentValues) -> [ObjectIdentifier] {
+    private func differs(_ old: EnvironmentValues, _ new: EnvironmentValues) -> Bool {
         if let last = lastDifference, last.old == old.version, last.new == new.version {
-            return last.keys
+            return last.differs
         }
-        let keys = old.keysDiffering(from: new)
-        lastDifference = (old.version, new.version, keys)
-        return keys
+        let differs = old.differs(from: new)
+        lastDifference = (old.version, new.version, differs)
+        return differs
     }
 
-    private func rebase(_ node: PathTrie<Entry>.Node, from old: EnvironmentValues, to new: EnvironmentValues, keys: [ObjectIdentifier]) {
+    private func rebase(
+        _ node: PathTrie<Entry>.Node,
+        from old: EnvironmentValues,
+        to new: EnvironmentValues,
+        relinked: inout [ObjectIdentifier: (from: EnvironmentEntry, to: EnvironmentEntry)]
+    ) {
         if var entry = node.value {
-            entry.environment = entry.environment.rebased(from: old, to: new, keys: keys)
+            entry.environment = entry.environment.rebased(from: old, to: new, relinked: &relinked)
             node.value = entry
         }
         node.forEachChild { _, child in
-            rebase(child, from: old, to: new, keys: keys)
+            rebase(child, from: old, to: new, relinked: &relinked)
         }
     }
 
