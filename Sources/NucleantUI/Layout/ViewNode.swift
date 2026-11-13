@@ -533,12 +533,12 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     let lazyCursor = context.lazyCursor
     let lazyKey = lazyCursor?.key
 
-    if let candidate = context.records.candidate(at: path) {
+    if let candidate = context.candidate {
         // `identity` first: it carries the type, which `isEquivalent` relies on.
         let reusable = candidate.identity == identity
             && candidate.stackAxis == context.stackAxis
             && candidate.lazyKey == lazyKey
-            && !context.isDirty(under: path)
+            && !context.isDirtyHereOrBelow
             && candidate.readsAgree(with: context.environment)
             && candidate.isEquivalent(to: view)
         if reusable {
@@ -546,7 +546,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             lazyCursor?.position += candidate.lazyUnits
             // What the kept subtree read, the view around it has read too.
             EnvironmentReads.shared.add(candidate.environmentReads)
-            context.records.reuse(candidate, at: path, under: context.environment)
+            context.reuse(candidate)
             if PerfTrace.isEnabled { PerfTrace.nodesReused += 1 }
             PerfTrace.trace("reuse \(path) \(V.self)")
             return node
@@ -556,7 +556,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             let reason = candidate.identity != identity ? "identity"
                 : candidate.stackAxis != context.stackAxis ? "stack axis"
                 : candidate.lazyKey != lazyKey ? "lazy window"
-                : context.isDirty(under: path) ? "dirty"
+                : context.isDirtyHereOrBelow ? "dirty"
                 : !candidate.readsAgree(with: context.environment) ? "environment"
                 : "inputs"
             return "build \(path) \(V.self) — \(reason)"
@@ -623,7 +623,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         // own reads asked for. Not one whose body dissolves into the
         // parent's layout (a `Group`, a `ForEach`): a node is one laid-out
         // box.
-        isBoundary = (wasBoundary || context.isDirty(at: path) || DependencyTracker.shared.currentViewHasReads)
+        isBoundary = (wasBoundary || context.isDirtyHere || DependencyTracker.shared.currentViewHasReads)
             && !node.content.isTransparent
         if isBoundary {
             let body = node
@@ -647,7 +647,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     // how to recognise it next time. The record holds the concrete view
     // value: a scoped rebuild re-runs it without walking down from the root,
     // and a parent that re-runs compares its new child against it.
-    context.records.record(
+    context.record(
         RebuildRecords.Entry(
             identity: identity,
             environment: context.environment,
@@ -660,8 +660,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             isBoundary: isBoundary,
             lazyKey: lazyKey,
             lazyUnits: lazyKey.map { lazyCursor!.position - $0.start } ?? 0
-        ),
-        at: path
+        )
     )
     return node
 }

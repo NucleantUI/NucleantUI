@@ -58,7 +58,7 @@ extension GeometryReader: BuiltinView {
         // The content is not in a stack of its own; clear any inherited axis
         // so a `Spacer` inside doesn't stretch along the enclosing stack's.
         inner.stackAxis = nil
-        let reader = GeometryReaderContent(content: content, log: log, context: inner)
+        let reader = GeometryReaderContent(content: content, log: log, context: inner.keptPastThisBuild)
         // Placed before: built now, with where it was, so what stands
         // inside is kept or released by this pass like everything else.
         // Never placed: there is nothing to build it for yet, and nothing

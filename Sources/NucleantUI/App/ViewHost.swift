@@ -427,7 +427,7 @@ public final class ViewHost {
                 dirtyPaths: paths
             )
             context.transaction = transaction
-            context.path = path
+            context.move(to: path)
             context.stackAxis = record.stackAxis
             // A view inside a lazy container rebuilds under the window it
             // was built under, not eagerly.

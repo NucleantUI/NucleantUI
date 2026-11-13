@@ -56,7 +56,7 @@ final class DragSession {
                 animations: AnimationStore(),
                 records: RebuildRecords()
             )
-            context.path = [-1]
+            context.move(to: [-1])
             let node = buildNode(makePreview(), &context)
             let size = node.sizeThatFits(.unspecified)
             preview = .view(node, size: size, environment: environment)

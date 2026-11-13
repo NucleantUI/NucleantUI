@@ -211,11 +211,6 @@ extension ViewNode {
 
 extension BuildContext {
 
-    /// Whether the child about to be built in slot `index` is new here.
-    func isNewChild(at index: Int) -> Bool {
-        records.candidate(at: path + [index]) == nil
-    }
-
     /// The slot a `ForEach` builds an element in: the hash of its id — any
     /// `Int` but the one transition bodies are built under.
     func childSlot<ID: Hashable>(for id: ID) -> Int {
@@ -240,7 +235,7 @@ extension BuildContext {
         }
         // What stood here and was not built again has been removed.
         if stood {
-            for (index, node) in records.leftoverChildren(under: path) {
+            for (index, node) in leftoverChildren {
                 beginExit(index: index, child: node, standing: previous[index], built: built, into: &slots)
             }
         }
@@ -417,7 +412,7 @@ extension BuildContext {
         animation: Animation?
     ) -> ViewNode {
         var context = self
-        context.path = path + [TransitionSlot.bodies, index]
+        context.move(to: path + [TransitionSlot.bodies, index])
         // Not one of a lazy container's items: the child it stands on was
         // counted as one.
         context.lazyCursor = nil

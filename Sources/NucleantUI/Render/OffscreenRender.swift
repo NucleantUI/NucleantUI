@@ -86,7 +86,7 @@ final class OffscreenRender {
             animations: animations,
             records: records
         )
-        context.path = [Self.rootIndex]
+        context.move(to: [Self.rootIndex])
         let node = buildNode(view, &context)
         releaseDeparted()
 
