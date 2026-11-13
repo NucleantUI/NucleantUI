@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `b42bfcf`.
+Last updated after `9fafb43`.
 
 ## Small fixes that are certain
 
@@ -78,7 +78,9 @@ Last updated after `b42bfcf`.
   arrays.
 - [x] **4.5** A path's elements as flat arrays — `b42bfcf`. `elements`
   and `Path.Element` stay as public API, made from the storage on each ask.
-- [ ] **4.6** `DrawContext` split into plain data and one shared reference.
+- [x] **4.6** `DrawContext` split into plain data and one shared reference —
+  `9fafb43`. Turned clips, the shader canvas input, the animation and the
+  coordinate spaces sit behind one object; the rest is plain data.
 - [x] **4.7** Paint bounds worked out once — `1280e85` (a shape's path box,
   kept on the node), `5e8fe6e` (each command's bounds under its state, kept
   by the list when the command is appended).
