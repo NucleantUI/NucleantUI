@@ -64,7 +64,10 @@ struct RenderTextureContent: NodeContent {
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0, let host = ShaderHost.current else { return }
         let clip = context.compositeClip
-        host.renderTextures.place(key: key, texture: texture, rect: rect, clip: clip)
-        host.boundaries.noteNested(at: list.commands.count, rect: clip.map { rect.intersection($0) } ?? rect)
+        // The image is mapped across the frame where the transform shows it
+        // — a stack's slide moves it with the screen.
+        let shown = context.compositeFrame(of: rect)
+        host.renderTextures.place(key: key, texture: texture, rect: shown, clip: clip)
+        host.boundaries.noteNested(at: list.commands.count, rect: clip.map { shown.intersection($0) } ?? shown)
     }
 }

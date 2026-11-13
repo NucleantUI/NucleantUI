@@ -396,6 +396,66 @@ public struct DisplayList: Equatable, Sendable {
         }
         return copy
     }
+
+    /// The same list with `transform` applied after each command's own:
+    /// how a `.shader` layer takes a scaled view's commands back to its
+    /// frame's size. A move and a scale without a flip only — what keeps a
+    /// clip, a rect on screen, a rect.
+    func transformed(by transform: Transform) -> DisplayList {
+        guard !transform.isIdentity else { return self }
+        var copy = DisplayList()
+        copy.commands.reserveCapacity(commands.count)
+        for command in commands {
+            copy.commands.append(command.transformed(by: transform))
+        }
+        return copy
+    }
+}
+
+extension DrawCommand {
+
+    /// This command with `transform` — a move and a scale, no flip —
+    /// applied after its own. The geometry stays as it is; the command's
+    /// transform, and the clips on screen, take it on.
+    func transformed(by transform: Transform) -> DrawCommand {
+        let radiusScale = min(transform.e11, transform.e22)
+        func after(_ own: Transform) -> Transform { transform.concatenating(own) }
+        func after(_ clips: [TransformedClip]) -> [TransformedClip] {
+            clips.map { TransformedClip(rect: $0.rect, cornerRadius: $0.cornerRadius, transform: after($0.transform)) }
+        }
+        switch self {
+        case .shape(var draw):
+            draw.transform = after(draw.transform)
+            draw.clip = draw.clip?.applying(transform)
+            draw.clipCornerRadius *= radiusScale
+            draw.transformedClips = after(draw.transformedClips)
+            return .shape(draw)
+        case .text(var draw):
+            draw.transform = after(draw.transform)
+            draw.clip = draw.clip?.applying(transform)
+            draw.clipCornerRadius *= radiusScale
+            draw.transformedClips = after(draw.transformedClips)
+            return .text(draw)
+        case .image(var draw):
+            draw.transform = after(draw.transform)
+            draw.clip = draw.clip?.applying(transform)
+            draw.clipCornerRadius *= radiusScale
+            draw.transformedClips = after(draw.transformedClips)
+            return .image(draw)
+        case .svg(var draw):
+            draw.transform = after(draw.transform)
+            draw.clip = draw.clip?.applying(transform)
+            draw.clipCornerRadius *= radiusScale
+            draw.transformedClips = after(draw.transformedClips)
+            return .svg(draw)
+        case .canvas(var draw):
+            draw.transform = after(draw.transform)
+            draw.clip = draw.clip?.applying(transform)
+            draw.clipCornerRadius *= radiusScale
+            draw.transformedClips = after(draw.transformedClips)
+            return .canvas(draw)
+        }
+    }
 }
 
 /// The ambient state a node draws under: inherited opacity, clip and
@@ -459,6 +519,32 @@ public struct DrawContext: Sendable {
         case (nil, let outer?): return outer
         case (nil, nil): return nil
         }
+    }
+
+    /// Where `rect`, a frame in layout space, shows under `transform`, for
+    /// a node whose image the engine composites into a rect — a shader
+    /// slot, a texture, a canvas node. Drawn commands carry the transform;
+    /// such a node has only this rect, so it is how the node follows a
+    /// stack's slide, an `.offset` or a `.scaleEffect`.
+    ///
+    /// A move or a scale gives `rect` under the transform exactly. The
+    /// composite can only place an image in a rect, not turn it: under a
+    /// rotation the frame's center goes where the transform takes it, at
+    /// the size the transform scales it to, and stays level.
+    func compositeFrame(of rect: Rect) -> Rect {
+        let t = transform
+        guard !t.isIdentity else { return rect }
+        let width = rect.width * (t.e11 * t.e11 + t.e21 * t.e21).squareRoot()
+        let height = rect.height * (t.e12 * t.e12 + t.e22 * t.e22).squareRoot()
+        if t.e12 == 0 && t.e21 == 0 {
+            // From the corner the transform takes to the top-left, so a
+            // move leaves the size exactly as it was.
+            let x = t.e11 * (t.e11 < 0 ? rect.maxX : rect.minX) + t.e13
+            let y = t.e22 * (t.e22 < 0 ? rect.maxY : rect.minY) + t.e23
+            return Rect(x: x, y: y, width: width, height: height)
+        }
+        let center = t.apply(to: Point(x: rect.midX, y: rect.midY))
+        return Rect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
     }
 
     public init() {}
