@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `25eeafe`.
+Last updated after `b42bfcf`.
 
 ## Small fixes that are certain
 
@@ -72,13 +72,16 @@ Last updated after `25eeafe`.
   The largest gain per frame in the plan, and the most work.
 - [x] **4.2** Paths in their own space — `d6af0fd`
 - [x] **4.3** The path kept on the node — `d6af0fd`
-- [ ] **4.4** One draw state shared by the five commands.
-- [ ] **4.5** A path's elements as flat arrays.
+- [x] **4.4** One draw state shared by the five commands — `5e8fe6e`. The
+  list keeps a `DrawState` per run of commands; each command has an index
+  into them. The payloads stay inline in the command enum, not in side
+  arrays.
+- [x] **4.5** A path's elements as flat arrays — `b42bfcf`. `elements`
+  and `Path.Element` stay as public API, made from the storage on each ask.
 - [ ] **4.6** `DrawContext` split into plain data and one shared reference.
-- [~] **4.7** Paint bounds worked out once — `1280e85`. The costly part, a
-  shape's path box, is carried by the command and kept on the node; the
-  rest (a rect under a transform and a clip) is still worked out on each
-  ask.
+- [x] **4.7** Paint bounds worked out once — `1280e85` (a shape's path box,
+  kept on the node), `5e8fe6e` (each command's bounds under its state, kept
+  by the list when the command is appended).
 - [x] **4.8** Text drawn from its lines — `d9ceb03`
 - [x] **4.9** No gradient rebuilt at full opacity — `d350522`
 
@@ -125,6 +128,8 @@ Last updated after `25eeafe`.
 - `43a7f32` — closure equivalence read a context whose capture layout is
   only known at run time (one holding a Foundation `Date`) from its header.
   Bookmarks crashed comparing the inspector's buttons.
+- `116a331` — `DrawContext` no longer carries the color scheme: since 1.11
+  nothing read it there.
 
 ## Open decisions
 
