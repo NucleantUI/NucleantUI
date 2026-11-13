@@ -75,15 +75,17 @@ extension ViewNode {
         return chain
     }
 
-    /// `value` found on this node at `point`, as a hit test reports it.
+    /// `value` found on this node at `point`, as a hit test reports it: in
+    /// the space its content is drawn in (`contentTransform`).
     fileprivate func hitRecord<Value>(_ value: Value, at point: Point) -> Hit<Value>? {
-        guard let local = mapIntoLocalSpace(point) else { return nil }
+        let drawn = contentTransform
+        guard let local = drawn.inverseApplied(to: point) else { return nil }
         return Hit(
             value: value,
             node: self,
             localPoint: Point(x: local.x - frame.minX, y: local.y - frame.minY),
             frame: frame,
-            transform: transform
+            transform: drawn
         )
     }
 
