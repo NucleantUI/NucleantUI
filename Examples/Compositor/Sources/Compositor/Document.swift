@@ -165,7 +165,7 @@ final class CompositorLayer: Identifiable {
     }
 
     /// This layer alone, as a tree — what the texture holds, and what the
-    /// CPU export draws instead of reading the image back.
+    /// export draws through `renderImage` instead of reading the image back.
     var art: LayerArt {
         LayerArt(
             artwork: artwork,

@@ -19,8 +19,9 @@
 //    NucleantUI_PyShader). The mix sliders are its input, read through
 //    observation, and are not.
 //  * The **export** goes the other way entirely: `renderImage` draws the
-//    same trees on the CPU with no window and no GPU, which is how a
-//    document is written out at a size the window never had.
+//    same trees again with no window, by Skia on a Vulkan device of its
+//    own, which is how a document is written out at a size the window
+//    never had.
 //
 
 import Foundation
@@ -448,14 +449,13 @@ private struct Row<Content: View> {
 
 // MARK: - Export
 
-/// The document flattened on the CPU.
+/// The document flattened into one image.
 ///
-/// `renderImage` lays the same trees out at any size with no window and no
-/// GPU — which is what an export is. It draws them stacked with their mix as
-/// opacity: the blend modes belong to the GPU composite, and a vector canvas
-/// has no screen or difference blend to offer, so this is deliberately the
-/// normal-blended flatten rather than a second implementation of the shader
-/// that would drift from it.
+/// `renderImage` lays the same trees out at any size and draws them with no
+/// window — which is what an export is. It draws them stacked with their mix
+/// as opacity: the blend modes belong to the composite shader, so this is
+/// deliberately the normal-blended flatten rather than a second
+/// implementation of the shader that would drift from it.
 @View
 private struct ExportPane {
     let document: CompositorDocument
@@ -488,8 +488,8 @@ private struct ExportPane {
             .cornerRadius(8)
             Text("""
             Drawn by renderImage: the same trees the textures hold, laid out \
-            again on the CPU at \(Int(scale)) pixels per point. Mix is applied \
-            as opacity — the blend modes are the GPU composite's.
+            and drawn again, off the window, at \(Int(scale)) pixels per point. \
+            Mix is applied as opacity — the blend modes are the GPU composite's.
             """)
                 .font(.system(size: 11))
                 .foregroundStyle(ShapeStyle.secondary)

@@ -82,8 +82,11 @@ change that adds the API.
 - [x] Text .font / .fontWeight / .bold / .italic
 - [x] Text .lineLimit (incl. ranges and `reservesSpace:`) / .multilineTextAlignment
 - [ ] AttributedString / Text concatenation / Markdown
-- [ ] .underline / .strikethrough / .monospaced / .kerning / .tracking
-- [ ] .lineSpacing / .truncationMode / .minimumScaleFactor / .textCase
+- [x] .underline / .strikethrough / .kerning / .tracking / .baselineOffset
+      — on Text and as defaults for the texts below
+- [ ] .monospaced
+- [x] .lineSpacing / .truncationMode / .minimumScaleFactor / .textCase /
+      .allowsTightening
 - [ ] .textSelection
 - [x] Font — system, custom, text styles, weight, design
 
@@ -140,8 +143,18 @@ change that adds the API.
 - [ ] .navigationDestination(isPresented:) / (item:)
 - [ ] NavigationSplitView
 - [ ] TabView
-- [x] .toolbar(_:for:) / .toolbarVisibility — hiding the bar
-- [ ] .toolbar { ToolbarItem } — toolbar content
+- [x] .toolbar(_:for:) / .toolbarVisibility — hiding the bar (navigation
+      bar and bottom bar)
+- [x] .toolbar { ToolbarItem } — toolbar content: ToolbarItem /
+      ToolbarItemGroup / ToolbarSpacer / ToolbarContent /
+      ToolbarContentBuilder, every ToolbarItemPlacement, .secondaryAction
+      in a "…" menu, the bottom bar; in the stack's bar on every platform,
+      macOS included
+- [x] .navigationBarBackButtonHidden
+- [ ] .toolbar(id:) — a toolbar the user rearranges
+- [ ] .navigationBarTitleDisplayMode / large titles
+- [ ] .navigationSubtitle / .toolbarTitleMenu
+- [ ] .toolbarBackground / .toolbarColorScheme / .toolbarRole
 - [x] .popover
 - [x] .contextMenu
 - [ ] .sheet / .fullScreenCover
@@ -167,7 +180,7 @@ change that adds the API.
 - [x] .drawingGroup
 - [x] Shader / ShaderLibrary / .shader
 - [x] ImageRenderer — as `renderImage(size:scale:)` / `.image(size:scale:)`,
-      a `RasterImage` drawn with no window and no GPU
+      a `RasterImage` drawn by Skia on a windowless Vulkan device
 - [ ] .visualEffect
 
 ## Layout modifiers
@@ -257,6 +270,8 @@ change that adds the API.
 - `.relativeSize(width:height:)` — a fraction of the space the parent offers
 - `.framed(_:alignment:)` — `.frame` and `.position` from one `Rect`
 - `PathShape` — a shape from a `(Size) -> Path` closure
+- `ArrowBack` — the back button's chevron as a shape, for a back button of
+  your own in any color
 - `Color.dynamic(light:dark:)`
 - `FontRegistry.register(path:as:)` — a font file as a `Font.custom` family
 - `SvgView` / `SvgImage` — an SVG document parsed by Skia, drawn at its own
