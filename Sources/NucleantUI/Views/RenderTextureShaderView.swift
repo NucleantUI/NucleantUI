@@ -88,6 +88,9 @@ struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0, let host = ShaderHost.current else { return }
+        // Drawn at the frame's size, composited where the transform shows
+        // the frame — a stack's slide moves it with the screen.
+        let shown = context.compositeFrame(of: rect)
         host.useModule(
             path: path,
             words: words,
@@ -96,10 +99,11 @@ struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
             draw: draw,
             textures: textures,
             rect: rect,
+            shown: shown,
             clip: context.compositeClip,
             texture: texture
         )
-        host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
+        host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { shown.intersection($0) } ?? shown)
     }
 }
 

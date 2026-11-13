@@ -144,8 +144,8 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         var elapsed: Double = 0
         /// Frames drawn since it appeared — ShaderToy's `iFrame`.
         var frame: Int = 0
-        /// Where the view was last placed, in points — the pointer uniform
-        /// is relative to it.
+        /// Where the view last showed, in points: its frame under its
+        /// transform — the pointer uniform is relative to it.
         var rect: Rect = .zero
         /// `rect`'s origin snapped to a whole pixel, in points: where the
         /// image is actually composited, and so where a layer's content is
@@ -265,6 +265,11 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// changed; otherwise a change to it is noticed by observation and
     /// uploaded by `tick`, without the view tree. Its values are packed as
     /// they are: a `Color` in it is the color it was given.
+    ///
+    /// `rect` is the view's frame, which the slot's image is the size of;
+    /// `shown` is where the frame shows under the view's transform
+    /// (`DrawContext.compositeFrame(of:)`), which the image is composited
+    /// into — moved with it, and stretched when the transform scales it.
     func useModule<Input: ShaderInput>(
         path: [Int],
         words: [UInt32],
@@ -273,6 +278,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         draw: ShaderDraw,
         textures: ShaderTextures,
         rect: Rect,
+        shown: Rect,
         clip: Rect?,
         layer content: DisplayList? = nil,
         canvas: RenderNodeManager<N>.ThorCanvasNode? = nil,
@@ -304,6 +310,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             inputBytes: bytes.count,
             textures: textures,
             rect: rect,
+            shown: shown,
             clip: clip,
             canvas: canvas,
             texture: texture
@@ -315,7 +322,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             redraw(slot, covering: draw)
         }
         if let content {
-            rasterize(content, into: slot)
+            rasterize(layerContent(content, rect: rect, shown: shown, in: slot), into: slot)
         }
         if changed {
             slot.container.needsRender = true
@@ -357,6 +364,20 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         slot.container.needsRender = true
     }
 
+    /// What a `.shader(_:)` effect's view drew, as its layer holds it. The
+    /// commands are where the view shows; the layer is the frame's size,
+    /// from where it shows, and is stretched by the composite when the
+    /// view is scaled — so a scaled view's commands are scaled back to the
+    /// frame's size about that corner first.
+    private func layerContent(_ content: DisplayList, rect: Rect, shown: Rect, in slot: Slot) -> DisplayList {
+        guard shown.size != rect.size, shown.width > 0, shown.height > 0 else { return content }
+        let unscale = Transform.around(
+            slot.pixelOrigin,
+            .scale(x: rect.width / shown.width, y: rect.height / shown.height)
+        )
+        return content.transformed(by: unscale)
+    }
+
     /// Rasterize what a `.shader(_:)` effect's view drew into the slot's
     /// layer, if it is not what the layer already holds, and run the shader
     /// over it again.
@@ -384,14 +405,16 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     }
 
     /// The slot standing at `path`, rebuilt if its size or module changed,
-    /// created if there is none; placed at `rect` either way. `canvas` is the
-    /// canvas node it samples instead of a layer of its own.
+    /// created if there is none; sized by `rect` and composited at `shown`
+    /// either way. `canvas` is the canvas node it samples instead of a layer
+    /// of its own.
     private func slot(
         at path: [Int],
         request: Request,
         inputBytes: Int,
         textures: ShaderTextures,
         rect: Rect,
+        shown: Rect,
         clip: Rect?,
         canvas canvasInput: RenderNodeManager<N>.ThorCanvasNode? = nil,
         texture textureInput: RenderTexture? = nil
@@ -427,7 +450,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             // re-clipping a shader view is free; only a *resize*, a different
             // module, or an input the buffer can't hold needs the GPU objects
             // rebuilt.
-            place(existing, rect: rect, clip: clip)
+            place(existing, rect: rect, shown: shown, clip: clip)
             if existing.width == pixelWidth,
                existing.height == pixelHeight,
                existing.words == request.words,
@@ -492,7 +515,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             slot.elapsed = previous.elapsed
             slot.frame = previous.frame
         }
-        place(slot, rect: rect, clip: clip)
+        place(slot, rect: rect, shown: shown, clip: clip)
         composite(slot, at: order)
         slots[path] = slot
         return slot
@@ -531,25 +554,28 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         slot.container.needsRender = true
     }
 
-    /// Point a slot at its frame, and at whatever its container allows it to
-    /// draw within.
-    private func place(_ slot: Slot, rect: Rect, clip: Rect?) {
-        slot.rect = rect
+    /// Point a slot at where its frame shows, and at whatever its container
+    /// allows it to draw within. `rect` is the frame the image is the size
+    /// of; `shown` is that frame under the view's transform.
+    private func place(_ slot: Slot, rect: Rect, shown: Rect, clip: Rect?) {
+        slot.rect = shown
         // Whole pixels, at the image's own size: a viewport that starts or
         // ends between pixels resamples the image, and a 1:1 mapping is what
-        // keeps a layer's text as sharp as it was in the canvas.
-        let x = (rect.minX * scale).rounded(.down)
-        let y = (rect.minY * scale).rounded(.down)
+        // keeps a layer's text as sharp as it was in the canvas. A scaled
+        // view's image is stretched by the same factor as its frame.
+        let x = (shown.minX * scale).rounded(.down)
+        let y = (shown.minY * scale).rounded(.down)
         slot.pixelOrigin = Point(x: x / scale, y: y / scale)
         slot.container.compositeRect = SIMD4(
             x, y,
-            Double(slot.width), Double(slot.height)
+            Double(slot.width) * shown.width / rect.width,
+            Double(slot.height) * shown.height / rect.height
         )
         // Intersected here rather than in the engine: `clip` is the container's
         // rect, and what the slot may draw is the part of *its own* frame that
         // falls inside it.
         slot.container.compositeScissor = clip.map { clip in
-            let visible = rect.intersection(clip)
+            let visible = shown.intersection(clip)
             return SIMD4(
                 visible.minX * scale, visible.minY * scale,
                 visible.width * scale, visible.height * scale
@@ -559,7 +585,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             let s = slot.container.compositeScissor
             nucleantLogError(String(
                 format: "[layout] shader  rect x=%7.2f y=%7.2f w=%7.2f h=%7.2f  scissor %@\n",
-                rect.minX, rect.minY, rect.width, rect.height,
+                shown.minX, shown.minY, shown.width, shown.height,
                 s.map { String(format: "x=%.2f y=%.2f w=%.2f h=%.2f", $0.x, $0.y, $0.z, $0.w) }
                     ?? "none"
             ))

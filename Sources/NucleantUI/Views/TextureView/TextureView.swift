@@ -116,15 +116,19 @@ struct TextureContent: NodeContent {
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0, let host = ShaderHost.current else { return }
         let clip = context.compositeClip
+        // Written at the frame's size, composited where the transform shows
+        // the frame — a stack's slide moves it with the screen.
+        let shown = context.compositeFrame(of: rect)
         host.textures.place(
             key: key,
             rect: rect,
+            shown: shown,
             clip: clip,
             sourceID: sourceID,
             didChange: didChange,
             didMove: didMove,
             didDisappear: didDisappear
         )
-        host.boundaries.noteNested(at: list.commands.count, rect: clip.map { rect.intersection($0) } ?? rect)
+        host.boundaries.noteNested(at: list.commands.count, rect: clip.map { shown.intersection($0) } ?? shown)
     }
 }

@@ -45,8 +45,9 @@ extension RenderNodeManager {
         var readerPath: [Int] = []
         /// Seen during the current layout pass.
         var used = true
-        /// Where the view was last placed, in points, and that origin snapped
-        /// to a whole pixel: where the image actually composites.
+        /// Where the view last showed, in points — its frame under its
+        /// transform — and that origin snapped to a whole pixel: where the
+        /// image actually composites.
         var rect: Rect = .zero
         var pixelOrigin: Point = .zero
 
@@ -58,18 +59,25 @@ extension RenderNodeManager {
             self.height = height
         }
 
-        /// Point the node at its frame, and at whatever its container lets
-        /// it show. `scale` is pixels per point.
-        func place(rect: Rect, clip: Rect?, scale: Double) {
-            self.rect = rect
+        /// Point the node at where its frame shows, and at whatever its
+        /// container lets it show. `rect` is the frame the canvas is painted
+        /// at; `shown` is that frame under the view's transform, which the
+        /// image is moved to and, for a scaled view, stretched by. `scale`
+        /// is pixels per point.
+        func place(rect: Rect, shown: Rect, clip: Rect?, scale: Double) {
+            self.rect = shown
             // Whole pixels, at the image's own size, so texels map 1:1. The
             // image is bigger than the frame (the granule); the scissor below
             // cuts the slack.
-            let x = (rect.minX * scale).rounded(.down)
-            let y = (rect.minY * scale).rounded(.down)
+            let x = (shown.minX * scale).rounded(.down)
+            let y = (shown.minY * scale).rounded(.down)
             pixelOrigin = Point(x: x / scale, y: y / scale)
-            container.compositeRect = SIMD4(x, y, Double(width), Double(height))
-            let visible = clip.map { rect.intersection($0) } ?? rect
+            container.compositeRect = SIMD4(
+                x, y,
+                Double(width) * shown.width / rect.width,
+                Double(height) * shown.height / rect.height
+            )
+            let visible = clip.map { shown.intersection($0) } ?? shown
             let minX = (visible.minX * scale).rounded(.down)
             let minY = (visible.minY * scale).rounded(.down)
             let maxX = (visible.maxX * scale).rounded(.up)
