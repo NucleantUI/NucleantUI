@@ -22,7 +22,20 @@ struct TextContent: NodeContent {
     var animatesSize: Bool { false }
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
-        TextMeasurer.layout(input, proposal: proposal).size
+        layout(for: proposal, node: node).size
+    }
+
+    /// The layout under `proposal`: the one kept on the node, when it was
+    /// made under the same — placing follows measuring under the proposal
+    /// just measured, and a pass that only places asks for it again —
+    /// or the measurer's, kept.
+    private func layout(for proposal: ProposedSize, node: ViewNode) -> TextLayout {
+        if let kept = node.layoutCache as? TextLayoutCache, kept.proposal == proposal {
+            return kept.layout
+        }
+        let layout = TextMeasurer.layout(input, proposal: proposal)
+        node.layoutCache = TextLayoutCache(proposal: proposal, layout: layout)
+        return layout
     }
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
@@ -34,7 +47,7 @@ struct TextContent: NodeContent {
         // box a parent squeezed below what the text asked for are they made
         // again, for the box. The half-point slack absorbs the difference
         // between summed glyph advances here and ThorVG's own layout.
-        var layout = TextMeasurer.layout(input, proposal: proposal)
+        var layout = self.layout(for: proposal, node: node)
         if layout.size.width > rect.width + 0.5 || layout.size.height > rect.height + 0.5 {
             layout = TextMeasurer.layout(input, proposal: ProposedSize(
                 width: min(proposal.width ?? .infinity, rect.width + 0.5),
@@ -51,7 +64,7 @@ struct TextContent: NodeContent {
 
         let font = layout.scale == 1 ? input.font : input.font.size(input.font.size * layout.scale)
         list.append(.text(TextDraw(
-            string: layout.lines.joined(separator: "\n"),
+            lines: layout.lines,
             frame: frame,
             font: font,
             color: context.resolve(animatedColor?.current(of: style) ?? style).flatColor,
@@ -69,6 +82,18 @@ struct TextContent: NodeContent {
             clipCornerRadius: context.clipCornerRadius,
             transformedClips: context.transformedClips
         )))
+    }
+}
+
+/// A text node's last layout, and the proposal it was made under.
+@MainActor
+final class TextLayoutCache {
+    let proposal: ProposedSize
+    let layout: TextLayout
+
+    init(proposal: ProposedSize, layout: TextLayout) {
+        self.proposal = proposal
+        self.layout = layout
     }
 }
 

@@ -163,7 +163,16 @@ public struct ShapeDraw: Equatable, Sendable {
 }
 
 public struct TextDraw: Equatable, Sendable {
-    public var string: String
+    /// The text's lines, as layout broke them — or, for a draw made from a
+    /// string, its lines at each "\n". Carried as they are, so a text laid
+    /// out once is neither joined nor split again to be drawn.
+    public var lines: [String]
+
+    /// The text, its lines joined with "\n".
+    public var string: String {
+        get { lines.joined(separator: "\n") }
+        set { lines = newValue.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) }
+    }
     /// The box the text is laid out in — absolute, already sized by layout.
     public var frame: Rect
     public var font: Font
@@ -218,7 +227,48 @@ public struct TextDraw: Equatable, Sendable {
         clipCornerRadius: Double = 0,
         transformedClips: [TransformedClip] = []
     ) {
-        self.string = string
+        self.init(
+            lines: string.split(separator: "\n", omittingEmptySubsequences: false).map(String.init),
+            frame: frame,
+            font: font,
+            color: color,
+            alignment: alignment,
+            lineLimit: lineLimit,
+            isTruncated: isTruncated,
+            wraps: wraps,
+            letterSpacing: letterSpacing,
+            lastLineTightening: lastLineTightening,
+            lineSpacing: lineSpacing,
+            underline: underline,
+            strikethrough: strikethrough,
+            transform: transform,
+            clip: clip,
+            clipCornerRadius: clipCornerRadius,
+            transformedClips: transformedClips
+        )
+    }
+
+    /// A draw of lines already broken.
+    init(
+        lines: [String],
+        frame: Rect,
+        font: Font,
+        color: Color,
+        alignment: TextAlignment = .leading,
+        lineLimit: Int? = nil,
+        isTruncated: Bool = false,
+        wraps: Bool = true,
+        letterSpacing: Double = 0,
+        lastLineTightening: Double = 0,
+        lineSpacing: Double = 0,
+        underline: Text.LineStyle? = nil,
+        strikethrough: Text.LineStyle? = nil,
+        transform: Transform = .identity,
+        clip: Rect? = nil,
+        clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = []
+    ) {
+        self.lines = lines
         self.frame = frame
         self.font = font
         self.color = color
