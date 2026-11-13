@@ -492,7 +492,7 @@ public final class ViewHost {
         var list = DisplayList()
         overlay.list = DisplayList()
         overlay.order = nil
-        var context = DrawContext(colorScheme: environment.colorScheme)
+        var context = DrawContext()
         // What moved in the frame that built it moves the way the change
         // said; in the frames after, it only follows.
         if animations.isCommitPass {
@@ -506,7 +506,7 @@ public final class ViewHost {
         )
         // Over everything, and outside the tree: the preview is drawn, never
         // hit tested, so the destination under it is found through it.
-        dragSession?.draw(into: &overlay.list, colorScheme: environment.colorScheme)
+        dragSession?.draw(into: &overlay.list)
         if let shaderSlots {
             // The overlay slot and the preview are the last thing painted,
             // so they are a node of their own, over every other node; an

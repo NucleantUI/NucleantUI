@@ -558,8 +558,6 @@ public struct DrawContext: Sendable {
     /// Clips set under a rotation, which no rect on screen can stand for —
     /// `clip` holds the box around them.
     public var transformedClips: [TransformedClip] = []
-    /// The appearance dynamic colors resolve against here.
-    public var colorScheme: ColorScheme = .light
 
     /// True while the list being filled is a *capture* that wants every
     /// pixel of the subtree in it — a `.shader` layer, a `.hidden()` view's
@@ -637,10 +635,6 @@ public struct DrawContext: Sendable {
     }
 
     public init() {}
-
-    public init(colorScheme: ColorScheme) {
-        self.colorScheme = colorScheme
-    }
 
     /// `color` faded by the inherited opacity — every leaf applies this
     /// rather than the renderer setting per-paint opacity, so gradients fade

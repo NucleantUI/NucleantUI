@@ -164,7 +164,7 @@ extension View {
 // MARK: - The modifiers
 //
 // Each files what it says with the enclosing stack as it is built, and
-// puts nothing in the tree but the scheme (`EnvironmentContent`).
+// puts nothing of its own in the tree (`EnvironmentContent`).
 
 /// `.navigationDestination(for:destination:)`. Built again whenever its
 /// parent is: the closure can't be compared, so it registers again, and

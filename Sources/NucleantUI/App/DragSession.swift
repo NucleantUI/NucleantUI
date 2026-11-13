@@ -117,8 +117,8 @@ final class DragSession {
     // MARK: - The preview
 
     /// Paint the preview at the current location, over everything.
-    func draw(into list: inout DisplayList, colorScheme: ColorScheme) {
-        var faded = DrawContext(colorScheme: colorScheme)
+    func draw(into list: inout DisplayList) {
+        var faded = DrawContext()
         faded.opacity = Self.previewOpacity
         faded.flattensRenderNodes = true
         faded.freezesMotion = true

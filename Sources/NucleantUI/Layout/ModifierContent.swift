@@ -391,17 +391,12 @@ struct InteractionContent: NodeContent {
     var hitTarget: HitTarget? { target }
 }
 
-/// `.environment(...)` and the sugar built on it (`.font`, `.foregroundColor`).
-/// Almost entirely a build-time concern — by placement time the values are
-/// baked into the leaves. The exception is the color scheme: dynamic colors
-/// are resolved as they are drawn, so the scheme rides on the draw context
-/// and is set here for the subtree.
+/// `.environment(...)` and the sugar built on it (`.font`, `.foregroundStyle`,
+/// `.colorScheme`): a build-time concern only. By placement time the values
+/// are in the leaves — a style was resolved where its view was built, in the
+/// environment it read — so the node places its child as it is.
 struct EnvironmentContent: NodeContent {
-    let colorScheme: ColorScheme
-
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
-        var inner = context
-        inner.colorScheme = colorScheme
-        node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
+        node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
     }
 }

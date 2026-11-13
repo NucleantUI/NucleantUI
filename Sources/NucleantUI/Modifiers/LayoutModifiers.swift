@@ -82,12 +82,11 @@ extension _ModifierView: BuiltinView where Modifier: PrimitiveModifier {
     }
 }
 
-/// A modifier whose node only carries the color scheme in effect below it
-/// — what a modifier that acts at build time and draws nothing of its own
+/// What a modifier that acts at build time and draws nothing of its own
 /// puts in the tree (see `EnvironmentContent`).
 extension PrimitiveModifier where Content == EnvironmentContent {
     func environmentContent(_ context: BuildContext) -> EnvironmentContent {
-        EnvironmentContent(colorScheme: context.environment.colorScheme)
+        EnvironmentContent()
     }
 }
 

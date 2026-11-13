@@ -90,7 +90,7 @@ final class OffscreenRender {
         let node = buildNode(view, &context)
         releaseDeparted()
 
-        var draw = DrawContext(colorScheme: environment.colorScheme)
+        var draw = DrawContext()
         // The list is the texture: a drawing group inside draws into it.
         draw.flattensRenderNodes = true
         var list = DisplayList()
