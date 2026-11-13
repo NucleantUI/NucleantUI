@@ -70,16 +70,20 @@ struct DrawingGroupContent: NodeContent {
         child.place(in: rect, proposal: proposal, context: inner, into: &content)
         guard !content.isEmpty else { return }   // draws nothing: no node
         let clip = context.compositeClip
+        // The content carries the transform, so the image is the box the
+        // frame lands in under it — a stack's slide moves it with the
+        // screen, a scale or a rotation is drawn inside it.
+        let shown = rect.applying(context.transform)
         // A view bigger than the window gets an image of what is on screen
         // — its frame cut to its container's clip and the window — with the
         // content shifted so that part's corner lands at the image's origin.
         // Unlike a node that fits, a scroll then changes what the image
         // holds and repaints it, as the window canvas would have.
-        var visible = rect
+        var visible = shown
         let windowSize = host.renderNodes.windowSize
-        if rect.width > windowSize.width || rect.height > windowSize.height {
+        if shown.width > windowSize.width || shown.height > windowSize.height {
             let window = Rect(origin: .zero, size: windowSize)
-            visible = rect.intersection(clip.map { $0.intersection(window) } ?? window)
+            visible = shown.intersection(clip.map { $0.intersection(window) } ?? window)
             guard visible.width > 0, visible.height > 0 else { return }
         }
         guard let node = host.renderNodes.canvasNode(for: key, rect: visible) else { return }

@@ -182,6 +182,9 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
         // away by ThorVG.
         var content = backdrop ? list : DisplayList()
         child.place(in: rect, proposal: proposal, context: inner, into: &content)
+        // The slot is the frame's size and composites where the transform
+        // shows the frame: a stack's slide moves the effect with its screen.
+        let shown = context.compositeFrame(of: rect)
         if !backdrop, content.commands.isEmpty, let canvas = canvasInput.sole,
            canvas.covers(rect, scale: host.renderNodes.scale) {
             // The view is one canvas node and nothing else: its image is
@@ -194,6 +197,7 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
                 draw: draw,
                 textures: textures,
                 rect: rect,
+                shown: shown,
                 clip: context.compositeClip,
                 canvas: canvas.node,
                 changed: canvas.changed
@@ -212,11 +216,12 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
                 draw: draw,
                 textures: textures,
                 rect: rect,
+                shown: shown,
                 clip: context.compositeClip,
                 layer: content
             )
         }
-        host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { rect.intersection($0) } ?? rect)
+        host.boundaries.noteNested(at: list.commands.count, rect: context.compositeClip.map { shown.intersection($0) } ?? shown)
     }
 }
 
@@ -230,6 +235,8 @@ final class ShaderCanvasInput {
     struct Canvas {
         let node: RenderNodeManager<NucleantRenderNode>.ThorCanvasNode
         let rect: Rect
+        /// `rect` under the view's transform, where it composites by itself.
+        let shown: Rect
         let clip: Rect?
         /// Whether its paints were rasterized again this pass.
         let changed: Bool
@@ -250,9 +257,9 @@ final class ShaderCanvasInput {
         /// Composite the node into its frame, as one outside an effect is.
         func composite(host: ShaderSlotRegistry<NucleantRenderNode>) {
             node.container.compositesToWindow = true
-            node.place(rect: rect, clip: clip, scale: host.renderNodes.scale)
+            node.place(rect: rect, shown: shown, clip: clip, scale: host.renderNodes.scale)
             host.renderNodes.composite(node.container, at: order)
-            host.boundaries.noteNested(at: listIndex, rect: clip.map { rect.intersection($0) } ?? rect)
+            host.boundaries.noteNested(at: listIndex, rect: clip.map { shown.intersection($0) } ?? shown)
         }
     }
 

@@ -77,14 +77,19 @@ final class TextureNodeManager<N: NucleantContainerNode> {
         for entry in entries.values { entry.used = false }
     }
 
-    /// The node for the `TextureView` at `key`, placed at `rect` (points) and
-    /// cut to `clip`, in this pass's paint order — made if the view is new,
-    /// resized if its frame outgrew the image or its scale changed. `nil`
-    /// when a node could not be made (logged).
+    /// The node for the `TextureView` at `key`, sized by its frame `rect`
+    /// (points), composited at `shown` — the frame under the view's
+    /// transform — and cut to `clip`, in this pass's paint order. Made if the
+    /// view is new, resized if its frame outgrew the image or its scale
+    /// changed. `nil` when a node could not be made (logged).
+    ///
+    /// The source is told where the view shows: `origin` and `visibleFrame`
+    /// follow `shown`, so a slide is a run of moves.
     @discardableResult
     func place(
         key: RenderNodeKey,
         rect: Rect,
+        shown: Rect,
         clip: Rect?,
         sourceID: ObjectIdentifier,
         didChange: @escaping @MainActor (ViewTexture<N>) -> Void,
@@ -93,7 +98,7 @@ final class TextureNodeManager<N: NucleantContainerNode> {
     ) -> Entry? {
         let scale = renderNodes.scale
         let image = renderNodes.imageSize(for: rect)
-        let visible = clip.map { rect.intersection($0) } ?? rect
+        let visible = clip.map { shown.intersection($0) } ?? shown
         let entry: Entry
         var changed = false
         var moved = false
@@ -126,8 +131,8 @@ final class TextureNodeManager<N: NucleantContainerNode> {
                 entry.texture.scale = scale
                 changed = true
             }
-            if entry.texture.origin != rect.origin || entry.texture.visibleFrame != visible {
-                entry.texture.origin = rect.origin
+            if entry.texture.origin != shown.origin || entry.texture.visibleFrame != visible {
+                entry.texture.origin = shown.origin
                 entry.texture.visibleFrame = visible
                 moved = true
             }
@@ -149,7 +154,7 @@ final class TextureNodeManager<N: NucleantContainerNode> {
             entry = Entry(
                 texture: ViewTexture(
                     node: node, container: container, engine: engine,
-                    frame: rect, visibleFrame: visible, scale: scale
+                    frame: Rect(origin: shown.origin, size: rect.size), visibleFrame: visible, scale: scale
                 ),
                 sourceID: sourceID,
                 didChange: didChange,
@@ -161,7 +166,7 @@ final class TextureNodeManager<N: NucleantContainerNode> {
         }
         entry.texture.window = window
 
-        position(entry.texture, rect: rect, clip: clip, scale: scale)
+        position(entry.texture, rect: rect, shown: shown, clip: clip, scale: scale)
         renderNodes.composite(entry.texture.container, at: renderNodes.nextPaintOrder())
 
         // The entry's closure at the time of the call, not this one: a later
@@ -174,15 +179,20 @@ final class TextureNodeManager<N: NucleantContainerNode> {
         return entry
     }
 
-    /// Point the node's slot at the frame: origin snapped to a whole pixel so
-    /// texels land on pixels, the image at its own size, and a scissor that
+    /// Point the node's slot at where the frame shows: origin snapped to a
+    /// whole pixel so texels land on pixels, the image at its own size —
+    /// stretched by a transform that scales the frame — and a scissor that
     /// cuts it to the frame and to whatever clips the view — the image is
     /// bigger than the frame by up to a granule, and that slack is nobody's.
-    private func position(_ texture: ViewTexture<N>, rect: Rect, clip: Rect?, scale: Double) {
-        let x = (rect.minX * scale).rounded(.down)
-        let y = (rect.minY * scale).rounded(.down)
-        texture.container.compositeRect = SIMD4(x, y, Double(texture.node.width), Double(texture.node.height))
-        let visible = clip.map { rect.intersection($0) } ?? rect
+    private func position(_ texture: ViewTexture<N>, rect: Rect, shown: Rect, clip: Rect?, scale: Double) {
+        let x = (shown.minX * scale).rounded(.down)
+        let y = (shown.minY * scale).rounded(.down)
+        texture.container.compositeRect = SIMD4(
+            x, y,
+            Double(texture.node.width) * shown.width / rect.width,
+            Double(texture.node.height) * shown.height / rect.height
+        )
+        let visible = clip.map { shown.intersection($0) } ?? shown
         let minX = (visible.minX * scale).rounded(.down)
         let minY = (visible.minY * scale).rounded(.down)
         let maxX = (visible.maxX * scale).rounded(.up)

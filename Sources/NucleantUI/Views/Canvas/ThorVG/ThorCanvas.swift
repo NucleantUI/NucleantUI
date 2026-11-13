@@ -122,15 +122,18 @@ struct ThorCanvasContent: NodeContent {
         // is sized to the frame exactly so that image is the view's rect.
         // Otherwise the effect composites it as below.
         let clip = context.compositeClip
+        // Painted at the frame's size, composited where the transform shows
+        // the frame — a stack's slide moves it with the screen.
+        let shown = context.compositeFrame(of: rect)
         let shaderInput = context.shaderCanvasInput
         guard let node = host.renderNodes.thorCanvases.node(for: key, rect: rect, exactSize: shaderInput != nil) else { return }
         let scale = host.renderNodes.scale
         let order = host.renderNodes.nextPaintOrder()
         node.container.compositesToWindow = shaderInput == nil
         if shaderInput == nil {
-            node.place(rect: rect, clip: clip, scale: scale)
+            node.place(rect: rect, shown: shown, clip: clip, scale: scale)
             host.renderNodes.composite(node.container, at: order)
-            host.boundaries.noteNested(at: list.commands.count, rect: clip.map { rect.intersection($0) } ?? rect)
+            host.boundaries.noteNested(at: list.commands.count, rect: clip.map { shown.intersection($0) } ?? shown)
         }
 
         // Canvas pixels: the frame's size, not the image's — the slack past
@@ -162,6 +165,7 @@ struct ThorCanvasContent: NodeContent {
         shaderInput?.add(ShaderCanvasInput.Canvas(
             node: node,
             rect: rect,
+            shown: shown,
             clip: clip,
             changed: rasterize,
             order: order,
