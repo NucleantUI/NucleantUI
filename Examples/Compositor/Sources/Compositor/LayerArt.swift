@@ -4,7 +4,7 @@
 //
 //  What a layer draws. An ordinary view tree, with nothing in it that knows
 //  it is going into a texture — which is the point: `renderTexture` takes any
-//  tree, and the same tree goes to the CPU exporter through `renderImage`.
+//  tree, and the same tree goes to the exporter through `renderImage`.
 //
 //  Drawn on black with its own alpha, because the shader composites it over
 //  what is beneath: a layer's transparent part is where the stack below shows

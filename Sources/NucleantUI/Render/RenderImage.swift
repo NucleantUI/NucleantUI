@@ -2,8 +2,8 @@
 //  RenderImage.swift
 //  NucleantUI
 //
-//  A view tree rendered to a bitmap, on the CPU — SwiftUI's `ImageRenderer`,
-//  as a function.
+//  A view tree rendered to a bitmap — SwiftUI's `ImageRenderer`, as a
+//  function.
 //
 //  No window and no engine: the tree is laid out by `OffscreenRender`, and
 //  the display list is drawn on the GPU by Skia, through the same
@@ -30,10 +30,14 @@
 /// and no lifecycle — `onAppear` does not run — and it does not re-render for
 /// its own state. Call this again for a new image.
 ///
-/// A `Shader`, `TextureView` or `ThorCanvas` inside draws
-/// nothing: their pixels come from the GPU, and there is none here. A
-/// `.drawingGroup()` or `.shader(_:)` inside draws its content inline — the
-/// node and the effect are flattened away, not applied.
+/// It is drawn on the GPU, by Skia on a Vulkan device of its own that needs
+/// no window, as the window draws, and read back.
+///
+/// A `Shader`, `TextureView` or `ThorCanvas` inside draws nothing: each is
+/// drawn by a render node of its own, which only a window's engine runs,
+/// and a snapshot draws the display list alone. A `.drawingGroup()` or
+/// `.shader(_:)` inside draws its content inline — the node and the effect
+/// are flattened away, not applied.
 ///
 /// A non-positive size gives an empty image.
 @MainActor

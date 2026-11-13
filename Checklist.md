@@ -180,7 +180,7 @@ change that adds the API.
 - [x] .drawingGroup
 - [x] Shader / ShaderLibrary / .shader
 - [x] ImageRenderer — as `renderImage(size:scale:)` / `.image(size:scale:)`,
-      a `RasterImage` drawn with no window and no GPU
+      a `RasterImage` drawn by Skia on a windowless Vulkan device
 - [ ] .visualEffect
 
 ## Layout modifiers
