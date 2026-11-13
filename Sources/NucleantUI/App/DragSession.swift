@@ -161,8 +161,14 @@ extension DrawCommand {
         }
         switch self {
         case .shape(var draw):
-            draw.path = draw.path.offsetBy(dx: dx, dy: dy)
-            draw.bounds = draw.bounds.offsetBy(dx: dx, dy: dy)
+            // A path in its own space moves with its origin, and is left as
+            // it is — the same path, wherever it lands.
+            if let origin = draw.origin {
+                draw.origin = origin + Point(x: dx, y: dy)
+            } else {
+                draw.path = draw.path.offsetBy(dx: dx, dy: dy)
+                draw.bounds = draw.bounds.offsetBy(dx: dx, dy: dy)
+            }
             draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
             draw.transform = moved(draw.transform)
             draw.transformedClips = moved(draw.transformedClips)

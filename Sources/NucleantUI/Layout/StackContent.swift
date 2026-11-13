@@ -112,14 +112,14 @@ struct StackContent: NodeContent {
     /// was just measured with — or worked out and kept.
     private func layout(_ proposal: ProposedSize, node: ViewNode, children: [ViewNode]) -> LayoutResult {
         let cache: StackRunCache
-        if let existing = node.stackCache {
+        if let existing = node.layoutCache as? StackRunCache {
             cache = existing
             if let last = cache.run, last.proposal == proposal, last.sizes.count == children.count {
                 return last
             }
         } else {
             cache = StackRunCache()
-            node.stackCache = cache
+            node.layoutCache = cache
         }
         let result = layout(proposal, children: children, cache: cache)
         cache.run = result

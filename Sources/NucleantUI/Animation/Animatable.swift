@@ -317,16 +317,17 @@ extension BuildContext {
         return result.value
     }
 
-    /// A shape's paint for the node being built: the shape itself, or — an
-    /// animatable one on its way somewhere — the shape as it stands at the
-    /// moment of drawing. No rebuild: the path is simply made again at each
-    /// frame's value, and the node asks for the frames it needs.
-    func drawnShape<S: Shape>(_ shape: S) -> @MainActor () -> S {
-        guard S.AnimatableData.self != EmptyAnimatableData.self else { return { shape } }
+    /// A shape's paint for the node being built, when it is an animatable
+    /// one on its way somewhere: the shape as it stands at the moment of
+    /// drawing. No rebuild: the path is simply made again at each frame's
+    /// value, and the node asks for the frames it needs. `nil` for a shape
+    /// that is where it was built — drawn as it is.
+    func drawnShape<S: Shape>(_ shape: S) -> (@MainActor () -> S)? {
+        guard S.AnimatableData.self != EmptyAnimatableData.self else { return nil }
         let result = animations.animated(shape, at: path, animation: transaction.animation)
         guard !result.isFinished,
               let state = animations.animatableData[path] as? AnimatableDataState<S.AnimatableData>
-        else { return { shape } }
+        else { return nil }
         return {
             guard let store = AnimationStore.current else { return shape }
             let sample = state.sample(at: store.now)

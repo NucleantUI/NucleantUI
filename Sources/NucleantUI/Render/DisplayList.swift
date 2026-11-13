@@ -116,6 +116,12 @@ public struct TransformedClip: Equatable, Sendable {
 /// One paint operation. `bounds` is the shape's own rect — gradients resolve
 /// their `UnitPoint`s against it, so it travels with the command rather than
 /// being recomputed from the path.
+///
+/// With `origin` set, `path` and `bounds` are in the shape's own space and
+/// `origin` is where that space's corner lands in the list — under
+/// `transform`, as everything else in the command is. A shape view's path is
+/// made that way, so it depends on the shape and its size alone; without
+/// `origin`, the path is in the list's coordinates.
 public struct ShapeDraw: Equatable, Sendable {
     public var path: Path
     public var bounds: Rect
@@ -127,6 +133,9 @@ public struct ShapeDraw: Equatable, Sendable {
     public var clipCornerRadius: Double
     /// Clips turned with the view they cut, on top of `clip`.
     public var transformedClips: [TransformedClip]
+    /// Where the path's own space starts in the list, for a path made in
+    /// it; `nil` for a path in the list's coordinates.
+    public var origin: Point?
 
     public init(
         path: Path,
@@ -137,7 +146,8 @@ public struct ShapeDraw: Equatable, Sendable {
         transform: Transform = .identity,
         clip: Rect? = nil,
         clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = []
+        transformedClips: [TransformedClip] = [],
+        origin: Point? = nil
     ) {
         self.path = path
         self.bounds = bounds
@@ -148,6 +158,7 @@ public struct ShapeDraw: Equatable, Sendable {
         self.clip = clip
         self.clipCornerRadius = clipCornerRadius
         self.transformedClips = transformedClips
+        self.origin = origin
     }
 }
 

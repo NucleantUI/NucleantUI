@@ -5,9 +5,11 @@
 
 /// A 2D shape that can be filled or stroked.
 ///
-/// Unlike SwiftUI's, `path(in:)` returns a path in *absolute* coordinates —
-/// the rect passed in is where the shape was placed, so building straight into
-/// it saves a translate per shape.
+/// As in SwiftUI, a shape drawn as a view is handed its rect in its own
+/// coordinate space — origin at its top-left corner — and the framework
+/// moves the path to where the view was placed. The path then depends on the
+/// shape and its size alone: one placed again at the same size is drawn
+/// with the path it already made.
 ///
 /// Every shape is `Animatable`: one that exposes `animatableData` is drawn
 /// at each value in between when a change to it animates — its path is
@@ -75,10 +77,10 @@ public struct _ShapeView<S: Shape> {
 
 extension _ShapeView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let drawn = context.drawnShape(shape)
         let fill = fillsWithForeground ? context.environment.foregroundStyle : self.fill
         return ContentNode(content: ShapeContent(
-            makePath: { rect in drawn().path(in: rect) },
+            shape: shape,
+            drawn: context.drawnShape(shape),
             fill: fill,
             stroke: stroke,
             strokeStyle: strokeStyle,

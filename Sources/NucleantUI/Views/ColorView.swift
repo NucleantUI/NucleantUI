@@ -16,11 +16,8 @@ extension Color: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let color = self
         return ContentNode(content: ShapeContent(
-            makePath: { rect in
-                var path = Path()
-                path.addRect(rect)
-                return path
-            },
+            shape: Rectangle(),
+            drawn: nil,
             fill: .color(color),
             stroke: nil,
             strokeStyle: StrokeStyle(),

@@ -186,15 +186,43 @@ public final class SkiaDisplayRenderer {
         let stroke = draw.stroke.flatMap { $0.isClear || draw.strokeStyle.lineWidth <= 0 ? nil : $0 }
         guard fill != nil || stroke != nil else { return }
 
-        path.reset()
-        append(draw.path, to: path)
+        // A rect, a rounded rect or an ellipse alone — a background, a
+        // border, a control's track and thumb — is drawn as one; anything
+        // else through the path.
+        let primitive = draw.path.elements.count == 1 ? draw.path.elements[0] : nil
+        switch primitive {
+        case .rect?, .ellipse?:
+            break
+        default:
+            path.reset()
+            append(draw.path, to: path)
+        }
 
         canvas.save()
         begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        if let origin = draw.origin {
+            canvas.translate(dx: Float(origin.x), dy: Float(origin.y))
+        }
+
+        func drawShape(with paint: SkPaint) {
+            switch primitive {
+            case .rect(let rect, let radiusX, let radiusY)?:
+                if radiusX > 0 || radiusY > 0 {
+                    canvas.drawRRect(pos: rect.origin, size: rect.size, radius: SIMD2(radiusX, radiusY), paint: paint)
+                } else {
+                    canvas.drawRect(pos: rect.origin, size: rect.size, paint: paint)
+                }
+            case .ellipse(let center, let radiusX, let radiusY)?:
+                let radius = SIMD2(radiusX, radiusY)
+                canvas.drawOval(pos: center - radius, size: radius * 2, paint: paint)
+            default:
+                canvas.drawPath(path, paint: paint)
+            }
+        }
 
         if let fill {
             apply(fill, to: fillPaint, bounds: draw.bounds)
-            canvas.drawPath(path, paint: fillPaint)
+            drawShape(with: fillPaint)
         }
         if let stroke {
             let style = draw.strokeStyle
@@ -215,7 +243,7 @@ public final class SkiaDisplayRenderer {
                 }
             }
             apply(stroke, to: paint, bounds: draw.bounds)
-            canvas.drawPath(path, paint: paint)
+            drawShape(with: paint)
         }
 
         if let fill {

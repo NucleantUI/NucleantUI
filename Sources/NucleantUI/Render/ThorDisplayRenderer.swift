@@ -160,7 +160,9 @@ public final class ThorDisplayRenderer {
             apply(stroke, to: shape, bounds: draw.bounds, stroke: true)
         }
 
-        finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        // A path in its own space, carried out to where it lands.
+        let transform = draw.origin.map { draw.transform.concatenating(.translation(x: $0.x, y: $0.y)) } ?? draw.transform
+        finish(paint: shape, transform: transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
     }
 
     private func appendPath(_ path: Path, to shape: Tvg_Paint) {

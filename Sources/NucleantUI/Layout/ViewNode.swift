@@ -120,10 +120,11 @@ class ViewNode {
     /// `layoutChildren`, worked out once and kept until it changes.
     private var flattenedChildren: [ViewNode]?
 
-    /// A stack's last run and the order it offers its children space in —
-    /// see `StackContent`. Dropped with the measurements, and when the
-    /// children it was worked out for change.
-    var stackCache: StackRunCache?
+    /// What the content keeps between passes, by its own type: a stack's
+    /// last run and the order it offers its children space in
+    /// (`StackRunCache`), a shape's last path (`ShapePathCache`). Dropped
+    /// with the measurements, and when the children change.
+    var layoutCache: AnyObject?
 
     fileprivate init(traits: NodeTraits, children: [ViewNode]) {
         self.traits = traits
@@ -205,7 +206,7 @@ class ViewNode {
             current.measurements.removeAll()
             current.horizontalFlexibility = nil
             current.verticalFlexibility = nil
-            current.stackCache = nil
+            current.layoutCache = nil
             // Preferences reduced from the old subtree, and a custom
             // layout's cache built from it, are stale the same way.
             current.preferenceCache.removeAll(keepingCapacity: true)
@@ -258,7 +259,7 @@ class ViewNode {
         var node: ViewNode? = self
         while let current = node {
             current.flattenedChildren = nil
-            current.stackCache = nil
+            current.layoutCache = nil
             guard current.isTransparent else { return }
             node = current.parent
         }

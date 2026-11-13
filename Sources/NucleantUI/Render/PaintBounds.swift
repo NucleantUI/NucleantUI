@@ -109,6 +109,10 @@ extension DrawCommand {
                 let reach = draw.strokeStyle.lineWidth * (draw.strokeStyle.lineJoin == .miter ? 2 : 0.5)
                 rect = rect.expanded(by: reach)
             }
+            // A path in its own space, out to where that space lands.
+            if let origin = draw.origin {
+                rect.origin += origin
+            }
             box = rect
             transform = draw.transform
             clip = draw.clip

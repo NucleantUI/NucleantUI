@@ -1208,9 +1208,11 @@ enum LayoutTrace {
         for (index, command) in list.commands.enumerated() {
             switch command {
             case .shape(let draw):
+                // Where it lands: a path in its own space is at its origin.
+                let at = draw.bounds.origin + (draw.origin ?? .zero)
                 nucleantLogError(String(
                     format: "[layout] %3d shape   x=%7.2f y=%7.2f w=%7.2f h=%7.2f\n",
-                    index, draw.bounds.minX, draw.bounds.minY, draw.bounds.width, draw.bounds.height
+                    index, at.x, at.y, draw.bounds.width, draw.bounds.height
                 ))
             case .text(let draw):
                 nucleantLogError(String(

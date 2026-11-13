@@ -72,11 +72,12 @@ struct TextContent: NodeContent {
     }
 }
 
-/// A filled and/or stroked shape. The shape itself is a closure so every
-/// concrete `Shape` reduces to one node kind.
-struct ShapeContent: NodeContent {
-    /// Builds the path in *local* coordinates for a given size.
-    let makePath: (Rect) -> Path
+/// A filled and/or stroked shape, of its own type.
+struct ShapeContent<S: Shape>: NodeContent {
+    let shape: S
+    /// The shape as an animation of its data has it at the moment of
+    /// drawing, while one is on its way; `nil` when it is drawn as it is.
+    let drawn: (@MainActor () -> S)?
     let fill: ShapeStyle?
     let stroke: ShapeStyle?
     let strokeStyle: StrokeStyle
@@ -92,20 +93,50 @@ struct ShapeContent: NodeContent {
         proposal.replacingUnspecifiedDimensions(by: idealSize ?? .zero)
     }
 
+    /// The path in the shape's own space, at `rect`'s origin in the list —
+    /// so the same shape at the same size has the same path wherever it
+    /// lands, and a move of it changes the origin and nothing else.
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0 else { return }
         guard fill != nil || stroke != nil else { return }
+        let own = Rect(origin: .zero, size: rect.size)
         list.append(.shape(ShapeDraw(
-            path: makePath(rect),
-            bounds: rect,
+            path: path(in: own, node: node),
+            bounds: own,
             fill: fill.map { context.resolve(animatedFill?.current(of: $0) ?? $0) },
             stroke: stroke.map { context.resolve(animatedStroke?.current(of: $0) ?? $0) },
             strokeStyle: strokeStyle,
             transform: context.transform,
             clip: context.clip,
             clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
+            transformedClips: context.transformedClips,
+            origin: rect.origin
         )))
+    }
+
+    /// The shape's path in `rect`, its own: the one made last, kept on the
+    /// node, when it was made at the same size; made at each frame's value
+    /// while the shape's data is on its way.
+    private func path(in rect: Rect, node: ViewNode) -> Path {
+        if let drawn { return drawn().path(in: rect) }
+        if let kept = node.layoutCache as? ShapePathCache, kept.size == rect.size {
+            return kept.path
+        }
+        let path = shape.path(in: rect)
+        node.layoutCache = ShapePathCache(size: rect.size, path: path)
+        return path
+    }
+}
+
+/// A shape node's last path, and the size it was made at.
+@MainActor
+final class ShapePathCache {
+    let size: Size
+    let path: Path
+
+    init(size: Size, path: Path) {
+        self.size = size
+        self.path = path
     }
 }
 
