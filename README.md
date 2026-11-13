@@ -47,7 +47,7 @@ runnable tour of everything below. The Nucleant packages this depends on are
 resolved from GitHub; set `NUCLEANT_LOCAL_DEV=1` in the environment to use
 sibling checkouts of this directory instead.
 
-[Examples/](Examples) has eighteen standalone apps built on the library — a
+[Examples/](Examples) has twenty-three standalone apps built on the library — a
 calculator, a task list, a drawing pad, a dashboard, 2048, a pomodoro
 timer and a drum sampler — each its own package to copy from.
 
@@ -221,8 +221,11 @@ passed down freely; what changes inside it is caught by the tracking.
 `if let` / `switch` in builders, `AnyView`, `EmptyView`.
 
 `Text` with `.font`, `.bold`, `.italic`, `.fontWeight`,
-`.foregroundColor`, `.lineLimit`, `.multilineTextAlignment` — set on the
-`Text` or inherited from the environment. Fonts: `.system(size:weight:design:)`,
+`.foregroundColor`, `.lineLimit`, `.multilineTextAlignment`, `.kerning`,
+`.tracking`, `.baselineOffset`, `.underline`, `.strikethrough`,
+`.lineSpacing`, `.truncationMode`, `.minimumScaleFactor`,
+`.allowsTightening` and `.textCase` — set on the `Text` or inherited from
+the environment, the modifier nearest the text winning. Fonts: `.system(size:weight:design:)`,
 `.custom(_:size:)`, the standard styles (`.title`, `.body`, `.footnote`, …).
 The default and monospaced designs are Roboto and Roboto Mono, bundled with
 the library so text is the same on every platform; `.serif` and
@@ -230,7 +233,7 @@ the library so text is the same on every platform; `.serif` and
 platforms), or registered from a file with `FontRegistry.register(path:as:)`.
 
 Shapes: `Rectangle`, `RoundedRectangle`, `Circle`, `Ellipse`, `Capsule`,
-`PathShape { size in … }`, with `.fill(_:)` / `.stroke(_:lineWidth:)` taking a
+`ArrowBack` (the back button's chevron), `PathShape { size in … }`, with `.fill(_:)` / `.stroke(_:lineWidth:)` taking a
 `Color` or a `ShapeStyle` (`.color`, `.linearGradient(colors:startPoint:endPoint:)`).
 `Color` is itself a view.
 
@@ -394,11 +397,11 @@ it is not in the snapshot), at 80% opacity, following the pointer.
 ## Navigation
 
 ```swift
-NavigationStack("Library") {           // the root's title is an argument
+NavigationStack("Library") {           // the root's title
     VStack {
-        NavigationLink("Shaders") { ShaderGalleryScreen() }
-        NavigationLink(title: "About") {
-            AboutScreen()
+        NavigationLink("Shaders") { ShaderGalleryScreen() }   // titled by its link
+        NavigationLink {
+            AboutScreen().navigationTitle("About")            // or titled by the screen
         } label: {
             HStack { Circle().frame(width: 8, height: 8); Text("About") }
         }
@@ -406,11 +409,66 @@ NavigationStack("Library") {           // the root's title is an argument
 }
 ```
 
-The stack draws a title bar with a Back button. A pushed screen's title
-comes from its link. Screens beneath the top one stay alive — their state
-and scroll positions are there when you come back. There is no preference
-system, so a child cannot set `.navigationTitle` upward; that is why the
-titles are arguments.
+The stack draws a bar over its current screen: a back button on a pushed
+screen, the screen's title and its toolbar items. Screens beneath the top
+one stay alive — their state and scroll positions are there when you come
+back. `NavigationStack(path:)` with `NavigationLink(value:)` and
+`.navigationDestination(for:)` navigates by data; a push slides the new
+screen in, and `.navigationTransition(.zoom(sourceID:in:))` grows it out of
+the view it was opened from.
+
+A screen puts controls in the bar with `.toolbar { }`:
+
+```swift
+TaskListScreen()
+    .toolbar {
+        ToolbarItem(placement: .primaryAction) {
+            Button("+ Add") { add() }
+        }
+        ToolbarItem(placement: .secondaryAction) {   // in a "…" menu
+            Button("Clear done") { clearDone() }
+        }
+    }
+```
+
+Items go where an iOS navigation bar puts them, in the stack's own bar on
+every platform, macOS included (never the window's title bar):
+`.cancellationAction` leading, `.primaryAction`, `.confirmationAction` and
+`.destructiveAction` trailing, `.principal` in the title's place,
+`.secondaryAction` behind a "…", and `.bottomBar` and `.status` in a bar
+along the bottom. `ToolbarItemGroup` and `ToolbarSpacer` group and space
+them. A root screen with no title, items or back button has no bar;
+`.toolbarVisibility(.hidden, for: .navigationBar)` hides it on any screen.
+
+The back button is a chevron in the primary label color: Material's
+`arrow_back_ios_new`, bundled with the library like the "…" icon, under
+their Apache 2.0 licence. For another color or icon, a screen hides it and puts its own in the `.navigation`
+placement. `ArrowBack` is the same chevron as a shape; the Atlas example
+fills it with each destination's colour:
+
+```swift
+@View
+struct DestinationScreen {
+    let destination: Destination
+    @Environment(\.navigationRouter) private var router
+
+    var body: some View {
+        DestinationPage(destination: destination)
+            .navigationTitle(destination.name)
+            .navigationBarBackButtonHidden()
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    ArrowBack()
+                        .fill(destination.palette.sun)
+                        .frame(width: 20, height: 20)   // the stack's chevron…
+                        .frame(width: 36, height: 36)   // …in its 36-point square
+                        .contentShape(Rectangle())
+                        .onTapGesture { router?.pop() }
+                }
+            }
+    }
+}
+```
 
 ## Shaders
 

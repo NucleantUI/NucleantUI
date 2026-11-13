@@ -5,8 +5,9 @@ Push screens onto a navigation stack and come back to them as you left them.
 ## Overview
 
 A ``NavigationStack`` draws a bar with a back button, the title and the
-screen's toolbar items over its current screen. A ``NavigationLink`` pushes a destination when it is tapped; the
-pushed screen takes its title from the link:
+screen's toolbar items over its current screen. A ``NavigationLink`` pushes
+a destination when it is tapped. The pushed screen takes its title from the
+link, or from its own `.navigationTitle(_:)`:
 
 ```swift
 @View
@@ -120,20 +121,23 @@ edge. The bar stays.
 
 The chevron itself is a shape, ``ArrowBack``. Filled in any color and
 framed at 20 points in a 36-point square, it is the stack's back button,
-drawn and placed the same:
+drawn and placed the same. The <doc:AtlasExample> app fills it with each
+destination's colour:
 
 ```swift
 @View
-struct DetailScreen {
+struct DestinationScreen {
+    let destination: Destination
     @Environment(\.navigationRouter) private var router
 
     var body: some View {
-        DetailContent()
+        DestinationPage(destination: destination)
+            .navigationTitle(destination.name)
             .navigationBarBackButtonHidden()
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     ArrowBack()
-                        .fill(Color.orange)
+                        .fill(destination.palette.sun)
                         .frame(width: 20, height: 20)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
@@ -154,8 +158,9 @@ name — and gets the stack's whole height. The setting belongs to the
 screen: pushing another screen shows the bar again, and coming back hides
 it again.
 
-The Back button goes with the bar, so a screen that hides it gives itself
-a way back through the router:
+The back button goes with the bar, so a screen that hides it gives itself
+a way back through the router, here the same chevron as an ``ArrowBack``
+over the cover:
 
 ```swift
 @View
@@ -166,9 +171,13 @@ struct BookCover {
     var body: some View {
         ZStack(alignment: .topLeading) {
             CoverArt(book: book)
-            Text("‹ Library")
-                .padding(12)
+            ArrowBack()
+                .fill(Color.white)
+                .frame(width: 20, height: 20)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
                 .onTapGesture { router?.pop() }
+                .padding(12)
         }
         .toolbarVisibility(.hidden, for: .navigationBar)
     }

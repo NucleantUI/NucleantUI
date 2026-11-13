@@ -5,7 +5,7 @@ the data your app works on in an `@Observable` model.
 
 ## A view's own state
 
-``State`` is storage that outlives the `body` that reads it. It is kept by the
+`@State`, the ``State()`` macro, is storage that outlives the `body` that reads it. It is kept by the
 view's position in the tree, so it survives rebuilds, and a write to it
 rebuilds the views that read it:
 

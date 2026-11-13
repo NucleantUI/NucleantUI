@@ -10,7 +10,7 @@ SwiftUI-shaped declarative views, drawn by Skia on Vulkan.
 
 NucleantUI is a declarative UI framework in pure Swift. If you know SwiftUI you
 already know most of it: views are structs with a `body`, state lives in
-``State`` and ``Binding``, models are `@Observable` classes, and layout is
+`@State` (``State()``) and ``Binding``, models are `@Observable` classes, and layout is
 stacks, frames and padding.
 
 Underneath it is a different machine. There is no AppKit or UIKit view
