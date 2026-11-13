@@ -27,13 +27,13 @@
 import NucleantUI
 
 enum Theme {
-    static let paper = ShapeStyle.dynamic(light: Color(hex: 0xFAF7F2), dark: Color(hex: 0x17181B))
-    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xF0EBE3), dark: Color(hex: 0x1F2024))
-    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x24262B))
-    static let ink = ShapeStyle.dynamic(light: Color(hex: 0x2B2723), dark: Color(hex: 0xE3DED6))
-    static let faint = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.45), dark: Color(white: 1, opacity: 0.45))
-    static let track = ShapeStyle.dynamic(light: Color(hex: 0xE3DED6), dark: Color(hex: 0x34363B))
-    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xFAF7F2, opacity: 0.97), dark: Color(hex: 0x17181B, opacity: 0.97))
+    static let paper = DynamicShapeStyle(light: Color(hex: 0xFAF7F2), dark: Color(hex: 0x17181B))
+    static let sidebar = DynamicShapeStyle(light: Color(hex: 0xF0EBE3), dark: Color(hex: 0x1F2024))
+    static let card = DynamicShapeStyle(light: Color.white, dark: Color(hex: 0x24262B))
+    static let ink = DynamicShapeStyle(light: Color(hex: 0x2B2723), dark: Color(hex: 0xE3DED6))
+    static let faint = DynamicShapeStyle(light: Color(white: 0, opacity: 0.45), dark: Color(white: 1, opacity: 0.45))
+    static let track = DynamicShapeStyle(light: Color(hex: 0xE3DED6), dark: Color(hex: 0x34363B))
+    static let bar = DynamicShapeStyle(light: Color(hex: 0xFAF7F2, opacity: 0.97), dark: Color(hex: 0x17181B, opacity: 0.97))
 }
 
 @main
@@ -143,7 +143,7 @@ struct RecipeRow {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
-        .background(isSelected ? Theme.card : .color(.clear))
+        .background(isSelected ? AnyShapeStyle(Theme.card) : AnyShapeStyle(.clear))
         .cornerRadius(10)
         .contentShape(Rectangle())
     }
@@ -178,10 +178,10 @@ struct RecipeChip {
     var body: some View {
         Text(recipe.title)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(isSelected ? .color(.white) : Theme.ink)
+            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(Theme.ink))
             .padding(.horizontal, 14)
             .frame(height: 34)
-            .background(isSelected ? .color(recipe.tint) : Theme.card)
+            .background(isSelected ? AnyShapeStyle(recipe.tint) : AnyShapeStyle(Theme.card))
             .cornerRadius(17)
     }
 }

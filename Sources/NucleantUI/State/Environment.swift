@@ -353,7 +353,7 @@ public struct Environment<Value>: DynamicProperty {
 // MARK: - Built-in keys
 
 private struct ForegroundStyleKey: EnvironmentKey {
-    static let defaultValue = ShapeStyle.primary
+    static let defaultValue = AnyShapeStyle(HierarchicalShapeStyle.primary)
 }
 
 private struct FontKey: EnvironmentKey {
@@ -361,7 +361,7 @@ private struct FontKey: EnvironmentKey {
 }
 
 private struct TintKey: EnvironmentKey {
-    static let defaultValue = ShapeStyle.color(.blue)
+    static let defaultValue = AnyShapeStyle(Color.blue)
 }
 
 private struct IsEnabledKey: EnvironmentKey {
@@ -385,7 +385,9 @@ private struct ColorSchemeKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    public var foregroundStyle: ShapeStyle {
+    /// The style foreground content is drawn with: a shape used as a view,
+    /// a `Text`, a control's label — `.foreground` where it is drawn.
+    public var foregroundStyle: AnyShapeStyle {
         get { self[ForegroundStyleKey.self] }
         set { self[ForegroundStyleKey.self] = newValue }
     }
@@ -395,7 +397,8 @@ extension EnvironmentValues {
         set { self[FontKey.self] = newValue }
     }
 
-    public var tint: ShapeStyle {
+    /// The style controls are tinted with — `.tint` where it is drawn.
+    public var tint: AnyShapeStyle {
         get { self[TintKey.self] }
         set { self[TintKey.self] = newValue }
     }

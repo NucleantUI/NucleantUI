@@ -28,8 +28,8 @@ struct SkiaDisplayRendererTests {
 
     private func rect(
         _ frame: Rect,
-        fill: ShapeStyle? = .color(.init(red: 1, green: 0, blue: 0)),
-        stroke: ShapeStyle? = nil,
+        fill: _ResolvedPaint? = .color(Color(red: 1, green: 0, blue: 0)),
+        stroke: _ResolvedPaint? = nil,
         lineWidth: Double = 1,
         transform: Transform = .identity,
         clip: Rect? = nil,
@@ -138,7 +138,7 @@ struct SkiaDisplayRendererTests {
         renderer().render(list(rect(
             Rect(x: 20, y: 20, width: 60, height: 60),
             fill: nil,
-            stroke: .color(.init(red: 0, green: 0, blue: 1)),
+            stroke: .color(Color(red: 0, green: 0, blue: 1)),
             lineWidth: 4
         )))
         #expect(pixel(20, 50) == SIMD4(0, 0, 255, 255))
@@ -149,7 +149,7 @@ struct SkiaDisplayRendererTests {
         let gradient = Gradient(colors: [.init(red: 1, green: 0, blue: 0), .init(red: 0, green: 0, blue: 1)])
         renderer().render(list(rect(
             Rect(x: 0, y: 0, width: 100, height: 100),
-            fill: .linearGradient(gradient, startPoint: .leading, endPoint: .trailing)
+            fill: LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing).paint(in: EnvironmentValues())
         )))
         let left = pixel(2, 50), right = pixel(97, 50)
         #expect(left.x > 240 && left.z < 15)

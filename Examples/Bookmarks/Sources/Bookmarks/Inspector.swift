@@ -190,7 +190,7 @@ struct RemovableTag {
                 .font(.system(size: 12, weight: .medium))
             Text("×")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(isHovered ? .color(Theme.accent) : .secondary)
+                .foregroundStyle(isHovered ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
                 .onHover { isHovered = $0 }
                 .onTapGesture { remove() }
         }

@@ -326,7 +326,7 @@ public final class SkiaDisplayRenderer {
     /// The text and images in a path, painted with its fill: text in the
     /// fill's color, an image faded by its alpha. Under the shape's clip and
     /// transform, which already hold.
-    private func emitEmbedded(_ path: Path, fill: ShapeStyle, on canvas: SkCanvas) {
+    private func emitEmbedded(_ path: Path, fill: _ResolvedPaint, on canvas: SkCanvas) {
         let color = fill.flatColor
         for element in path.elements {
             switch element {
@@ -377,11 +377,9 @@ public final class SkiaDisplayRenderer {
         }
     }
 
-    private func apply(_ style: ShapeStyle, to paint: SkPaint, bounds: Rect) {
-        switch style {
-        // A display list holds styles resolved for their scheme as they were
-        // recorded; a dynamic one that got past that draws its light color.
-        case .color(let color), .dynamic(light: let color, dark: _):
+    private func apply(_ resolved: _ResolvedPaint, to paint: SkPaint, bounds: Rect) {
+        switch resolved.kind {
+        case .color(let color):
             let (r, g, b, a) = color.rgba8
             paint.clearShader()
             paint.setColor(SIMD4(r, g, b, a))

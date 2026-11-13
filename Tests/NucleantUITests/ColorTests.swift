@@ -62,39 +62,47 @@ struct ColorVector {
     }
 }
 
-struct DynamicShapeStyle {
+@MainActor
+@Suite
+struct DynamicShapeStyleTests {
+
+    private func environment(_ scheme: ColorScheme) -> EnvironmentValues {
+        var environment = EnvironmentValues()
+        environment.colorScheme = scheme
+        return environment
+    }
 
     @Test
     func aDynamicStyleResolvesToTheSchemesColor() {
-        let style = ShapeStyle.dynamic(light: Color(white: 0.2), dark: Color(white: 0.8))
-        #expect(style.resolved(for: .light) == .color(Color(white: 0.2)))
-        #expect(style.resolved(for: .dark) == .color(Color(white: 0.8)))
-        #expect(ShapeStyle.color(.red).resolved(for: .dark) == .color(.red))
+        let style = DynamicShapeStyle(light: Color(white: 0.2), dark: Color(white: 0.8))
+        #expect(style.paint(in: environment(.light)) == .color(Color(white: 0.2)))
+        #expect(style.paint(in: environment(.dark)) == .color(Color(white: 0.8)))
+        #expect(Color.red.paint(in: environment(.dark)) == .color(.red))
     }
 
     @Test
-    func opacityFadesBothAppearances() {
-        let faded = ShapeStyle.dynamic(light: Color(white: 0.2), dark: Color(white: 0.8, opacity: 0.5)).opacity(0.5)
-        #expect(faded == .dynamic(light: Color(white: 0.2, opacity: 0.5), dark: Color(white: 0.8, opacity: 0.25)))
+    func opacityFadesTheColorShown() {
+        let faded = DynamicShapeStyle(light: Color(white: 0.2), dark: Color(white: 0.8, opacity: 0.5)).opacity(0.5)
+        #expect(faded.paint(in: environment(.light)) == .color(Color(white: 0.2, opacity: 0.5)))
+        #expect(faded.paint(in: environment(.dark)) == .color(Color(white: 0.8, opacity: 0.25)))
     }
 
-    /// The draw context picks the scheme's color and fades it by the
-    /// inherited opacity.
+    /// The draw context fades a paint by the opacity a pass inherits.
     @Test
-    func theDrawContextResolvesForItsScheme() {
-        var context = DrawContext(colorScheme: .dark)
+    func theDrawContextFadesByTheInheritedOpacity() {
+        var context = DrawContext()
         context.opacity = 0.5
-        let style = ShapeStyle.dynamic(light: Color(white: 0.2), dark: Color(white: 0.8))
-        #expect(context.resolve(style) == .color(Color(white: 0.8, opacity: 0.5)))
+        let paint = DynamicShapeStyle(light: Color(white: 0.2), dark: Color(white: 0.8)).paint(in: environment(.dark))
+        #expect(context.resolve(paint) == .color(Color(white: 0.8, opacity: 0.5)))
     }
 
-    /// A flat color and a dynamic one animate into each other: both carry
-    /// both appearances.
+    /// A color animates as its four components; a gradient changes at once.
     @Test
-    func aStyleAnimatesAsBothAppearances() {
-        let style = ShapeStyle.dynamic(light: Color(white: 0.25), dark: Color(white: 0.75))
-        #expect(style.animatableVector == [0.25, 0.25, 0.25, 1, 0.75, 0.75, 0.75, 1])
-        #expect(ShapeStyle(animatableVector: style.animatableVector) == style)
-        #expect(ShapeStyle(animatableVector: ShapeStyle.color(.white).animatableVector) == .color(.white))
+    func aColorAnimatesAsItsComponents() {
+        let paint = _ResolvedPaint.color(Color(white: 0.25))
+        #expect(paint.animatableVector == [0.25, 0.25, 0.25, 1])
+        #expect(_ResolvedPaint(animatableVector: paint.animatableVector) == paint)
+        #expect(LinearGradient(colors: [.red, .blue], startPoint: .top, endPoint: .bottom)
+            .paint(in: EnvironmentValues()).animatableVector.isEmpty)
     }
 }

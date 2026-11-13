@@ -34,7 +34,7 @@ struct Inspector {
                     .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(ShapeStyle.background)
+            .background(.background)
         }
     }
 }

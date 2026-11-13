@@ -155,12 +155,12 @@ struct PreviewBrowser {
                         picked = index
                         PreviewRuntime.selectionChanged(previews[index].id)
                     }
-                    .tint(index == selection ? .color(Color(hex: 0x4C8DFF)) : .fill)
+                    .tint(index == selection ? AnyShapeStyle(Color(hex: 0x4C8DFF)) : AnyShapeStyle(.fill))
                 }
                 Spacer()
             }
             .padding(horizontal: 10, vertical: 8)
-            .background(ShapeStyle.secondaryBackground)
+            .background(.secondaryBackground)
 
             if previews.isEmpty {
                 Text(file.map { "No @Preview functions in \($0.split(separator: "/").last ?? "")" } ?? "No @Preview functions in this app")
@@ -171,6 +171,6 @@ struct PreviewBrowser {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(ShapeStyle.background)
+        .background(.background)
     }
 }

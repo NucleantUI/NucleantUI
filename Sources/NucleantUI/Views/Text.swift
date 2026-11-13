@@ -22,7 +22,7 @@ public struct Text {
     // `Text("a").font(.title).font(.body)` is in the title font, and one
     // further out only fills in what is still unset.
     var explicitFont: Font?
-    var explicitStyle: ShapeStyle?
+    var explicitStyle: AnyShapeStyle?
     var explicitWeight: FontWeight?
     var isItalic = false
     var alignment: TextAlignment?
@@ -57,13 +57,13 @@ extension Text {
 
     public func foregroundColor(_ color: Color) -> Text {
         var copy = self
-        if copy.explicitStyle == nil { copy.explicitStyle = .color(color) }
+        if copy.explicitStyle == nil { copy.explicitStyle = AnyShapeStyle(color) }
         return copy
     }
 
-    public func foregroundStyle(_ style: ShapeStyle) -> Text {
+    public func foregroundStyle<S: ShapeStyle>(_ style: S) -> Text {
         var copy = self
-        if copy.explicitStyle == nil { copy.explicitStyle = style }
+        if copy.explicitStyle == nil { copy.explicitStyle = AnyShapeStyle(style) }
         return copy
     }
 
@@ -189,7 +189,8 @@ extension Text: BuiltinView {
         case nil: string = content
         }
 
-        let style = explicitStyle ?? environment.foregroundStyle
+        // Resolved where the text is built, in its environment.
+        let style = (explicitStyle ?? environment.foregroundStyle).paint(in: environment)
         let tracking = explicitTracking ?? settings.tracking
         let kerning = explicitKerning ?? settings.kerning
         let input = TextLayoutInput(

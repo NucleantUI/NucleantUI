@@ -13,11 +13,11 @@ import NucleantUI
 /// on both. `muted` is a button tint for secondary actions — white text
 /// needs a darker grey under it in light mode than in dark.
 struct Palette {
-    static let background = ShapeStyle.background
-    static let panel = ShapeStyle.secondaryBackground
-    static let panelHighlight = ShapeStyle.tertiaryBackground
-    static let track = ShapeStyle.fill
-    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let background = BackgroundStyle.background
+    static let panel = BackgroundStyle.secondaryBackground
+    static let panelHighlight = BackgroundStyle.tertiaryBackground
+    static let track = FillShapeStyle.fill
+    static let muted = DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3))
     static let accent = Color(hex: 0x4C8DFF)
     static let good = Color(hex: 0x3DD68C)
     static let warn = Color(hex: 0xFFB020)
@@ -327,7 +327,7 @@ struct EffectScreen {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(isEnabled ? "Effect on" : "Effect off") { isEnabled.toggle() }
-                    .tint(isEnabled ? .color(Palette.accent) : Palette.muted)
+                    .tint(isEnabled ? AnyShapeStyle(Palette.accent) : AnyShapeStyle(Palette.muted))
             }
 
             VStack(spacing: 8) {
@@ -429,7 +429,7 @@ struct Bus {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(isTargeted ? .color(Palette.accent.opacity(0.25)) : Palette.panel)
+        .background(isTargeted ? AnyShapeStyle(Palette.accent.opacity(0.25)) : AnyShapeStyle(Palette.panel))
         .border(isTargeted ? Palette.accent : Color.clear, width: 2, cornerRadius: 12)
         .cornerRadius(12)
         .dropDestination(for: TrackItem.self) { dropped, _ in
@@ -528,7 +528,7 @@ struct DragDropScreen {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(notesTargeted ? .color(Palette.good.opacity(0.25)) : Palette.panel)
+        .background(notesTargeted ? AnyShapeStyle(Palette.good.opacity(0.25)) : AnyShapeStyle(Palette.panel))
         .border(notesTargeted ? Palette.good : Color.clear, width: 2, cornerRadius: 12)
         .cornerRadius(12)
         .dropDestination(for: String.self) { strings, location in
@@ -581,7 +581,7 @@ struct AppearancePicker {
             ForEach(Appearance.allCases, id: \.self) { choice in
                 Text(choice.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(appearance == choice ? .color(.white) : .secondary)
+                    .foregroundStyle(appearance == choice ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                     .padding(horizontal: 10, vertical: 5)
                     .background(appearance == choice ? Palette.accent : Color.clear)
                     .cornerRadius(6)

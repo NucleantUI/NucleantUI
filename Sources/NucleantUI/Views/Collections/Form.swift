@@ -633,7 +633,7 @@ struct _GroupedForm {
                                     _GroupedFormRow(item: entry.item, showsSeparator: entry.showsSeparator)
                                 }
                             }
-                            .background(ShapeStyle.secondaryBackground)
+                            .background(.secondaryBackground)
                             .cornerRadius(10)
                         }
                         if let footer = group.footer {
@@ -647,7 +647,7 @@ struct _GroupedForm {
             }
             .padding(look.contentInsets)
         }
-        .background(ShapeStyle.background)
+        .background(.background)
     }
 
     private func items() -> [ListItem<Never>] {
@@ -699,7 +699,7 @@ struct _GroupedFormRow {
         .overlay(alignment: .bottom) {
             if showsSeparator {
                 Rectangle()
-                    .fill(item.traits.separatorTint.map { .color($0) } ?? .separator)
+                    .fill(item.traits.separatorTint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.separator))
                     .frame(height: 1)
                     .padding(.leading, insets.leading)
             }

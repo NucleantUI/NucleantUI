@@ -11,7 +11,7 @@ struct TextContent: NodeContent {
     /// depend on, and what its layouts are kept by.
     let input: TextLayoutInput
     /// Drawn as one flat color: a gradient gives its first stop.
-    let style: ShapeStyle
+    let style: _ResolvedPaint
     let alignment: TextAlignment
     let underline: Text.LineStyle?
     let strikethrough: Text.LineStyle?
@@ -103,14 +103,14 @@ struct ShapeContent<S: Shape>: NodeContent {
     /// The shape as an animation of its data has it at the moment of
     /// drawing, while one is on its way; `nil` when it is drawn as it is.
     let drawn: (@MainActor () -> S)?
-    let fill: ShapeStyle?
-    let stroke: ShapeStyle?
+    let fill: _ResolvedPaint?
+    let stroke: _ResolvedPaint?
     let strokeStyle: StrokeStyle
     /// A shape claims whatever it is offered; an unspecified axis collapses to
     /// nothing, matching SwiftUI (a `Circle()` in a `VStack` with no width
     /// proposal is empty, not infinite).
     let idealSize: Size?
-    /// `fill` and `stroke`, animated — see `BuildContext.animatedStyle`.
+    /// `fill` and `stroke`, animated — see `BuildContext.animatedPaint`.
     var animatedFill: AnimatedVector? = nil
     var animatedStroke: AnimatedVector? = nil
 

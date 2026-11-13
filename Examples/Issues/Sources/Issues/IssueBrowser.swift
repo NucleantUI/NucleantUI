@@ -154,7 +154,7 @@ struct CellDetail {
     var body: some View {
         Text(text)
             .font(monospaced ? .system(size: 12, design: .monospaced) : .system(size: 13))
-            .foregroundStyle(prominence == .increased ? .color(Color.white.opacity(0.85)) : .secondary)
+            .foregroundStyle(prominence == .increased ? AnyShapeStyle(Color.white.opacity(0.85)) : AnyShapeStyle(.secondary))
     }
 }
 

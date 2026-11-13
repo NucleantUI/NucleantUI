@@ -24,14 +24,14 @@ import Foundation
 import NucleantUI
 
 struct Theme {
-    static let background = ShapeStyle.background
-    static let panel = ShapeStyle.secondaryBackground
-    static let pad = ShapeStyle.tertiaryBackground
+    static let background = BackgroundStyle.background
+    static let panel = BackgroundStyle.secondaryBackground
+    static let pad = BackgroundStyle.tertiaryBackground
     /// Behind the waveform — resolved for the scheme in effect by the
     /// waveform view, which hands the result to the shader as a `.color`
     /// argument: a shader gets a color as it is given.
-    static let wave = ShapeStyle.dynamic(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x14161C))
-    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let wave = DynamicShapeStyle(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x14161C))
+    static let muted = DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3))
 }
 
 // MARK: - Waveform
@@ -109,7 +109,7 @@ struct WaveformView {
                 .float("trimEnd", Float(sample.trimEnd)),
                 .float("playhead", Float(playhead ?? -1)),
                 .color("tint", sample.color),
-                .color("paper", Theme.wave.resolved(for: colorScheme).flatColor),
+                .color("paper", Theme.wave.color(for: colorScheme)),
             ])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .gesture(
@@ -147,7 +147,7 @@ struct Fader {
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 44, alignment: .leading)
             ZStack(alignment: .leading) {
-                Capsule().fill(ShapeStyle.fill).frame(height: 8)
+                Capsule().fill(.fill).frame(height: 8)
                 Capsule()
                     .fill(.linearGradient(colors: [color.opacity(0.6), color], startPoint: .leading, endPoint: .trailing))
                     .relativeSize(width: max(0.01, fraction))
@@ -191,7 +191,7 @@ struct Pad {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(isTriggered ? .color(sample.color.opacity(0.35)) : Theme.pad)
+        .background(isTriggered ? AnyShapeStyle(sample.color.opacity(0.35)) : AnyShapeStyle(Theme.pad))
         .cornerRadius(10)
         .border(isSelected ? sample.color : Color.clear, width: 2, cornerRadius: 10)
     }

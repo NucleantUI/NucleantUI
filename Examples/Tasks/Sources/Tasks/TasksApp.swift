@@ -83,11 +83,11 @@ let backlog = [
 /// Surfaces are the framework's semantic colors, so the list follows the
 /// system's light or dark appearance; the accents are fixed.
 struct Theme {
-    static let background = ShapeStyle.background
-    static let panel = ShapeStyle.secondaryBackground
-    static let row = ShapeStyle.tertiaryBackground
-    static let ring = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.25), dark: Color(white: 1, opacity: 0.25))
-    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let background = BackgroundStyle.background
+    static let panel = BackgroundStyle.secondaryBackground
+    static let row = BackgroundStyle.tertiaryBackground
+    static let ring = DynamicShapeStyle(light: Color(white: 0, opacity: 0.25), dark: Color(white: 1, opacity: 0.25))
+    static let muted = DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3))
     static let accent = Color(hex: 0x4C8DFF)
     static let done = Color(hex: 0x3DD68C)
 }
@@ -102,7 +102,7 @@ struct Checkbox {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(isDone ? .color(Theme.done) : Theme.ring, lineWidth: 2)
+                .stroke(isDone ? AnyShapeStyle(Theme.done) : AnyShapeStyle(Theme.ring), lineWidth: 2)
             if isDone {
                 Circle().fill(Theme.done)
                 PathShape { size in
@@ -205,7 +205,7 @@ struct TaskDetail {
                 HStack(spacing: 8) {
                     ForEach(Priority.allCases, id: \.self) { priority in
                         Button(priority.name) { task.priority = priority }
-                            .tint(task.priority == priority ? .color(priority.color) : Theme.muted)
+                            .tint(task.priority == priority ? AnyShapeStyle(priority.color) : AnyShapeStyle(Theme.muted))
                     }
                 }
             }
@@ -273,9 +273,9 @@ struct TaskList {
             ForEach(Filter.allCases, id: \.self) { f in
                 Text(f.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(filter == f ? .color(.white) : .secondary)
+                    .foregroundStyle(filter == f ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                     .padding(horizontal: 12, vertical: 6)
-                    .background(filter == f ? .color(Theme.accent) : Theme.panel)
+                    .background(filter == f ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel))
                     .cornerRadius(14)
                     .onTapGesture { filter = f }
             }

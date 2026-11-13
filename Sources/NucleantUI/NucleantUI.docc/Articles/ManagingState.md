@@ -139,7 +139,29 @@ or with `.environment(_:_:)`.
 
 ## Light and dark
 
-The window follows the system appearance. Semantic colors adapt on their own
-— `Color.primary`, `.secondary`, `.background`, `.secondaryBackground`,
-`.separator`, `.fill` — and `Color.dynamic(light:dark:)` makes your own.
-`.colorScheme(.dark)` fixes a subtree, shaders included.
+The window follows the system appearance. Semantic styles adapt on their own
+— `.primary`, `.secondary`, `.background`, `.secondaryBackground`,
+`.separator`, `.fill` — and `.dynamic(light:dark:)` makes your own: a
+`DynamicShapeStyle`. A style is resolved in the environment of the view it
+paints, so a view that resolved one from the color scheme is rebuilt when
+the scheme changes. `.colorScheme(.dark)` fixes a subtree, shaders included.
+
+A `ShapeStyle` is a protocol, as in SwiftUI: `fill`, `stroke`,
+`foregroundStyle`, `background` and `tint` take any style by its type. Two
+different styles in one expression — the branches of a condition — are one
+type as `AnyShapeStyle`:
+
+```swift
+.foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+```
+
+A style of your own resolves to one of the framework's in the environment
+it is drawn in:
+
+```swift
+struct Warning: ShapeStyle {
+    func resolve(in environment: EnvironmentValues) -> Color {
+        environment.colorScheme == .dark ? .orange : .red
+    }
+}
+```

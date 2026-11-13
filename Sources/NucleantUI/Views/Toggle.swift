@@ -228,7 +228,7 @@ struct _SwitchToggle {
             // Only the switch flips it, as on every platform that has one.
             ZStack {
                 Capsule()
-                    .fill(isOn ? tint : controlTrackColor)
+                    .fill(isOn ? tint : AnyShapeStyle(controlTrackColor))
                 Circle()
                     .fill(Color.white)
                     .frame(width: Self.trackHeight - 2 * Self.knobInset, height: Self.trackHeight - 2 * Self.knobInset)
@@ -257,8 +257,8 @@ struct _CheckboxToggle {
         HStack(spacing: 6) {
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(isOn ? tint.opacity(isPressed ? 0.7 : 1) : (isPressed ? ShapeStyle.tertiaryBackground : ShapeStyle.secondaryBackground))
-                    .border(isOn ? .color(.clear) : .separator, width: 1, cornerRadius: 4)
+                    .fill(isOn ? AnyShapeStyle(tint.opacity(isPressed ? 0.7 : 1)) : AnyShapeStyle(isPressed ? BackgroundStyle.tertiaryBackground : .secondaryBackground))
+                    .border(isOn ? AnyShapeStyle(.clear) : AnyShapeStyle(.separator), width: 1, cornerRadius: 4)
                 if isOn {
                     _ControlCheckmark()
                         .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -294,12 +294,12 @@ struct _ButtonToggle {
     var body: some View {
         let isOn = configuration.isOn
         configuration.label
-            .foregroundStyle(isOn ? .color(.white) : .primary)
+            .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isOn ? tint.opacity(isPressed ? 0.65 : 1) : (isPressed ? controlTrackColor : ShapeStyle.tertiaryBackground))
+                    .fill(isOn ? AnyShapeStyle(tint.opacity(isPressed ? 0.65 : 1)) : (isPressed ? AnyShapeStyle(controlTrackColor) : AnyShapeStyle(.tertiaryBackground)))
             )
             .opacity(isEnabled ? 1 : 0.4)
             ._hitTarget(HitTarget(

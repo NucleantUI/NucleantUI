@@ -68,6 +68,6 @@ struct SettingsPane {
             .frame(maxWidth: 620, alignment: .topLeading)
             .frame(maxWidth: .infinity)
         }
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
     }
 }

@@ -192,6 +192,9 @@ struct NavigationScreenTransitionContent: NodeContent {
     let screen: NavigationScreenID
     let transition: NavigationStackTransition
     let storage: NavigationStackStorage
+    /// The window background a zoom's card is filled with when its style
+    /// names no color, resolved where the stack was built.
+    let windowBackground: _ResolvedPaint
 
     /// How far the lower screen recedes under a zoom: 35 points across, but
     /// never below 80%.
@@ -285,11 +288,12 @@ struct NavigationScreenTransitionContent: NodeContent {
         )
         let radius = max(0, mix(style.cornerRadius, 0))
         let clipped = context.clipped(to: frame, cornerRadius: radius)
+        let background = style.background.map { _ResolvedPaint.color($0) } ?? windowBackground
 
         list.append(.shape(ShapeDraw(
             path: Path { $0.addRect(frame, cornerRadius: radius) },
             bounds: frame,
-            fill: clipped.resolve(style.background.map { .color($0) } ?? .background),
+            fill: clipped.resolve(background),
             transform: clipped.transform,
             clip: clipped.clip,
             clipCornerRadius: clipped.clipCornerRadius,
@@ -347,7 +351,13 @@ struct NavigationScreenTransitionModifier: PrimitiveModifier {
     let storage: NavigationStackStorage
 
     func makeContent(_ context: inout BuildContext) -> NavigationScreenTransitionContent {
-        NavigationScreenTransitionContent(path: context.path, screen: screen, transition: transition, storage: storage)
+        NavigationScreenTransitionContent(
+            path: context.path,
+            screen: screen,
+            transition: transition,
+            storage: storage,
+            windowBackground: BackgroundStyle().paint(in: context.environment)
+        )
     }
 
     func _isEquivalent(to other: NavigationScreenTransitionModifier) -> Bool {

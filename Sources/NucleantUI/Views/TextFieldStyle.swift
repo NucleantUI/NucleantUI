@@ -134,12 +134,12 @@ struct TextFieldChrome<Content: View, Placeholder: View> {
         case .roundedBorder:
             decorated
                 .background(RoundedRectangle(cornerRadius: 6).fill(.secondaryBackground))
-                .border(isFocused ? tint : .separator, width: isFocused ? 2 : 1, cornerRadius: 6)
+                .border(isFocused ? tint : AnyShapeStyle(.separator), width: isFocused ? 2 : 1, cornerRadius: 6)
                 .opacity(isEnabled ? 1 : 0.5)
         case .squareBorder:
             decorated
                 .background(Rectangle().fill(.secondaryBackground))
-                .border(isFocused ? tint : .separator, width: isFocused ? 2 : 1)
+                .border(isFocused ? tint : AnyShapeStyle(.separator), width: isFocused ? 2 : 1)
                 .opacity(isEnabled ? 1 : 0.5)
         case .plain:
             decorated

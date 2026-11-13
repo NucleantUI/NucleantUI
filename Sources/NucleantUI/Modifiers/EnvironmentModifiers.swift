@@ -27,22 +27,18 @@ extension View {
         _ModifierView(content: self, modifier: ForegroundColorModifier(color: color))
     }
 
-    /// The foreground for text and shapes below — a semantic style such as
-    /// `.secondary`, a light/dark pair, a gradient.
-    public func foregroundStyle(_ style: ShapeStyle) -> some View {
+    /// The foreground for text and shapes below — a color, a semantic style
+    /// such as `.secondary`, a light/dark pair, a gradient.
+    public func foregroundStyle<S: ShapeStyle>(_ style: S) -> some View {
         _ModifierView(content: self, modifier: ForegroundStyleModifier(style: style))
-    }
-
-    public func foregroundStyle(_ color: Color) -> some View {
-        _ModifierView(content: self, modifier: ForegroundStyleColorModifier(color: color))
     }
 
     public func tint(_ color: Color) -> some View {
         _ModifierView(content: self, modifier: TintColorModifier(color: color))
     }
 
-    public func tint(_ style: ShapeStyle) -> some View {
-        _ModifierView(content: self, modifier: TintModifier(style: style))
+    public func tint<S: ShapeStyle>(_ tint: S) -> some View {
+        _ModifierView(content: self, modifier: TintModifier(style: tint))
     }
 
     public func disabled(_ isDisabled: Bool = true) -> some View {
@@ -146,7 +142,7 @@ struct ForegroundColorModifier: PrimitiveModifier, Equatable {
     let color: Color
 
     func modifyEnvironment(_ environment: inout EnvironmentValues) {
-        environment.foregroundStyle = .color(color)
+        environment.foregroundStyle = AnyShapeStyle(color)
     }
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
@@ -154,25 +150,17 @@ struct ForegroundColorModifier: PrimitiveModifier, Equatable {
     }
 }
 
-/// `.foregroundStyle(_:)` with a style.
-struct ForegroundStyleModifier: PrimitiveModifier, Equatable {
-    let style: ShapeStyle
+/// `.foregroundStyle(_:)`: the style kept as its own type, compared as one.
+/// It is resolved where something is drawn with it, in that environment.
+struct ForegroundStyleModifier<S: ShapeStyle>: PrimitiveModifier {
+    let style: S
 
-    func modifyEnvironment(_ environment: inout EnvironmentValues) {
-        environment.foregroundStyle = style
+    func _isEquivalent(to other: ForegroundStyleModifier<S>) -> Bool {
+        _areEquivalent(style, other.style)
     }
 
-    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
-        environmentContent(context)
-    }
-}
-
-/// `.foregroundStyle(_:)` with a color.
-struct ForegroundStyleColorModifier: PrimitiveModifier, Equatable {
-    let color: Color
-
     func modifyEnvironment(_ environment: inout EnvironmentValues) {
-        environment.foregroundStyle = .color(color)
+        environment.foregroundStyle = AnyShapeStyle(style)
     }
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
@@ -185,7 +173,7 @@ struct TintColorModifier: PrimitiveModifier, Equatable {
     let color: Color
 
     func modifyEnvironment(_ environment: inout EnvironmentValues) {
-        environment.tint = .color(color)
+        environment.tint = AnyShapeStyle(color)
     }
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
@@ -193,12 +181,16 @@ struct TintColorModifier: PrimitiveModifier, Equatable {
     }
 }
 
-/// `.tint(_:)` with a style.
-struct TintModifier: PrimitiveModifier, Equatable {
-    let style: ShapeStyle
+/// `.tint(_:)` with a style, kept as its own type.
+struct TintModifier<S: ShapeStyle>: PrimitiveModifier {
+    let style: S
+
+    func _isEquivalent(to other: TintModifier<S>) -> Bool {
+        _areEquivalent(style, other.style)
+    }
 
     func modifyEnvironment(_ environment: inout EnvironmentValues) {
-        environment.tint = style
+        environment.tint = AnyShapeStyle(style)
     }
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {

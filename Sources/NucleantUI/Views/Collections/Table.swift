@@ -109,7 +109,7 @@ where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
                         look: look
                     )
                     Rectangle()
-                        .fill(ShapeStyle.separator)
+                        .fill(.separator)
                         .frame(height: 1)
                 }
                 ZStack(alignment: .topLeading) {
@@ -128,7 +128,7 @@ where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
             // Columns that can't shrink to fit spill past the edge; they
             // are cut off there rather than drawn over what is beside.
             .clipped()
-            .border(look.kind == .bordered ? .separator : .color(.clear), width: 1)
+            .border(look.kind == .bordered ? AnyShapeStyle(.separator) : AnyShapeStyle(.clear), width: 1)
         }
         .opacity(isEnabled ? 1 : 0.5)
     }
@@ -591,7 +591,7 @@ struct _TableRow<Value: Identifiable> {
         let isSelected = actions.selection.contains(id)
         let inverted = isSelected && isFocused
         let row = _TableRowCells(value: entry.value, cells: cells)
-            .foregroundStyle(inverted ? .color(.white) : .primary)
+            .foregroundStyle(inverted ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .environment(\.backgroundProminence, inverted ? .increased : .standard)
             .background(ZStack {
                 if look.alternates && entry.index % 2 == 1 {
@@ -599,7 +599,7 @@ struct _TableRow<Value: Identifiable> {
                 }
                 if isSelected {
                     RoundedRectangle(cornerRadius: look.selectionRadius)
-                        .fill(isFocused ? tint : SelectionColors.unfocused)
+                        .fill(isFocused ? tint : AnyShapeStyle(SelectionColors.unfocused))
                 }
             })
             ._hitTarget(HitTarget(
@@ -724,7 +724,7 @@ struct _TableHeader {
             layout: layout
         )
         .padding(.horizontal, look.horizontalInset)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
     }
 }
 
@@ -847,7 +847,7 @@ struct _TableColumnEdge {
         let start = $dragStart
         ZStack {
             Rectangle()
-                .fill(ShapeStyle.separator)
+                .fill(.separator)
                 .frame(width: 1)
                 .padding(.vertical, 4)
         }

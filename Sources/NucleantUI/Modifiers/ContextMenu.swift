@@ -233,8 +233,8 @@ struct ContextMenuPanel {
         }
         .padding(Self.inset)
         .frame(minWidth: 160, alignment: .leading)
-        .background(ShapeStyle.secondaryBackground)
-        .border(ShapeStyle.separator, cornerRadius: 8)
+        .background(.secondaryBackground)
+        .border(.separator, cornerRadius: 8)
         .cornerRadius(8)
         .environment(\.menuLevel, level)
     }
@@ -243,16 +243,16 @@ struct ContextMenuPanel {
 extension View {
     /// The look shared by every row of a menu: full width, lit in the tint
     /// while the pointer is over it or pressing it.
-    func _menuRow(isLit: Bool, isEnabled: Bool, tint: ShapeStyle) -> some View {
+    func _menuRow(isLit: Bool, isEnabled: Bool, tint: AnyShapeStyle) -> some View {
         self
             .font(.system(size: 14))
-            .foregroundStyle(isLit ? .color(.white) : .primary)
+            .foregroundStyle(isLit ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(isLit ? tint : .color(.clear))
+                    .fill(isLit ? tint : AnyShapeStyle(.clear))
             )
             .opacity(isEnabled ? 1 : 0.4)
     }

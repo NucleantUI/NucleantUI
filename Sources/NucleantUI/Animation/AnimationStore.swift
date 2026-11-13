@@ -371,25 +371,16 @@ final class AnimatedVector {
 
 // MARK: - Vectors for the animatable kinds
 
-extension ShapeStyle {
-    /// Both appearances' components, so a flat color and a dynamic one
-    /// animate into each other; a gradient changes at once.
+extension _ResolvedPaint {
+    /// A color's components; a gradient changes at once.
     var animatableVector: [Double] {
-        switch self {
-        case .color(let color):
-            return [color, color].flatMap { [$0.red, $0.green, $0.blue, $0.alpha].map { Double($0) } }
-        case .dynamic(let light, let dark):
-            return [light, dark].flatMap { [$0.red, $0.green, $0.blue, $0.alpha].map { Double($0) } }
-        case .linearGradient, .radialGradient:
-            return []
-        }
+        guard case .color(let color) = kind else { return [] }
+        return [Double(color.red), Double(color.green), Double(color.blue), Double(color.alpha)]
     }
 
     init(animatableVector v: [Double]) {
         func clamp(_ x: Double) -> Float { Float(Swift.min(Swift.max(x, 0), 1)) }
-        let light = Color(red: clamp(v[0]), green: clamp(v[1]), blue: clamp(v[2]), opacity: clamp(v[3]))
-        let dark = Color(red: clamp(v[4]), green: clamp(v[5]), blue: clamp(v[6]), opacity: clamp(v[7]))
-        self = light == dark ? .color(light) : .dynamic(light: light, dark: dark)
+        self = .color(Color(red: clamp(v[0]), green: clamp(v[1]), blue: clamp(v[2]), opacity: clamp(v[3])))
     }
 }
 
@@ -406,23 +397,19 @@ extension BuildContext {
         animations.state(at: path, slot: slot, target: target, animation: transaction.animation)
     }
 
-    /// The same for a paint: only a flat or dynamic color has anything to
-    /// animate.
-    func animatedStyle(_ slot: AnimationStore.Slot, _ style: ShapeStyle?) -> AnimatedVector? {
-        guard let style else { return nil }
-        return animatedValue(slot, style.animatableVector)
+    /// The same for a paint: only a color has anything to animate.
+    func animatedPaint(_ slot: AnimationStore.Slot, _ paint: _ResolvedPaint?) -> AnimatedVector? {
+        guard let paint else { return nil }
+        return animatedValue(slot, paint.animatableVector)
     }
 }
 
 extension AnimatedVector {
-    /// `style` as drawn this pass: its color where one is animating.
-    func current(of style: ShapeStyle) -> ShapeStyle {
-        switch style {
-        case .color, .dynamic: break
-        case .linearGradient, .radialGradient: return style
-        }
+    /// `paint` as drawn this pass: its color where one is animating.
+    func current(of paint: _ResolvedPaint) -> _ResolvedPaint {
+        guard case .color = paint.kind else { return paint }
         let vector = current()
-        guard vector.count == 8 else { return style }
-        return ShapeStyle(animatableVector: vector)
+        guard vector.count == 4 else { return paint }
+        return _ResolvedPaint(animatableVector: vector)
     }
 }

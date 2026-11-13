@@ -203,8 +203,8 @@ struct PopoverPanel {
     var body: some View {
         content
             .padding(Self.inset)
-            .background(ShapeStyle.secondaryBackground)
-            .border(ShapeStyle.separator, cornerRadius: Self.cornerRadius)
+            .background(.secondaryBackground)
+            .border(.separator, cornerRadius: Self.cornerRadius)
             .cornerRadius(Self.cornerRadius)
     }
 }
@@ -222,6 +222,10 @@ extension View {
 /// on the first side of the anchor that has room for it.
 struct PopoverPlacementContent: NodeContent {
     weak var anchor: PopoverHandle?
+    /// The arrow's fill and its outline, as the panel's — resolved where
+    /// the popover was built.
+    let arrowFill: _ResolvedPaint
+    let arrowStroke: _ResolvedPaint
 
     static let arrowWidth = 24.0
     static let arrowHeight = 12.0
@@ -346,7 +350,7 @@ struct PopoverPlacementContent: NodeContent {
                 $0.closeSubpath()
             },
             bounds: bounds,
-            fill: context.resolve(.secondaryBackground),
+            fill: context.resolve(arrowFill),
             transform: context.transform,
             clip: context.clip,
             clipCornerRadius: context.clipCornerRadius,
@@ -359,7 +363,7 @@ struct PopoverPlacementContent: NodeContent {
                 $0.addLine(to: baseB)
             },
             bounds: bounds,
-            stroke: context.resolve(.separator),
+            stroke: context.resolve(arrowStroke),
             strokeStyle: StrokeStyle(lineWidth: 1, lineJoin: .round),
             transform: context.transform,
             clip: context.clip,
@@ -374,7 +378,11 @@ struct PopoverPlacementModifier: PrimitiveModifier {
     weak var anchor: PopoverHandle?
 
     func makeContent(_ context: inout BuildContext) -> PopoverPlacementContent {
-        PopoverPlacementContent(anchor: anchor)
+        PopoverPlacementContent(
+            anchor: anchor,
+            arrowFill: BackgroundStyle.secondaryBackground.paint(in: context.environment),
+            arrowStroke: SeparatorShapeStyle().paint(in: context.environment)
+        )
     }
 
     func _isEquivalent(to other: PopoverPlacementModifier) -> Bool { false }

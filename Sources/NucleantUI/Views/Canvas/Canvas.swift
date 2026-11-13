@@ -65,7 +65,12 @@ public struct Canvas {
 
 extension Canvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ContentNode(content: CanvasContent(path: context.path, renderer: renderer))
+        // What the drawing reads of the environment is read when it is
+        // drawn, outside this build; the color scheme, which every style
+        // drawn with depends on, is read here, so a change of appearance
+        // builds the canvas again and it draws again.
+        _ = context.environment.colorScheme
+        return ContentNode(content: CanvasContent(path: context.path, environment: context.environment, renderer: renderer))
     }
 }
 
@@ -73,6 +78,8 @@ extension Canvas: BuiltinView {
 /// the author's closure when it reaches it.
 struct CanvasContent: NodeContent {
     let path: [Int]
+    /// What the drawing's styles resolve in.
+    let environment: EnvironmentValues
     let renderer: (inout GraphicsContext, Size) -> Void
     /// Which build this content came from. A rebuilt view gets a new
     /// content and so a new generation, which is what makes its command
@@ -95,7 +102,7 @@ struct CanvasContent: NodeContent {
         let path = self.path
         let renderer = self.renderer
         let size = rect.size
-        let scheme = context.colorScheme
+        let environment = self.environment
         list.append(.canvas(CanvasDraw(
             frame: rect,
             opacity: context.opacity,
@@ -105,7 +112,7 @@ struct CanvasContent: NodeContent {
             transformedClips: context.transformedClips,
             generation: generation,
             drawing: CanvasDrawing { pointer in
-                var graphics = GraphicsContext(canvas: SkCanvas(base: pointer), size: size, colorScheme: scheme)
+                var graphics = GraphicsContext(canvas: SkCanvas(base: pointer), size: size, environment: environment)
                 // Reads inside the renderer belong to this view: a change
                 // to one dirties it alone, which rebuilds it, which draws
                 // the node again.

@@ -253,7 +253,7 @@ struct IngredientRow {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             ZStack {
-                Circle().stroke(isGathered ? .color(tint) : Theme.track, lineWidth: 2)
+                Circle().stroke(isGathered ? AnyShapeStyle(tint) : AnyShapeStyle(Theme.track), lineWidth: 2)
                 if isGathered {
                     Circle().fill(tint).padding(5)
                 }
@@ -374,11 +374,11 @@ struct StepRow {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             ZStack {
-                Circle().fill(isDone ? .color(tint) : Theme.paper)
-                Circle().stroke(isDone || isCurrent ? .color(tint) : Theme.track, lineWidth: 2)
+                Circle().fill(isDone ? AnyShapeStyle(tint) : AnyShapeStyle(Theme.paper))
+                Circle().stroke(isDone || isCurrent ? AnyShapeStyle(tint) : AnyShapeStyle(Theme.track), lineWidth: 2)
                 Text("\(number)")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(isDone ? .color(.white) : isCurrent ? .color(tint) : Theme.faint)
+                    .foregroundStyle(isDone ? AnyShapeStyle(.white) : isCurrent ? AnyShapeStyle(tint) : AnyShapeStyle(Theme.faint))
             }
             .frame(width: Self.badgeSize, height: Self.badgeSize)
             VStack(alignment: .leading, spacing: 8) {

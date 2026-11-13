@@ -197,7 +197,7 @@ struct TopicBubble {
         HStack(spacing: 8) {
             Text(topic.title.isEmpty ? "New topic" : topic.title)
                 .font(.system(size: isCenter ? 18 : 13, weight: isCenter ? .bold : .medium))
-                .foregroundStyle(isCenter ? .color(.white) : (topic.title.isEmpty ? .secondary : .primary))
+                .foregroundStyle(isCenter ? AnyShapeStyle(.white) : (topic.title.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary)))
                 .lineLimit(2)
             if hiddenCount > 0 {
                 Text("+\(hiddenCount)")
@@ -214,10 +214,10 @@ struct TopicBubble {
             bottom: isCenter ? 14 : 8,
             trailing: isCenter ? 20 : 12
         ))
-        .background(RoundedRectangle(cornerRadius: radius).fill(isCenter ? .color(color) : Theme.bubble))
+        .background(RoundedRectangle(cornerRadius: radius).fill(isCenter ? AnyShapeStyle(color) : AnyShapeStyle(Theme.bubble)))
         .overlay(
             RoundedRectangle(cornerRadius: radius)
-                .stroke(isSelected ? Theme.selection : .color(color), lineWidth: isSelected ? 3 : 1.5)
+                .stroke(isSelected ? AnyShapeStyle(Theme.selection) : AnyShapeStyle(color), lineWidth: isSelected ? 3 : 1.5)
         )
         .gesture(
             DragGesture(minimumDistance: 2)
@@ -294,7 +294,7 @@ struct StickyNote {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.noteBar, lineWidth: 1))
         .overlay(alignment: .bottomTrailing) {
             ResizeGrip()
-                .stroke(ShapeStyle.secondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                .stroke(.secondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                 .frame(width: 16, height: 16)
                 .padding(4)
                 .contentShape(Rectangle())

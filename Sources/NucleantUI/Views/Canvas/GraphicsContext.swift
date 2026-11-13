@@ -42,8 +42,9 @@ public struct GraphicsContext {
     /// ``concatenate(_:)``.
     public var transform: Transform = .identity
 
-    /// The appearance dynamic colors resolve against.
-    let colorScheme: ColorScheme
+    /// The environment of the canvas view, which a style drawn with
+    /// (`Shading.style(_:)`) is resolved in.
+    public let environment: EnvironmentValues
 
     /// Clips in effect, already mapped to the canvas's space, newest last.
     private var clips: [(path: Path, eoFill: Bool)] = []
@@ -63,10 +64,71 @@ public struct GraphicsContext {
         }
     }
 
-    init(canvas: SkCanvas, size: Size, colorScheme: ColorScheme) {
+    init(canvas: SkCanvas, size: Size, environment: EnvironmentValues) {
         self.canvas = canvas
         self.size = size
-        self.colorScheme = colorScheme
+        self.environment = environment
+    }
+
+    // MARK: Shading
+
+    /// What a path is filled or stroked with: a color, a gradient laid out
+    /// in the canvas's points, or a style resolved in the canvas's
+    /// environment.
+    public struct Shading: Sendable {
+        enum Kind: Sendable {
+            case paint(_ResolvedPaint)
+            case style(AnyShapeStyle)
+            case linearGradient(Gradient, startPoint: Point, endPoint: Point)
+            case radialGradient(Gradient, center: Point, startRadius: Double, endRadius: Double)
+        }
+
+        let kind: Kind
+
+        /// The foreground style of the canvas's environment.
+        public static var foreground: Shading { Shading(kind: .style(AnyShapeStyle(ForegroundStyle()))) }
+
+        public static func color(_ color: Color) -> Shading {
+            Shading(kind: .paint(.color(color)))
+        }
+
+        /// `style` as the canvas's environment resolves it; a gradient's
+        /// unit points are the canvas's.
+        public static func style<S: ShapeStyle>(_ style: S) -> Shading {
+            Shading(kind: .style(AnyShapeStyle(style)))
+        }
+
+        /// Colors along the line from `startPoint` to `endPoint`, in the
+        /// canvas's points.
+        public static func linearGradient(_ gradient: Gradient, startPoint: Point, endPoint: Point) -> Shading {
+            Shading(kind: .linearGradient(gradient, startPoint: startPoint, endPoint: endPoint))
+        }
+
+        /// Colors in rings around `center`, in the canvas's points.
+        public static func radialGradient(
+            _ gradient: Gradient, center: Point, startRadius: Double, endRadius: Double
+        ) -> Shading {
+            Shading(kind: .radialGradient(gradient, center: center, startRadius: startRadius, endRadius: endRadius))
+        }
+    }
+
+    /// What `shading` paints, its points made unit points of the canvas.
+    private func paint(for shading: Shading) -> _ResolvedPaint {
+        func unit(_ point: Point) -> UnitPoint {
+            UnitPoint(x: size.width > 0 ? point.x / size.width : 0, y: size.height > 0 ? point.y / size.height : 0)
+        }
+        switch shading.kind {
+        case .paint(let paint):
+            return paint
+        case .style(let style):
+            return style.paint(in: environment)
+        case .linearGradient(let gradient, let start, let end):
+            return _ResolvedPaint(.linearGradient(gradient, startPoint: unit(start), endPoint: unit(end)))
+        case .radialGradient(let gradient, let center, let startRadius, let endRadius):
+            return _ResolvedPaint(.radialGradient(
+                gradient, center: unit(center), startRadius: startRadius, endRadius: endRadius
+            ))
+        }
     }
 
     // MARK: Transform
@@ -104,19 +166,15 @@ public struct GraphicsContext {
 
     // MARK: Drawing
 
-    public func fill(_ path: Path, with style: ShapeStyle, eoFill: Bool = false) {
+    public func fill(_ path: Path, with shading: Shading, eoFill: Bool = false) {
         draw(path, eoFill: eoFill) { canvas, skPath in
-            apply(style, to: scratch.fill)
+            apply(paint(for: shading), to: scratch.fill)
             canvas.drawPath(skPath, paint: scratch.fill)
             drawEmbedded(path, on: canvas)
         }
     }
 
-    public func fill(_ path: Path, with color: Color, eoFill: Bool = false) {
-        fill(path, with: .color(color), eoFill: eoFill)
-    }
-
-    public func stroke(_ path: Path, with style: ShapeStyle, style strokeStyle: StrokeStyle) {
+    public func stroke(_ path: Path, with shading: Shading, style strokeStyle: StrokeStyle) {
         guard strokeStyle.lineWidth > 0 else { return }
         draw(path, eoFill: false) { canvas, skPath in
             let paint = scratch.stroke
@@ -135,21 +193,13 @@ public struct GraphicsContext {
                     paint.clearPathEffect()
                 }
             }
-            apply(style, to: paint)
+            apply(self.paint(for: shading), to: paint)
             canvas.drawPath(skPath, paint: paint)
         }
     }
 
-    public func stroke(_ path: Path, with style: ShapeStyle, lineWidth: Double = 1) {
-        stroke(path, with: style, style: StrokeStyle(lineWidth: lineWidth))
-    }
-
-    public func stroke(_ path: Path, with color: Color, style: StrokeStyle) {
-        stroke(path, with: .color(color), style: style)
-    }
-
-    public func stroke(_ path: Path, with color: Color, lineWidth: Double = 1) {
-        stroke(path, with: .color(color), style: StrokeStyle(lineWidth: lineWidth))
+    public func stroke(_ path: Path, with shading: Shading, lineWidth: Double = 1) {
+        stroke(path, with: shading, style: StrokeStyle(lineWidth: lineWidth))
     }
 
     /// Run `content` against a copy of this context: what it changes
@@ -217,11 +267,10 @@ public struct GraphicsContext {
         EmbeddedDrawing.draw(path, on: canvas, fill: scratch.fill, image: scratch.image, opacity: opacity)
     }
 
-    private func apply(_ style: ShapeStyle, to paint: SkPaint) {
+    private func apply(_ resolved: _ResolvedPaint, to paint: SkPaint) {
         let bounds = Rect(origin: .zero, size: size)
-        // Resolved here, so a dynamic style is its color by the switch.
-        switch style.resolved(for: colorScheme) {
-        case .color(let color), .dynamic(light: let color, dark: _):
+        switch resolved.kind {
+        case .color(let color):
             paint.clearShader()
             paint.setColor(rgba(color))
         case .linearGradient(let gradient, let startPoint, let endPoint):

@@ -131,8 +131,8 @@ public struct ShapeDraw: Equatable, Sendable {
     /// box is a walk over every element — a measure of every text in it.
     private(set) var pathBox: Rect?
     public var bounds: Rect
-    public var fill: ShapeStyle?
-    public var stroke: ShapeStyle?
+    public var fill: _ResolvedPaint?
+    public var stroke: _ResolvedPaint?
     public var strokeStyle: StrokeStyle
     public var transform: Transform
     public var clip: Rect?
@@ -146,8 +146,8 @@ public struct ShapeDraw: Equatable, Sendable {
     public init(
         path: Path,
         bounds: Rect,
-        fill: ShapeStyle? = nil,
-        stroke: ShapeStyle? = nil,
+        fill: _ResolvedPaint? = nil,
+        stroke: _ResolvedPaint? = nil,
         strokeStyle: StrokeStyle = StrokeStyle(),
         transform: Transform = .identity,
         clip: Rect? = nil,
@@ -168,8 +168,8 @@ public struct ShapeDraw: Equatable, Sendable {
         path: Path,
         pathBox: Rect?,
         bounds: Rect,
-        fill: ShapeStyle?,
-        stroke: ShapeStyle?,
+        fill: _ResolvedPaint?,
+        stroke: _ResolvedPaint?,
         strokeStyle: StrokeStyle,
         transform: Transform,
         clip: Rect?,
@@ -354,10 +354,9 @@ public struct ImageDraw: Equatable, Sendable {
 public struct SvgDraw: Equatable, Sendable {
     public var image: SvgImage
     public var frame: Rect
-    /// A template's style, resolved for its scheme: everything the document
-    /// draws painted in it, by the document's own coverage. `nil` draws the
-    /// document's colors.
-    public var tint: ShapeStyle?
+    /// A template's paint: everything the document draws painted in it, by
+    /// the document's own coverage. `nil` draws the document's colors.
+    public var tint: _ResolvedPaint?
     /// The inherited opacity, applied to the drawing as a whole — the
     /// document's colors are its own, not resolved at layout time.
     public var opacity: Double
@@ -370,7 +369,7 @@ public struct SvgDraw: Equatable, Sendable {
     public init(
         image: SvgImage,
         frame: Rect,
-        tint: ShapeStyle? = nil,
+        tint: _ResolvedPaint? = nil,
         opacity: Double = 1,
         transform: Transform = .identity,
         clip: Rect? = nil,
@@ -650,27 +649,13 @@ public struct DrawContext: Sendable {
         opacity >= 1 ? color : color.opacity(opacity)
     }
 
-    /// `style` under this scheme, faded the same way. A gradient at full
-    /// opacity is drawn as it is: fading its stops by 1 would only copy them.
-    func resolve(_ style: ShapeStyle) -> ShapeStyle {
-        switch style {
-        case .color(let color):
-            return .color(resolve(color))
-        case .dynamic(let light, let dark):
-            return .color(resolve(colorScheme == .dark ? dark : light))
-        case .linearGradient(let gradient, let start, let end):
-            guard opacity < 1 else { return style }
-            return .linearGradient(faded(gradient), startPoint: start, endPoint: end)
-        case .radialGradient(let gradient, let center, let startRadius, let endRadius):
-            guard opacity < 1 else { return style }
-            return .radialGradient(faded(gradient), center: center, startRadius: startRadius, endRadius: endRadius)
-        }
-    }
-
-    private func faded(_ gradient: Gradient) -> Gradient {
-        Gradient(stops: gradient.stops.map {
-            Gradient.Stop(color: resolve($0.color), location: $0.location)
-        })
+    /// `paint` faded the same way. Styles are resolved when their views are
+    /// built, against the environment, color scheme included; what is left
+    /// for drawing is the opacity a pass inherits. A paint at full opacity
+    /// is drawn as it is: fading a gradient's stops by 1 would only copy
+    /// them.
+    func resolve(_ paint: _ResolvedPaint) -> _ResolvedPaint {
+        paint.opacity(opacity)
     }
 
     /// Narrow the clip to `rect`, a frame in layout space, as `transform`

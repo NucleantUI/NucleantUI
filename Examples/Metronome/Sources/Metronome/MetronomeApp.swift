@@ -19,11 +19,11 @@
 import NucleantUI
 
 struct Theme {
-    static let background = ShapeStyle.background
-    static let panel = ShapeStyle.secondaryBackground
+    static let background = BackgroundStyle.background
+    static let panel = BackgroundStyle.secondaryBackground
     static let accent = Color(hex: 0x4C8DFF)
     static let downbeat = Color(hex: 0xFF9F43)
-    static let flash = ShapeStyle.dynamic(light: Color(hex: 0xDCE8FF), dark: Color(hex: 0x1F2B45))
+    static let flash = DynamicShapeStyle(light: Color(hex: 0xDCE8FF), dark: Color(hex: 0x1F2B45))
 }
 
 // MARK: - Tempo
@@ -69,12 +69,12 @@ struct TempoPanel {
                 .toggleStyle(.button)
 
                 Button("Tap") { metronome.tap() }
-                    .tint(ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3)))
+                    .tint(DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3)))
             }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(metronome.flashesOnBeat && metronome.isFlashing ? Theme.flash : Theme.panel)
+        .background(metronome.flashesOnBeat && metronome.isFlashing ? AnyShapeStyle(Theme.flash) : AnyShapeStyle(Theme.panel))
         .cornerRadius(16)
     }
 }
@@ -93,7 +93,7 @@ struct BeatLights {
                 let isDownbeat = index == 0 && accentsFirstBeat
                 let color = isDownbeat ? Theme.downbeat : Theme.accent
                 Circle()
-                    .fill(current == index ? .color(color) : .fill)
+                    .fill(current == index ? AnyShapeStyle(color) : AnyShapeStyle(.fill))
                     .frame(width: isDownbeat ? 22 : 18, height: isDownbeat ? 22 : 18)
                     .frame(width: 22, height: 22)
             }

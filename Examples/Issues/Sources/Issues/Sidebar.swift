@@ -101,11 +101,11 @@ struct AllIssuesGlyph {
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 2.5)
-                .stroke(ShapeStyle.secondary, lineWidth: 1.3)
+                .stroke(.secondary, lineWidth: 1.3)
                 .frame(width: 9, height: 9)
                 .offset(x: 4, y: 0)
             RoundedRectangle(cornerRadius: 2.5)
-                .fill(ShapeStyle.secondary)
+                .fill(.secondary)
                 .frame(width: 9, height: 9)
                 .offset(x: 0, y: 4)
         }
@@ -119,9 +119,9 @@ struct SettingsGlyph {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(ShapeStyle.secondary, lineWidth: 1.5)
+                .stroke(.secondary, lineWidth: 1.5)
             Circle()
-                .fill(ShapeStyle.secondary)
+                .fill(.secondary)
                 .frame(width: 4, height: 4)
         }
         .frame(width: 12, height: 12)

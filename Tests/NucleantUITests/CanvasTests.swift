@@ -25,7 +25,7 @@ import NucleantSkia
         context: DrawContext = DrawContext(),
         _ renderer: @escaping (inout GraphicsContext, Size) -> Void
     ) -> (DrawCommand, CanvasContent) {
-        let content = CanvasContent(path: [0], renderer: renderer)
+        let content = CanvasContent(path: [0], environment: EnvironmentValues(), renderer: renderer)
         var list = DisplayList()
         content.place(node: ContentNode(content: content), in: rect, proposal: ProposedSize(rect.size), context: context, into: &list)
         return (list.commands[0], content)
@@ -199,7 +199,7 @@ import NucleantSkia
     @Test func emptyFrameDrawsNothing() {
         var ran = false
         var list = DisplayList()
-        let content = CanvasContent(path: [0]) { _, _ in ran = true }
+        let content = CanvasContent(path: [0], environment: EnvironmentValues()) { _, _ in ran = true }
         content.place(node: ContentNode(content: content), in: Rect(x: 0, y: 0, width: 0, height: 10), proposal: ProposedSize(Size(width: 0, height: 10)), context: DrawContext(), into: &list)
         #expect(list.isEmpty)
         #expect(!ran)

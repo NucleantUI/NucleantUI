@@ -135,7 +135,7 @@ public struct TextField<Label: View> {
                 text: current,
                 font: font,
                 color: foreground,
-                selectionColor: tint.opacity(editing.isFocused ? 0.3 : 0.15),
+                selectionColor: AnyShapeStyle(tint.opacity(editing.isFocused ? 0.3 : 0.15)),
                 caret: resolved.caret,
                 anchor: resolved.anchor,
                 showsCaret: editing.isFocused,
@@ -1077,8 +1077,8 @@ enum TextFieldPasteboard {
 struct TextFieldLine {
     let text: String
     let font: Font
-    let color: ShapeStyle
-    let selectionColor: ShapeStyle
+    let color: AnyShapeStyle
+    let selectionColor: AnyShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -1123,8 +1123,8 @@ extension TextFieldLine: BuiltinView {
         return ContentNode(content: TextFieldLineContent(
             text: text,
             font: font,
-            color: color,
-            selectionColor: selectionColor,
+            color: color.paint(in: context.environment),
+            selectionColor: selectionColor.paint(in: context.environment),
             caret: caret,
             anchor: anchor,
             showsCaret: showsCaret,
@@ -1164,8 +1164,9 @@ extension TextFieldLine: BuiltinView {
 struct TextFieldLineContent: NodeContent {
     let text: String
     let font: Font
-    let color: ShapeStyle
-    let selectionColor: ShapeStyle
+    /// Resolved where the field was built.
+    let color: _ResolvedPaint
+    let selectionColor: _ResolvedPaint
     let caret: Int
     let anchor: Int
     let showsCaret: Bool

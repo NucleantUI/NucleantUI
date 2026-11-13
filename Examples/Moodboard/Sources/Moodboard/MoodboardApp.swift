@@ -25,9 +25,9 @@
 import NucleantUI
 
 enum Theme {
-    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
-    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
-    static let canvas = ShapeStyle.dynamic(light: Color(hex: 0xE4E1DA), dark: Color(hex: 0x2A2A2E))
+    static let sidebar = DynamicShapeStyle(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
+    static let bar = DynamicShapeStyle(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
+    static let canvas = DynamicShapeStyle(light: Color(hex: 0xE4E1DA), dark: Color(hex: 0x2A2A2E))
     static let accent = Color(hex: 0x2F7CF6)
 }
 
@@ -72,7 +72,7 @@ struct MoodboardView {
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
         .onAppear { focus = .board }

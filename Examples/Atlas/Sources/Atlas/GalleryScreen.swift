@@ -86,12 +86,12 @@ private struct Chip {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold))
-                Text("\(count)").font(.system(size: 12)).foregroundStyle(isOn ? ShapeStyle.color(Color.white.opacity(0.8)) : .secondary)
+                Text("\(count)").font(.system(size: 12)).foregroundStyle(isOn ? AnyShapeStyle(Color.white.opacity(0.8)) : AnyShapeStyle(.secondary))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .foregroundStyle(isOn ? ShapeStyle.color(.white) : .primary)
-            .background(isOn ? ShapeStyle.color(.atlasAccent) : .fill)
+            .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .background(isOn ? AnyShapeStyle(.atlasAccent) : AnyShapeStyle(.fill))
             .clipShape(Capsule())
         }
     }
@@ -139,7 +139,7 @@ struct DestinationCard {
     }
 }
 
-extension Color {
+extension ShapeStyle where Self == Color {
     /// The guide's one accent: chips that are on, the save button.
-    static let atlasAccent = Color(hex: 0xE8505B)
+    static var atlasAccent: Color { Color(hex: 0xE8505B) }
 }

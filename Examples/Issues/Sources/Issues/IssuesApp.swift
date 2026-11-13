@@ -27,8 +27,8 @@ import Foundation
 import NucleantUI
 
 enum Theme {
-    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
-    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
+    static let sidebar = DynamicShapeStyle(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
+    static let bar = DynamicShapeStyle(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
     static let accent = Color(hex: 0x5E6AD2)
 }
 
@@ -76,7 +76,7 @@ struct IssuesView {
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }
@@ -111,7 +111,7 @@ struct Avatar {
                     .foregroundColor(.white)
             } else {
                 Circle()
-                    .stroke(ShapeStyle.tertiary, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                    .stroke(.tertiary, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
             }
         }
         .frame(width: size, height: size)
@@ -189,7 +189,7 @@ struct PriorityGlyph {
             HStack(alignment: .bottom, spacing: 2) {
                 ForEach(0..<3) { bar in
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(bar < priority.bars ? ShapeStyle.primary : ShapeStyle.tertiary.opacity(0.5))
+                        .fill(bar < priority.bars ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary.opacity(0.5)))
                         .frame(width: 3, height: 5 + Double(bar) * 3)
                 }
             }
