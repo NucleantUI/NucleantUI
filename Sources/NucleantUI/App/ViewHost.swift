@@ -290,6 +290,7 @@ public final class ViewHost {
                 + "measured=\(PerfTrace.sizeCalls) text=\(PerfTrace.textMeasures)"
                 + (PerfTrace.layersDrawn > 0 ? " layers=\(PerfTrace.layersDrawn)" : "")
                 + (PerfTrace.nodesDrawn > 0 ? " nodes=\(PerfTrace.nodesDrawn)" : "")
+                + (PerfTrace.placementsKept > 0 ? " kept=\(PerfTrace.placementsKept)" : "")
                 + (windowRedrawn ? " window" : ""))
         }
 
@@ -351,6 +352,7 @@ public final class ViewHost {
     public func invalidate() {
         needsFullRebuild = true
         needsWindowRedraw = true
+        PlacementRecorder.shared.invalidateAll()
         Invalidator.shared.invalidate()
     }
 
@@ -1300,6 +1302,9 @@ enum PerfTrace {
     /// `ThorCanvas`, the overlay — painted again this pass, because what
     /// they hold changed.
     static var nodesDrawn = 0
+    /// Subtrees not placed this pass: what they drew the pass before was
+    /// appended — counted at their root (`PlacementCache.swift`).
+    static var placementsKept = 0
 
     static func reset() {
         textMeasures = 0
@@ -1308,6 +1313,7 @@ enum PerfTrace {
         sizeCalls = 0
         layersDrawn = 0
         nodesDrawn = 0
+        placementsKept = 0
     }
 
     static func log(_ message: @autoclosure () -> String) {

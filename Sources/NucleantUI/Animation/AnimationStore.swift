@@ -78,6 +78,9 @@ final class AnimationStore {
     /// Called by whatever is still between two values as it is placed.
     func requestFrame() {
         movedThisPass = true
+        // Whatever asked is on its way: what it is part of draws something
+        // else next frame, and is not kept (`PlacementCache.swift`).
+        PlacementRecorder.shared.noteDisturbance()
     }
 
     /// An animation began in this pass: whichever `withAnimation`

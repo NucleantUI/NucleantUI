@@ -192,6 +192,8 @@ final class StateStorage<Value>: AnyStateStorage {
     func noteRead(via chain: [AnyKeyPath]) {
         if DependencyTracker.shared.isPlacingOutsideABody {
             isReadDuringPlacement = true
+            // What was placed drew from it: not to be kept as it is.
+            PlacementRecorder.shared.noteDisturbance()
         } else {
             DependencyTracker.shared.recordRead(self, via: chain)
         }

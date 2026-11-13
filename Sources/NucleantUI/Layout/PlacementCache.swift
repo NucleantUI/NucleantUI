@@ -1,0 +1,197 @@
+//
+//  PlacementCache.swift
+//  NucleantUI
+//
+//  Placing only what changed. Every pass places the tree from the root, but
+//  most of a window draws the same commands it drew the pass before: one
+//  knob turning, and every label and card around it placed again to append
+//  what it appended last time.
+//
+//  A subtree made only of nodes that place purely (`NodeContent.placesPurely`
+//  — stacks, padding, frames, decorations, opacity and transforms, text,
+//  shapes, images) draws from its rect, its proposal, its context and its own
+//  nodes alone. Placed again under the same three, with nothing in it
+//  rebuilt since and nothing in it moving, it draws what it drew: the
+//  commands it appended are kept on its node, and the next pass appends them
+//  in one go instead of placing it.
+//
+//  What a pass places fresh tells, for each pure node:
+//  - whether it is *clean*: nothing below it asked for another frame (an
+//    animated value, a node's motion, a shape's data on its way) and nothing
+//    read state while it was placed — counted as it is placed;
+//  - whether it is *stable*: placed as it was the pass before.
+//  A clean, stable node is kept by the highest such node above it — each
+//  command copied once at most: the node itself, when nothing above it is
+//  pure, or else the first node above it that is not clean or not stable,
+//  which keeps each of its clean, stable children. A knob turning is then
+//  placed with its ancestors, and everything beside them is appended.
+//
+//  What is kept goes when anything in the subtree changes: a graft, a child
+//  replaced or leaving drops it from there up to the root (`ViewNode`). A
+//  view leaving anywhere turns keeping off for the pass, and a forced
+//  rebuild drops everything kept.
+//
+
+/// What a pure node was last placed with, and what it drew then when it
+/// may be drawn again.
+struct PlacementRecord {
+    let rect: Rect
+    let proposal: ProposedSize
+    let context: DrawContext
+    let epoch: Int
+    /// The commands it appended, in the list it appended them to; `nil`
+    /// until it is known to be worth keeping.
+    var list: DisplayList?
+
+    /// Whether a placement under these draws what this one drew.
+    func matches(_ rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> Bool {
+        self.epoch == epoch && self.rect == rect && self.proposal == proposal && self.context.placesLike(context)
+    }
+}
+
+/// The fresh placements of pure nodes under way, innermost last, and what
+/// tells whether one was clean.
+@MainActor
+final class PlacementRecorder {
+    static let shared = PlacementRecorder()
+
+    /// Bumped to drop everything kept, wherever it is: a kept list is only
+    /// replayed under the epoch it was made in.
+    private(set) var epoch = 0
+
+    /// How many things have asked for another frame or read state while
+    /// being placed, ever. A placement that leaves it as it found it was
+    /// clean.
+    private(set) var disturbances = 0
+
+    private struct Frame {
+        /// Clean, stable children placed fresh, not kept yet: kept by this
+        /// node if it is not kept itself.
+        var pending: [(node: ViewNode, record: PlacementRecord, range: Range<Int>)] = []
+    }
+
+    private var frames: [Frame] = []
+
+    private init() {}
+
+    /// Something animated asked for another frame, or state was read while
+    /// the tree was placed.
+    func noteDisturbance() {
+        disturbances += 1
+    }
+
+    /// Drop everything kept.
+    func invalidateAll() {
+        epoch += 1
+    }
+
+    /// Place `node` — a node whose subtree places purely — keeping what it
+    /// draws, or appending what it kept.
+    func place(
+        _ node: ViewNode,
+        in rect: Rect,
+        proposal: ProposedSize,
+        context: DrawContext,
+        into list: inout DisplayList,
+        fresh: (inout DisplayList) -> Void
+    ) {
+        if let record = node.placed, let kept = record.list, record.matches(rect, proposal, context, epoch: epoch) {
+            list.append(contentsOf: kept)
+            if PerfTrace.isEnabled { PerfTrace.placementsKept += 1 }
+            return
+        }
+        let stable = node.placed?.matches(rect, proposal, context, epoch: epoch) ?? false
+        let start = list.commands.count
+        let mark = disturbances
+        frames.append(Frame())
+        fresh(&list)
+        let frame = frames.removeLast()
+        let record = PlacementRecord(rect: rect, proposal: proposal, context: context, epoch: epoch)
+        node.placed = record
+        let range = start..<list.commands.count
+
+        if disturbances == mark && stable {
+            if frames.isEmpty {
+                // Nothing above it places purely: it keeps itself.
+                node.placed?.list = list.slice(range)
+            } else {
+                // The node above decides: it keeps itself, this with it, or
+                // this alone.
+                frames[frames.count - 1].pending.append((node, record, range))
+            }
+            return
+        }
+        // Something below it moves, or it was placed somewhere new: what
+        // below it stood still where it stood is kept on its own.
+        for child in frame.pending {
+            var kept = child.record
+            kept.list = list.slice(child.range)
+            child.node.placed = kept
+        }
+    }
+}
+
+extension DrawContext {
+    /// Whether a pure subtree placed under `other` draws what it drew under
+    /// this context. Every field but the animation: that only says how a
+    /// node placed somewhere new starts to move, and a subtree whose rects
+    /// are the ones it had moves nowhere.
+    func placesLike(_ other: DrawContext) -> Bool {
+        opacity == other.opacity
+            && transform == other.transform
+            && clip == other.clip
+            && clipCornerRadius == other.clipCornerRadius
+            && flattensRenderNodes == other.flattensRenderNodes
+            && nodeClip == other.nodeClip
+            && freezesMotion == other.freezesMotion
+            && frozenTransitionContent == other.frozenTransitionContent
+            && (shared === other.shared || (
+                transformedClips == other.transformedClips
+                    && shaderCanvasInput === other.shaderCanvasInput
+                    && coordinateSpaces == other.coordinateSpaces
+            ))
+    }
+}
+
+// MARK: - The kinds that place purely
+
+// Each of these draws from the rect, proposal and context it is placed with
+// and its own values alone, and places its children into the list it was
+// given. Animated values they read ask for a frame while they move, which
+// keeps them from being kept meanwhile.
+
+extension StackContent { static var placesPurely: Bool { true } }
+extension ZStackContent { static var placesPurely: Bool { true } }
+extension GroupContent { static var placesPurely: Bool { true } }
+extension PaddingContent { static var placesPurely: Bool { true } }
+extension FrameContent { static var placesPurely: Bool { true } }
+extension FramedContent { static var placesPurely: Bool { true } }
+extension RelativeSizeContent { static var placesPurely: Bool { true } }
+extension PositionContent { static var placesPurely: Bool { true } }
+extension AspectRatioContent { static var placesPurely: Bool { true } }
+extension DecorationContent { static var placesPurely: Bool { true } }
+extension OpacityContent { static var placesPurely: Bool { true } }
+extension OffsetContent { static var placesPurely: Bool { true } }
+extension TransformContent { static var placesPurely: Bool { true } }
+extension ClipContent { static var placesPurely: Bool { true } }
+extension EnvironmentContent { static var placesPurely: Bool { true } }
+extension TextContent { static var placesPurely: Bool { true } }
+extension ShapeContent { static var placesPurely: Bool { true } }
+extension ImageContent { static var placesPurely: Bool { true } }
+extension SvgContent { static var placesPurely: Bool { true } }
+extension SpacerContent { static var placesPurely: Bool { true } }
+extension DividerContent { static var placesPurely: Bool { true } }
+
+// These place their child as it is (`NodeContent`'s own `place`); what they
+// add is for input, which reads the frames placing left on the nodes.
+extension HitTestingContent { static var placesPurely: Bool { true } }
+extension InteractionContent { static var placesPurely: Bool { true } }
+extension HoverContent { static var placesPurely: Bool { true } }
+extension GestureContent { static var placesPurely: Bool { true } }
+extension CountedTapContent { static var placesPurely: Bool { true } }
+extension FocusableContent { static var placesPurely: Bool { true } }
+extension FocusBindingContent { static var placesPurely: Bool { true } }
+extension KeyPressContent { static var placesPurely: Bool { true } }
+extension DropTargetContent { static var placesPurely: Bool { true } }
+extension ContextMenuContent { static var placesPurely: Bool { true } }
+extension TransitionTraitContent { static var placesPurely: Bool { true } }

@@ -28,8 +28,9 @@ struct NodeTraitsTests {
         #expect(hoverNode().traits == [.hoverTarget])
         #expect(ContentNode(content: GroupContent()).traits == [.transparent])
         #expect(ContentNode(content: ClipContent(cornerRadius: 4)).traits == [.clipsChildren])
-        #expect(ContentNode(content: ParkedContent(isParked: true)).traits == [.parked])
-        #expect(ContentNode(content: ParkedContent(isParked: false)).traits == [])
+        // A parked screen places by its own rules: not a kind that places purely.
+        #expect(ContentNode(content: ParkedContent(isParked: true)).traits == [.parked, .placesImpurely])
+        #expect(ContentNode(content: ParkedContent(isParked: false)).traits == [.placesImpurely])
         #expect(ContentNode(content: HitTestingContent(allowsHitTesting: false)).traits == [.blocksHitTesting])
         #expect(ContentNode(content: PaddingContent(insets: .zero)).traits == [])
     }

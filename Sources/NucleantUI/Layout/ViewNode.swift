@@ -52,6 +52,11 @@ class ViewNode {
     /// Its geometry animation in flight.
     var motion = NodeMotion()
 
+    /// For a node whose subtree places purely: what it was last placed with,
+    /// and what it drew then when that is kept — see `PlacementCache.swift`.
+    /// Dropped here and above whenever the subtree changes.
+    var placed: PlacementRecord?
+
     /// The `.transition` of the view this node stands for, carried up
     /// through the modifiers around it to the container that inserts or
     /// removes it.
@@ -64,6 +69,7 @@ class ViewNode {
             let leaving = removal != nil
             guard leaving != isLeaving else { return }
             isLeaving = leaving
+            dropPlacementsUpwards()
             // Out of its parent's layout, or back in it.
             parent?.layoutChildrenChanged()
         }
@@ -149,6 +155,17 @@ class ViewNode {
         replacement.parent = self
         replacement.indexInParent = index
         subtreeTraitsChanged()
+        dropPlacementsUpwards()
+    }
+
+    /// What this node and every node above it kept of their last placement
+    /// was drawn from a subtree that changed.
+    func dropPlacementsUpwards() {
+        var node: ViewNode? = self
+        while let current = node {
+            current.placed = nil
+            node = current.parent
+        }
     }
 
     /// Work `subtreeTraits` out again from the children, here and above,
@@ -207,6 +224,7 @@ class ViewNode {
             current.horizontalFlexibility = nil
             current.verticalFlexibility = nil
             current.layoutCache = nil
+            current.placed = nil
             // Preferences reduced from the old subtree, and a custom
             // layout's cache built from it, are stale the same way.
             current.preferenceCache.removeAll(keepingCapacity: true)
@@ -322,7 +340,26 @@ class ViewNode {
         // is drawn first, under it.
         if let store, store.hasExits {
             placeLeavingBefore(context: context, store: store, into: &list)
+        } else if !subtreeTraits.contains(.placesImpurely), !context.freezesMotion {
+            // Drawn from what it is placed with alone: what it drew the
+            // last time, when that is what it would draw.
+            PlacementRecorder.shared.place(self, in: rect, proposal: proposal, context: context, into: &list) { list in
+                placeFresh(in: rect, proposal: proposal, context: context, store: store, into: &list)
+            }
+            return
         }
+        placeFresh(in: rect, proposal: proposal, context: context, store: store, into: &list)
+    }
+
+    /// Position this node in `rect` and draw it, without asking whether what
+    /// it drew last time would do.
+    private func placeFresh(
+        in rect: Rect,
+        proposal: ProposedSize,
+        context: DrawContext,
+        store: AnimationStore?,
+        into list: inout DisplayList
+    ) {
         var rect = rect
         var context = context
         frame = rect
@@ -464,6 +501,10 @@ struct NodeTraits: OptionSet, Sendable {
     static let keepsSizeWhileMoving = NodeTraits(rawValue: 1 << 17)
     /// A container's slot that a transition stands on (`TransitionSlotContent`).
     static let transitionSlot = NodeTraits(rawValue: 1 << 18)
+    /// Placing it does more than draw from what it is placed with — see
+    /// `NodeContent.placesPurely`. A subtree without one keeps what it
+    /// drew (`PlacementCache.swift`).
+    static let placesImpurely = NodeTraits(rawValue: 1 << 19)
 
     init(rawValue: UInt32) {
         self.rawValue = rawValue
@@ -491,6 +532,7 @@ struct NodeTraits: OptionSet, Sendable {
         if C.self is any LayoutCacheOwner.Type { traits.insert(.layoutCacheOwner) }
         if C.self is any LayoutSpacingSource.Type { traits.insert(.spacingSource) }
         if C.self == TransitionSlotContent.self { traits.insert(.transitionSlot) }
+        if !C.placesPurely { traits.insert(.placesImpurely) }
         self = traits
     }
 }
@@ -499,6 +541,15 @@ struct NodeTraits: OptionSet, Sendable {
 /// Every builtin view maps to one of these.
 @MainActor
 protocol NodeContent {
+
+    /// Whether placing this draws from the rect, proposal and context it is
+    /// placed with and its own values alone, placing its children into the
+    /// list it was given — nothing kept anywhere else, nothing read that a
+    /// rebuild or an animation asking for frames would not tell of. A subtree
+    /// of such nodes keeps what it drew and draws it again
+    /// (`PlacementCache.swift`). False unless a kind says so.
+    static var placesPurely: Bool { get }
+
 
     /// True when the node contributes its children to the parent's layout
     /// rather than laying them out itself.
@@ -594,6 +645,7 @@ protocol NodeContent {
 }
 
 extension NodeContent {
+    static var placesPurely: Bool { false }
     var isTransparent: Bool { false }
     var hitTarget: HitTarget? { nil }
     var dragSource: DragSource? { nil }

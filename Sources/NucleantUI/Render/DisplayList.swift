@@ -706,6 +706,22 @@ public struct DisplayList: Equatable, Sendable {
         bounds[index]
     }
 
+    /// The commands in `range` as a list of their own, under their states
+    /// and with their bounds: what appending them again appends. A run's
+    /// states are numbered in order, so the range's are one stretch of
+    /// `states`.
+    func slice(_ range: Range<Int>) -> DisplayList {
+        var copy = DisplayList()
+        guard !range.isEmpty else { return copy }
+        let first = stateIndices[range.lowerBound]
+        let last = stateIndices[range.upperBound - 1]
+        copy.states = Array(states[Int(first)...Int(last)])
+        copy.stateIndices = stateIndices[range].map { $0 - first }
+        copy.commands = Array(commands[range])
+        copy.bounds = Array(bounds[range])
+        return copy
+    }
+
     public mutating func append(_ command: DrawCommand, under state: DrawState = DrawState()) {
         append(command, under: state, bounds: command.paintBox.flatMap(state.paintBounds(of:)))
     }
