@@ -15,14 +15,82 @@ protocol AnyStateStorage: AnyObject {
     /// The view that declared this state — the subtree a write invalidates.
     var ownerPath: [Int] { get }
 
-    /// Every view that read this slot while its `body` ran, by path, with
-    /// the key paths it read through — `[]` for the whole value, `[\.[3],
-    /// \.level]` for a read through `$tracks[3].level`. A write dirties each
-    /// reader whose chain overlaps the written one, which is what stops a
-    /// view whose *inputs* look unchanged from being reused while the state
-    /// behind its binding moved — and what lets the other rows be reused
-    /// when it is only row 3 that moved.
-    var readers: [[Int]: [[AnyKeyPath]]] { get set }
+    /// Every view that read this slot while its `body` ran, with the key
+    /// paths it read through — see `StateReaders`.
+    var readers: StateReaders { get set }
+}
+
+/// The views that read one state slot, by path, with the key paths each
+/// read through — `[]` for the whole value, `[\.[3], \.level]` for a read
+/// through `$tracks[3].level`.
+///
+/// A write dirties each reader whose chain overlaps the written one, which
+/// is what stops a view whose *inputs* look unchanged from being reused
+/// while the state behind its binding moved — and what lets the other rows
+/// be reused when it is only row 3 that moved. Readers of the whole value
+/// are kept apart, and the others are filed by the first key path of their
+/// chain: a write through `[\.[3], \.level]` reaches the readers of the
+/// whole value and looks only among those filed under `\.[3]`, not at the
+/// reader of every other row.
+struct StateReaders {
+
+    /// Readers of the whole value.
+    private var whole: Set<[Int]> = []
+
+    /// The other readers, by the first key path of their chain, each with
+    /// the chains it read through.
+    private var byFirstKeyPath: [AnyKeyPath: [[Int]: [[AnyKeyPath]]]] = [:]
+
+    /// The first key paths each of those is filed under, to take it out.
+    private var firstKeyPaths: [[Int]: [AnyKeyPath]] = [:]
+
+    /// `reader` read the slot through `chain`.
+    mutating func add(_ reader: [Int], via chain: [AnyKeyPath]) {
+        guard let first = chain.first else {
+            whole.insert(reader)
+            return
+        }
+        let known = byFirstKeyPath[first]?[reader]
+        if let known, known.contains(chain) { return }
+        if known == nil {
+            firstKeyPaths[reader, default: []].append(first)
+        }
+        byFirstKeyPath[first, default: [:]][reader, default: []].append(chain)
+    }
+
+    /// `reader` is rebuilt or gone: the reads it made are forgotten.
+    mutating func remove(_ reader: [Int]) {
+        whole.remove(reader)
+        guard let firsts = firstKeyPaths.removeValue(forKey: reader) else { return }
+        for first in firsts {
+            byFirstKeyPath[first]?[reader] = nil
+            if byFirstKeyPath[first]?.isEmpty == true {
+                byFirstKeyPath[first] = nil
+            }
+        }
+    }
+
+    /// Each reader a write through `chain` reaches: one whose chain and the
+    /// written one are nested either way. A reader may be handed over more
+    /// than once.
+    func forEachReader(reachedBy chain: [AnyKeyPath], _ body: ([Int]) -> Void) {
+        for reader in whole {
+            body(reader)
+        }
+        guard let first = chain.first else {
+            // The whole value: every chain is inside it.
+            for readers in byFirstKeyPath.values {
+                for reader in readers.keys { body(reader) }
+            }
+            return
+        }
+        guard let readers = byFirstKeyPath[first] else { return }
+        for (reader, chains) in readers
+        where chains.contains(where: { $0.starts(with: chain) || chain.starts(with: $0) }) {
+            body(reader)
+        }
+    }
+
 }
 
 /// One `@State` value, living across rebuilds.
@@ -34,7 +102,7 @@ final class StateStorage<Value>: AnyStateStorage {
 
     let ownerPath: [Int]
 
-    var readers: [[Int]: [[AnyKeyPath]]] = [:]
+    var readers = StateReaders()
 
     /// Read while the tree was laid out or drawn, outside any `body` — a
     /// `ScrollView` placing its content at its offset, a `PathShape` or a
@@ -79,14 +147,34 @@ final class StateStorage<Value>: AnyStateStorage {
         }
         if isSame { return }
         value = newValue
+        didChange(via: chain)
+    }
+
+    /// A write of one part of the value — `$tracks[3].level`'s, through
+    /// `path`, the key paths of `chain` in one. Only that part is compared
+    /// with what it was, and it is written where it lies: the rest of the
+    /// value is not read out, copied or compared.
+    ///
+    /// Into an object, the write changes the object and leaves the slot
+    /// holding the same one: no write to the slot, as before — what reads
+    /// the object's properties is tracked by observation.
+    func set<Part>(_ part: Part, at path: WritableKeyPath<Value, Part>, via chain: [AnyKeyPath]) {
+        if Value.self is AnyClass {
+            var object = value
+            object[keyPath: path] = part
+            return
+        }
+        if _areEquivalent(value[keyPath: path], part) { return }
+        value[keyPath: path] = part
+        didChange(via: chain)
+    }
+
+    private func didChange(via chain: [AnyKeyPath]) {
         version &+= 1
         if isReadDuringPlacement {
             Invalidator.shared.invalidate(owner: ownerPath)
         }
-        for (reader, chains) in readers {
-            guard chains.contains(where: { $0.starts(with: chain) || chain.starts(with: $0) }) else {
-                continue
-            }
+        readers.forEachReader(reachedBy: chain) { reader in
             Invalidator.shared.invalidate(owner: reader)
         }
     }
@@ -95,12 +183,18 @@ final class StateStorage<Value>: AnyStateStorage {
     /// is currently being built. `chain` is the key path the read came
     /// through, `[]` for the whole value.
     func read(via chain: [AnyKeyPath] = []) -> Value {
+        noteRead(via: chain)
+        return value
+    }
+
+    /// The dependency `read(via:)` records, for a reader that takes only a
+    /// part of the value.
+    func noteRead(via chain: [AnyKeyPath]) {
         if DependencyTracker.shared.isPlacingOutsideABody {
             isReadDuringPlacement = true
         } else {
             DependencyTracker.shared.recordRead(self, via: chain)
         }
-        return value
     }
 
     /// Read with no dependency recorded — for a write's read-modify-write,
@@ -199,12 +293,7 @@ final class DependencyTracker {
     func recordRead(_ storage: any AnyStateStorage, via chain: [AnyKeyPath]) {
         guard !stack.isEmpty else { return }
         let top = stack.count - 1
-        let path = stack[top].path
-        var chains = storage.readers[path] ?? []
-        if !chains.contains(chain) {
-            chains.append(chain)
-            storage.readers[path] = chains
-        }
+        storage.readers.add(stack[top].path, via: chain)
         // Read again, most likely the slot read last.
         for read in stack[top].reads.reversed() where read === storage { return }
         stack[top].reads.append(storage)

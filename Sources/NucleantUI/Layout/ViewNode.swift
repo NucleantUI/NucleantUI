@@ -727,7 +727,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         // and its state is only carried over if this is still the same view.
         let replaced = context.records.replace(candidate)
         for storage in replaced.reads {
-            storage.readers.removeValue(forKey: path)
+            storage.readers.remove(path)
         }
         if replaced.identity != identity {
             context.store.release(replaced.stateKeys)

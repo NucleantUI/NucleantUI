@@ -246,7 +246,7 @@ extension RenderNodeManager {
         /// limit it is freed.
         private func recycle(_ node: ThorCanvasNode) {
             for storage in node.reads {
-                storage.readers.removeValue(forKey: node.readerPath)
+                storage.readers.remove(node.readerPath)
             }
             node.reads.removeAll()
             node.generation = -1

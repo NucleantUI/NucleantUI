@@ -114,18 +114,9 @@ public struct _StateProperty<Value> {
     /// `$state` — a two-way binding to this value.
     @MainActor
     public var projectedValue: Binding<Value> {
-        let holder = self.holder
-        return Binding(
+        Binding(
             source: holder.storage.map { BindingSource(root: ObjectIdentifier($0), keyPaths: []) },
-            get: { chain in
-                guard let storage = holder.storage else {
-                    preconditionFailure("@State projected before the view was built.")
-                }
-                return chain.map { storage.read(via: $0) } ?? storage.peek()
-            },
-            // Through the same setter as `wrappedValue`, so a binding write
-            // can't bump the version without invalidating, or vice versa.
-            set: { newValue, chain in holder.storage?.set(newValue, via: chain) }
+            location: StateRootLocation(holder: holder)
         )
     }
 }

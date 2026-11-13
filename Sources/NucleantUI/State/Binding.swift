@@ -10,14 +10,11 @@
 @MainActor
 public struct Binding<Value>: DynamicProperty {
 
-    /// Read the value. The chain is the full key path of the *outermost*
-    /// binding, handed down unchanged so the slot at the root records the
-    /// read at that granularity; `nil` reads without recording, for a
-    /// write's read-modify-write.
-    private let rawGet: ([AnyKeyPath]?) -> Value
-    /// Write the value, again carrying the outermost binding's chain down to
-    /// the slot so it can dirty only the readers that overlap it.
-    private let rawSet: (Value, [AnyKeyPath]) -> Void
+    /// Where the value is read and written. Reads take the full key path of
+    /// the *outermost* binding (`chain`), handed down unchanged so the slot
+    /// at the root records the read at that granularity; writes carry it
+    /// down to the slot so it can dirty only the readers that overlap it.
+    private let location: BindingLocation<Value>
 
     /// What this binding points at, when the framework can tell: the `@State`
     /// slot it was projected from, and the key paths walked since. Two
@@ -27,18 +24,24 @@ public struct Binding<Value>: DynamicProperty {
     let source: BindingSource?
 
     public init(get: @escaping () -> Value, set: @escaping (Value) -> Void) {
-        self.rawGet = { _ in get() }
-        self.rawSet = { newValue, _ in set(newValue) }
+        self.location = ClosureLocation(get: { _ in get() }, set: { newValue, _ in set(newValue) })
         self.source = nil
     }
 
+    /// A binding with closures of its own over another binding's source — a
+    /// conversion of the value that stays the same input as the binding it
+    /// converts.
     init(
         source: BindingSource?,
         get: @escaping ([AnyKeyPath]?) -> Value,
         set: @escaping (Value, [AnyKeyPath]) -> Void
     ) {
-        self.rawGet = get
-        self.rawSet = set
+        self.location = ClosureLocation(get: get, set: set)
+        self.source = source
+    }
+
+    init(source: BindingSource?, location: BindingLocation<Value>) {
+        self.location = location
         self.source = source
     }
 
@@ -50,8 +53,8 @@ public struct Binding<Value>: DynamicProperty {
     private var chain: [AnyKeyPath] { source?.keyPaths ?? [] }
 
     public var wrappedValue: Value {
-        get { rawGet(chain) }
-        nonmutating set { rawSet(newValue, chain) }
+        get { location.get(chain) }
+        nonmutating set { location.set(newValue, chain) }
     }
 
     /// `$binding` on a binding is the binding itself, so it can be forwarded
@@ -62,20 +65,10 @@ public struct Binding<Value>: DynamicProperty {
     public subscript<Subject>(
         dynamicMember keyPath: WritableKeyPath<Value, Subject>
     ) -> Binding<Subject> {
-        let rawGet = self.rawGet
-        let rawSet = self.rawSet
-        return Binding<Subject>(
-            source: source?.appending(keyPath),
-            get: { chain in rawGet(chain)[keyPath: keyPath] },
-            set: { newValue, chain in
-                var copy = rawGet(nil)
-                copy[keyPath: keyPath] = newValue
-                rawSet(copy, chain)
-            }
-        )
+        Binding<Subject>(source: source?.appending(keyPath), location: location.projecting(keyPath))
     }
 
-    /// Nothing to wire up — a binding carries its own closures.
+    /// Nothing to wire up — a binding carries its own location.
     public func _bind(to context: BindingContext) {}
 }
 
@@ -93,5 +86,118 @@ struct BindingSource: Hashable {
 
     func appending(_ keyPath: AnyKeyPath) -> BindingSource {
         BindingSource(root: root, keyPaths: keyPaths + [keyPath])
+    }
+}
+
+/// Where a binding reads and writes its value: `@State`'s slot, through the
+/// key paths walked from it (`StateLocation`), or a pair of closures
+/// (`ClosureLocation`).
+@MainActor
+class BindingLocation<Value> {
+
+    /// The value. `chain` is the outermost binding's, for the slot to record
+    /// the read; `nil` reads without recording, for a write's
+    /// read-modify-write.
+    func get(_ chain: [AnyKeyPath]?) -> Value {
+        fatalError("each location overrides it")
+    }
+
+    func set(_ newValue: Value, _ chain: [AnyKeyPath]) {
+        fatalError("each location overrides it")
+    }
+
+    /// The location of one property of the value.
+    func projecting<Subject>(_ keyPath: WritableKeyPath<Value, Subject>) -> BindingLocation<Subject> {
+        fatalError("each location overrides it")
+    }
+}
+
+/// A value reached through a pair of closures. A property of it is read
+/// out of the whole value, and written by writing the whole value back.
+final class ClosureLocation<Value>: BindingLocation<Value> {
+    private let read: ([AnyKeyPath]?) -> Value
+    private let write: (Value, [AnyKeyPath]) -> Void
+
+    init(get: @escaping ([AnyKeyPath]?) -> Value, set: @escaping (Value, [AnyKeyPath]) -> Void) {
+        self.read = get
+        self.write = set
+    }
+
+    override func get(_ chain: [AnyKeyPath]?) -> Value {
+        read(chain)
+    }
+
+    override func set(_ newValue: Value, _ chain: [AnyKeyPath]) {
+        write(newValue, chain)
+    }
+
+    override func projecting<Subject>(_ keyPath: WritableKeyPath<Value, Subject>) -> BindingLocation<Subject> {
+        ClosureLocation<Subject>(
+            get: { chain in self.read(chain)[keyPath: keyPath] },
+            set: { newValue, chain in
+                var copy = self.read(nil)
+                copy[keyPath: keyPath] = newValue
+                self.write(copy, chain)
+            }
+        )
+    }
+}
+
+/// A part of an `@State` value: the slot, and the key path from its value
+/// to the part, every projection since the slot in one. A read takes the
+/// part where it lies; a write compares and writes only the part
+/// (`StateStorage.set(_:at:via:)`). Another projection adds to the key
+/// path, not another level of closures.
+final class StateLocation<Root, Value>: BindingLocation<Value> {
+    /// The state's holder, which has the slot once its view is built: a
+    /// binding made before that finds it when it is used.
+    private let holder: _StateProperty<Root>.Holder
+    private let path: WritableKeyPath<Root, Value>
+
+    init(holder: _StateProperty<Root>.Holder, path: WritableKeyPath<Root, Value>) {
+        self.holder = holder
+        self.path = path
+    }
+
+    override func get(_ chain: [AnyKeyPath]?) -> Value {
+        guard let storage = holder.storage else {
+            preconditionFailure("@State projected before the view was built.")
+        }
+        if let chain { storage.noteRead(via: chain) }
+        return storage.value[keyPath: path]
+    }
+
+    override func set(_ newValue: Value, _ chain: [AnyKeyPath]) {
+        holder.storage?.set(newValue, at: path, via: chain)
+    }
+
+    override func projecting<Subject>(_ keyPath: WritableKeyPath<Value, Subject>) -> BindingLocation<Subject> {
+        StateLocation<Root, Subject>(holder: holder, path: path.appending(path: keyPath))
+    }
+}
+
+/// An `@State` value as a whole.
+final class StateRootLocation<Value>: BindingLocation<Value> {
+    private let holder: _StateProperty<Value>.Holder
+
+    init(holder: _StateProperty<Value>.Holder) {
+        self.holder = holder
+    }
+
+    override func get(_ chain: [AnyKeyPath]?) -> Value {
+        guard let storage = holder.storage else {
+            preconditionFailure("@State projected before the view was built.")
+        }
+        return chain.map { storage.read(via: $0) } ?? storage.peek()
+    }
+
+    // Through the same setter as `wrappedValue`, so a binding write can't
+    // bump the version without invalidating, or vice versa.
+    override func set(_ newValue: Value, _ chain: [AnyKeyPath]) {
+        holder.storage?.set(newValue, via: chain)
+    }
+
+    override func projecting<Subject>(_ keyPath: WritableKeyPath<Value, Subject>) -> BindingLocation<Subject> {
+        StateLocation<Value, Subject>(holder: holder, path: keyPath)
     }
 }

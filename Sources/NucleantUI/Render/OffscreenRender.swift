@@ -117,7 +117,7 @@ final class OffscreenRender {
         guard !departed.isEmpty else { return }
         for (path, entry) in departed {
             for storage in entry.reads {
-                storage.readers.removeValue(forKey: path)
+                storage.readers.remove(path)
             }
             store.release(entry.stateKeys)
         }

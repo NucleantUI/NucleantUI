@@ -148,7 +148,7 @@ struct ThorCanvasContent: NodeContent {
         if node.generation != generation || node.renderedSize != rect.size {
             // The reads about to happen replace the last run's.
             for storage in node.reads {
-                storage.readers.removeValue(forKey: node.readerPath)
+                storage.readers.remove(node.readerPath)
             }
             node.readerPath = path
             DependencyTracker.shared.push(path)
