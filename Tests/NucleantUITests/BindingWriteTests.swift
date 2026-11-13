@@ -21,104 +21,109 @@ private final class Model {
     var name = "a"
 }
 
-@MainActor
-@Suite(.serialized)
-struct BindingWriteTests {
+// Writes go to the process-wide invalidation queue, which the hosted views
+// share: these run among them, one at a time.
+extension HostedViews {
 
-    /// A binding onto a slot holding `value`, as `$state` makes one.
-    private func bound<Value>(_ value: Value) -> (StateStorage<Value>, Binding<Value>) {
-        let storage = StateStorage(value, ownerPath: [0])
-        let holder = _StateProperty<Value>.Holder()
-        holder.storage = storage
-        let binding = Binding(
-            source: BindingSource(root: ObjectIdentifier(storage), keyPaths: []),
-            location: StateRootLocation(holder: holder)
-        )
-        return (storage, binding)
-    }
+    @MainActor
+    @Suite
+    struct BindingWriteTests {
 
-    private func dirtied() -> Set<[Int]> {
-        Invalidator.shared.consume().paths
-    }
+        /// A binding onto a slot holding `value`, as `$state` makes one.
+        private func bound<Value>(_ value: Value) -> (StateStorage<Value>, Binding<Value>) {
+            let storage = StateStorage(value, ownerPath: [0])
+            let holder = _StateProperty<Value>.Holder()
+            holder.storage = storage
+            let binding = Binding(
+                source: BindingSource(root: ObjectIdentifier(storage), keyPaths: []),
+                location: StateRootLocation(holder: holder)
+            )
+            return (storage, binding)
+        }
 
-    @Test func aWriteToOnePartComparesAndWritesThatPart() {
-        let (storage, tracks) = bound([Track(level: 1, name: "a"), Track(level: 2, name: "b")])
-        _ = dirtied()
-        let level = tracks[1].level
+        private func dirtied() -> Set<[Int]> {
+            Invalidator.shared.consume().paths
+        }
 
-        level.wrappedValue = 2              // what it holds: no write
-        #expect(storage.version == 0)
-        #expect(dirtied().isEmpty)
+        @Test func aWriteToOnePartComparesAndWritesThatPart() {
+            let (storage, tracks) = bound([Track(level: 1, name: "a"), Track(level: 2, name: "b")])
+            _ = dirtied()
+            let level = tracks[1].level
 
-        level.wrappedValue = 5
-        #expect(storage.version == 1)
-        #expect(storage.peek() == [Track(level: 1, name: "a"), Track(level: 5, name: "b")])
-        #expect(level.wrappedValue == 5)
-        #expect(tracks[1].name.wrappedValue == "b")
-    }
+            level.wrappedValue = 2              // what it holds: no write
+            #expect(storage.version == 0)
+            #expect(dirtied().isEmpty)
 
-    @Test func aProjectionKeepsItsChainAsTheSource() {
-        let (storage, tracks) = bound([Track(level: 1, name: "a")])
-        let level = tracks[0].level
-        #expect(level.source?.root == ObjectIdentifier(storage))
-        #expect(level.source?.keyPaths == [\[Track].[0], \Track.level])
-        #expect(level._isEquivalent(to: tracks[0].level))
-        #expect(!level._isEquivalent(to: tracks[1].level))
-    }
+            level.wrappedValue = 5
+            #expect(storage.version == 1)
+            #expect(storage.peek() == [Track(level: 1, name: "a"), Track(level: 5, name: "b")])
+            #expect(level.wrappedValue == 5)
+            #expect(tracks[1].name.wrappedValue == "b")
+        }
 
-    @Test func aWriteReachesTheReadersOfItsPartAndOfTheWhole() {
-        let (storage, tracks) = bound([Track(level: 1, name: "a"), Track(level: 2, name: "b")])
-        storage.readers.add([1], via: [])
-        storage.readers.add([2], via: [\[Track].[0], \Track.level])
-        storage.readers.add([3], via: [\[Track].[1], \Track.level])
-        storage.readers.add([4], via: [\[Track].[1]])
-        storage.readers.add([5], via: [\[Track].[1], \Track.name])
-        _ = dirtied()
+        @Test func aProjectionKeepsItsChainAsTheSource() {
+            let (storage, tracks) = bound([Track(level: 1, name: "a")])
+            let level = tracks[0].level
+            #expect(level.source?.root == ObjectIdentifier(storage))
+            #expect(level.source?.keyPaths == [\[Track].[0], \Track.level])
+            #expect(level._isEquivalent(to: tracks[0].level))
+            #expect(!level._isEquivalent(to: tracks[1].level))
+        }
 
-        tracks[1].level.wrappedValue = 9
-        #expect(dirtied() == [[1], [3], [4]])
+        @Test func aWriteReachesTheReadersOfItsPartAndOfTheWhole() {
+            let (storage, tracks) = bound([Track(level: 1, name: "a"), Track(level: 2, name: "b")])
+            storage.readers.add([1], via: [])
+            storage.readers.add([2], via: [\[Track].[0], \Track.level])
+            storage.readers.add([3], via: [\[Track].[1], \Track.level])
+            storage.readers.add([4], via: [\[Track].[1]])
+            storage.readers.add([5], via: [\[Track].[1], \Track.name])
+            _ = dirtied()
 
-        tracks.wrappedValue = []
-        #expect(dirtied() == [[1], [2], [3], [4], [5]])
-    }
+            tracks[1].level.wrappedValue = 9
+            #expect(dirtied() == [[1], [3], [4]])
 
-    @Test func aReaderTakenOutIsReachedNoMore() {
-        let (storage, tracks) = bound([Track(level: 1, name: "a")])
-        storage.readers.add([1], via: [\[Track].[0], \Track.level])
-        storage.readers.add([1], via: [\[Track].[0], \Track.name])
-        storage.readers.add([1], via: [])
-        storage.readers.add([2], via: [\[Track].[0]])
-        storage.readers.remove([1])
-        _ = dirtied()
+            tracks.wrappedValue = []
+            #expect(dirtied() == [[1], [2], [3], [4], [5]])
+        }
 
-        tracks[0].level.wrappedValue = 3
-        #expect(dirtied() == [[2]])
-        storage.readers.remove([2])
-        tracks.wrappedValue = []
-        #expect(dirtied().isEmpty)
-    }
+        @Test func aReaderTakenOutIsReachedNoMore() {
+            let (storage, tracks) = bound([Track(level: 1, name: "a")])
+            storage.readers.add([1], via: [\[Track].[0], \Track.level])
+            storage.readers.add([1], via: [\[Track].[0], \Track.name])
+            storage.readers.add([1], via: [])
+            storage.readers.add([2], via: [\[Track].[0]])
+            storage.readers.remove([1])
+            _ = dirtied()
 
-    @Test func aWriteIntoAnObjectLeavesTheSlotAsItWas() {
-        let model = Model()
-        let (storage, binding) = bound(model)
-        storage.readers.add([1], via: [])
-        _ = dirtied()
+            tracks[0].level.wrappedValue = 3
+            #expect(dirtied() == [[2]])
+            storage.readers.remove([2])
+            tracks.wrappedValue = []
+            #expect(dirtied().isEmpty)
+        }
 
-        binding.name.wrappedValue = "b"
-        #expect(model.name == "b")
-        #expect(storage.version == 0)
-        #expect(dirtied().isEmpty)
-    }
+        @Test func aWriteIntoAnObjectLeavesTheSlotAsItWas() {
+            let model = Model()
+            let (storage, binding) = bound(model)
+            storage.readers.add([1], via: [])
+            _ = dirtied()
 
-    @Test func aProjectionOfClosuresWritesTheWholeValueBack() {
-        var held = Track(level: 1, name: "a")
-        var writes = 0
-        let binding = Binding(get: { held }, set: { held = $0; writes += 1 })
-        let level = binding.level
-        #expect(level.wrappedValue == 1)
-        level.wrappedValue = 4
-        #expect(held == Track(level: 4, name: "a"))
-        #expect(writes == 1)
-        #expect(level.source == nil)
+            binding.name.wrappedValue = "b"
+            #expect(model.name == "b")
+            #expect(storage.version == 0)
+            #expect(dirtied().isEmpty)
+        }
+
+        @Test func aProjectionOfClosuresWritesTheWholeValueBack() {
+            var held = Track(level: 1, name: "a")
+            var writes = 0
+            let binding = Binding(get: { held }, set: { held = $0; writes += 1 })
+            let level = binding.level
+            #expect(level.wrappedValue == 1)
+            level.wrappedValue = 4
+            #expect(held == Track(level: 4, name: "a"))
+            #expect(writes == 1)
+            #expect(level.source == nil)
+        }
     }
 }

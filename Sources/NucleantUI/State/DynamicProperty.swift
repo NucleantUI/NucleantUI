@@ -7,13 +7,15 @@
 /// `body` runs — `@State` needs its storage from the state store, `@Environment`
 /// needs the current environment.
 ///
-/// Views are structs rebuilt from scratch on every pass, so a property wrapper
-/// can't carry state in its own stored fields. Each wrapper instead holds a
-/// small reference *holder*, which every copy of the view shares; binding
-/// writes into that holder, and `wrappedValue` reads back through it.
+/// The builder binds the copy of the view it is about to build, in place,
+/// and runs `body` on that copy: a wrapper keeps what it was bound to in its
+/// own fields, and the copies `body` makes — the closures it hands out, the
+/// projections it passes down — are made from the bound one. A view value
+/// that is made and then found equivalent to the one standing is never
+/// bound, and costs its wrappers nothing.
 @MainActor
 public protocol DynamicProperty {
-    func _bind(to context: BindingContext)
+    mutating func _bind(to context: BindingContext)
 }
 
 /// Everything a dynamic property may need at bind time.
@@ -51,7 +53,7 @@ public struct DynamicPropertyBinder {
     }
     let keys = Keys()
 
-    public func bind<P: DynamicProperty>(_ property: P, index: Int) {
+    public func bind<P: DynamicProperty>(_ property: inout P, index: Int) {
         let key = StateKey(path: path, propertyIndex: index, viewType: viewType, viewID: viewID)
         keys.keys.append(key)
         property._bind(to: BindingContext(store: store, key: key, environment: environment))
@@ -60,7 +62,7 @@ public struct DynamicPropertyBinder {
     /// A wrapped property that is not a dynamic property — a user's own
     /// wrapper — needs nothing from the framework. The overload exists so the
     /// macro can emit a `bind` for every wrapper without knowing which are.
-    public func bind<P>(_ property: P, index: Int) {}
+    public func bind<P>(_ property: inout P, index: Int) {}
 }
 
 /// Where a piece of `@State` lives: the structural position of the view that

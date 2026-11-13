@@ -38,54 +38,46 @@
 @MainActor
 public struct FocusState<Value: Hashable>: DynamicProperty {
 
-    /// The one reference every copy of the wrapper shares, as `@State`'s
-    /// does.
-    final class Holder {
-        var storage: StateStorage<Value>?
-        /// What the value is while no marked view has the keys.
-        let empty: Value
+    /// The slot, once the view is bound.
+    private var storage: StateStorage<Value>?
 
-        init(empty: Value) {
-            self.empty = empty
-        }
-
-        var storageOrFail: StateStorage<Value> {
-            guard let storage else {
-                preconditionFailure(
-                    "@FocusState used before the view was built. Reading or writing focus "
-                    + "outside of `body` and the actions it creates is not supported."
-                )
-            }
-            return storage
-        }
-    }
-
-    private let holder: Holder
+    /// What the value is while no marked view has the keys.
+    private let empty: Value
 
     public init() where Value == Bool {
-        holder = Holder(empty: false)
+        empty = false
     }
 
     public init<T: Hashable>() where Value == T? {
-        holder = Holder(empty: nil)
+        empty = nil
+    }
+
+    private var storageOrFail: StateStorage<Value> {
+        guard let storage else {
+            preconditionFailure(
+                "@FocusState used before the view was built. Reading or writing focus "
+                + "outside of `body` and the actions it creates is not supported."
+            )
+        }
+        return storage
     }
 
     /// The marked view that has the keys — `true`, or its value — or the
     /// empty value. Setting it moves the keys there; setting the empty
     /// value takes them away.
     public var wrappedValue: Value {
-        get { holder.storageOrFail.read() }
-        nonmutating set { holder.storageOrFail.set(newValue) }
+        get { storageOrFail.read() }
+        nonmutating set { storageOrFail.set(newValue) }
     }
 
     /// `$focused` — what `.focused` takes.
     public var projectedValue: Binding {
-        Binding(holder: holder)
+        Binding(storage: storageOrFail, empty: empty)
     }
 
-    public func _bind(to context: BindingContext) {
-        let empty = holder.empty
-        holder.storage = context.store.slot(for: context.key, initialValue: { empty })
+    public mutating func _bind(to context: BindingContext) {
+        let empty = self.empty
+        storage = context.store.slot(for: context.key, initialValue: { empty })
     }
 
     /// A focus state handed to `.focused`, or down to a view below as
@@ -93,24 +85,23 @@ public struct FocusState<Value: Hashable>: DynamicProperty {
     @propertyWrapper
     @MainActor
     public struct Binding {
-        let holder: Holder
+        let storage: StateStorage<Value>
+        let empty: Value
 
         public var wrappedValue: Value {
-            get { holder.storageOrFail.read() }
-            nonmutating set { holder.storageOrFail.set(newValue) }
+            get { storage.read() }
+            nonmutating set { storage.set(newValue) }
         }
 
         public var projectedValue: Binding { self }
 
         /// Which focus state this is — the marks of one state are kept
         /// in step together.
-        var identity: ObjectIdentifier { ObjectIdentifier(holder.storageOrFail) }
+        var identity: ObjectIdentifier { ObjectIdentifier(storage) }
 
         /// The value with no read recorded — the host, not a view, asks.
-        func peek() -> Value { holder.storageOrFail.peek() }
+        func peek() -> Value { storage.peek() }
 
-        var version: UInt32 { holder.storageOrFail.version }
-
-        var empty: Value { holder.empty }
+        var version: UInt32 { storage.version }
     }
 }

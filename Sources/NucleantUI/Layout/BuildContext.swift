@@ -168,11 +168,11 @@ public struct BuildContext {
         records.leftoverChildren(under: path, cursor: recordCursor)
     }
 
-    /// Bind every `@State` / `@Environment` on `view` before its `body` runs.
-    /// Returns the keys bound, so the view's record can release them when the
-    /// view goes away. The view does the walking, through what `@View`
-    /// generated.
-    func bindDynamicProperties<V: View>(of view: V) -> [StateKey] {
+    /// Bind every `@State` / `@Environment` on `view`, in place, before its
+    /// `body` runs. Returns the keys bound, so the view's record can release
+    /// them when the view goes away. The view does the walking, through what
+    /// `@View` generated.
+    func bindDynamicProperties<V: View>(of view: inout V) -> [StateKey] {
         let binder = DynamicPropertyBinder(
             store: store,
             environment: environment,

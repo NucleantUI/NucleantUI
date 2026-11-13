@@ -746,8 +746,10 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     // it has, by everything built under it — is one it depends on.
     EnvironmentReads.shared.begin()
 
-    // Wire up @State / @Environment before anything reads `body`.
-    let stateKeys = context.bindDynamicProperties(of: view)
+    // Wire up @State / @Environment before anything reads `body` — on this
+    // copy, which is the one built and recorded.
+    var view = view
+    let stateKeys = context.bindDynamicProperties(of: &view)
 
     // Publish this view's identity for the duration of its own evaluation, so
     // any `@State` read below is attributed to it — that attribution is what

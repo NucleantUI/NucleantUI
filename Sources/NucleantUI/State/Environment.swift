@@ -326,19 +326,17 @@ final class EnvironmentEntryOf<K: EnvironmentKey>: EnvironmentEntry {
 @MainActor
 public struct Environment<Value>: DynamicProperty {
 
-    final class Holder {
-        var value: Value?
-    }
+    private let keyPath: KeyPath<EnvironmentValues, Value>
 
-    private let holder = Holder()
-    private let read: (EnvironmentValues) -> Value
+    /// The value, once the view is bound.
+    private var value: Value?
 
     public init(_ keyPath: KeyPath<EnvironmentValues, Value>) {
-        self.read = { $0[keyPath: keyPath] }
+        self.keyPath = keyPath
     }
 
     public var wrappedValue: Value {
-        guard let value = holder.value else {
+        guard let value else {
             preconditionFailure(
                 "@Environment read before the view was built — environment values "
                 + "are only available inside `body`."
@@ -347,8 +345,8 @@ public struct Environment<Value>: DynamicProperty {
         return value
     }
 
-    public func _bind(to context: BindingContext) {
-        holder.value = read(context.environment)
+    public mutating func _bind(to context: BindingContext) {
+        value = context.environment[keyPath: keyPath]
     }
 }
 
