@@ -21,6 +21,10 @@ final class Icons {
     /// a chevron pointing back, in a 24-point box.
     private(set) lazy var back = Self.parse(PackageResources.arrow_back_ios_new_svg)
 
+    /// The navigation bar's "…", which opens the `.secondaryAction` items:
+    /// Material's `more_horiz`, three dots in a row.
+    private(set) lazy var more = Self.parse(PackageResources.more_horiz_svg)
+
     /// One of our own files, which a test parses: one that doesn't parse
     /// is a broken build, not a state a control has to handle.
     private static func parse(_ bytes: [UInt8]) -> SvgImage {

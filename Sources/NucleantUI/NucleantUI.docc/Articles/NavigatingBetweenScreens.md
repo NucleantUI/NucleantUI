@@ -4,8 +4,8 @@ Push screens onto a navigation stack and come back to them as you left them.
 
 ## Overview
 
-A ``NavigationStack`` draws a title bar with a Back button over its current
-screen. A ``NavigationLink`` pushes a destination when it is tapped; the
+A ``NavigationStack`` draws a bar with a back button, the title and the
+screen's toolbar items over its current screen. A ``NavigationLink`` pushes a destination when it is tapped; the
 pushed screen takes its title from the link:
 
 ```swift
@@ -52,6 +52,89 @@ there when you come back.
 A stack bound to a ``NavigationPath`` navigates by data: `NavigationLink(value:)`
 appends a value, and `.navigationDestination(for:destination:)` says which
 screen shows it.
+
+## Toolbar items
+
+A screen puts controls in the stack's bars with `.toolbar { }`. Each
+``ToolbarItem`` names its place, and the bar arranges them the way an iOS
+navigation bar does — on every platform, macOS included, where they go in
+the stack's own bar rather than the window's title bar:
+
+```swift
+@View
+struct NoteEditor {
+    @Bindable var note: Note
+    @Environment(\.navigationRouter) private var router
+
+    var body: some View {
+        TextEditor(text: $note.text)
+            .navigationTitle(note.title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { router?.pop() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { note.save(); router?.pop() }
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button("Duplicate") { note.duplicate() }
+                }
+                ToolbarItem(placement: .status) {
+                    Text("\(note.wordCount) words")
+                }
+            }
+    }
+}
+```
+
+- The leading side has `.topBarLeading`, `.cancellationAction`, then
+  `.navigation`, nearest the title.
+- The trailing side has `.automatic` (an item with no placement, and views
+  put straight in `.toolbar { }`), `.topBarTrailing`, `.primaryAction`, then
+  `.confirmationAction` and `.destructiveAction` at the edge.
+- `.navigation` moves to the trailing side on a pushed screen, where the
+  back button holds the leading edge.
+- `.principal` takes the title's place, in the middle of the bar.
+- `.secondaryAction` items are in a menu behind a "…" at the trailing edge.
+- `.bottomBar` and `.status` items go in a bar along the bottom of the
+  stack, a `.status` item centred. `.toolbarVisibility(.hidden, for:
+  .bottomBar)` hides it.
+
+``ToolbarItemGroup`` puts several views at one placement, and
+``ToolbarSpacer`` adds room between items: `.flexible` pushes them apart,
+`.fixed` parts them into two groups. Each item is built in the environment
+of the view its `.toolbar` is on, and is kept up to date with the screen's
+state. Several `.toolbar`s on one screen add up, an outer one's items before
+an inner one's.
+
+The bar shows when its screen has something for it: a title, toolbar items
+or a back button. A root screen with none of them has no bar, unless it
+asks for one with `.toolbarVisibility(.visible, for: .navigationBar)`.
+
+### A back button of your own
+
+The back button is a chevron in the primary label color. For any other
+icon, label or color, hide it with `.navigationBarBackButtonHidden()` and
+put your own in the `.navigation` placement, which then takes the leading
+edge. The bar stays:
+
+```swift
+@View
+struct DetailScreen {
+    @Environment(\.navigationRouter) private var router
+
+    var body: some View {
+        DetailContent()
+            .navigationBarBackButtonHidden()
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button("Close") { router?.pop() }
+                        .tint(.red)
+                }
+            }
+    }
+}
+```
 
 ## Hiding the bar
 

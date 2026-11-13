@@ -39,8 +39,9 @@ struct NavigationScreen: Identifiable, Equatable {
 
 /// What a `NavigationStack` keeps across builds for its descendants to write
 /// into: the destinations `.navigationDestination(for:)` registered, the
-/// titles `.navigationTitle` set and the bar visibilities
-/// `.toolbarVisibility(_:for:)` set. A child reaches this through the router
+/// titles `.navigationTitle` set, the bar visibilities
+/// `.toolbarVisibility(_:for:)` set, and what `.toolbar` and
+/// `.navigationBarBackButtonHidden` put in the bars. A child reaches this through the router
 /// in the environment rather than handing values up as preferences: those
 /// are delivered only after the pass that built them, too late for the bar
 /// built in that same pass. One per stack, held in the stack's `@State`.
@@ -97,6 +98,81 @@ final class NavigationStackStorage {
         barVersion &+= 1
     }
 
+    @ObservationIgnored
+    private var bottomBarVisibilities: [NavigationScreenID: Visibility] = [:]
+
+    /// `.automatic` for a screen that never said.
+    func bottomBarVisibility(for screen: NavigationScreenID) -> Visibility {
+        _ = barVersion
+        return bottomBarVisibilities[screen] ?? .automatic
+    }
+
+    func setBottomBarVisibility(_ visibility: Visibility, for screen: NavigationScreenID) {
+        guard (bottomBarVisibilities[screen] ?? .automatic) != visibility else { return }
+        bottomBarVisibilities[screen] = visibility
+        barVersion &+= 1
+    }
+
+    // MARK: Toolbars
+
+    /// Each screen's `.toolbar`s, by where each one is in the tree.
+    @ObservationIgnored
+    private var toolbars: [NavigationScreenID: [[Int]: (entries: [ToolbarEntry], environment: EnvironmentValues)]] = [:]
+
+    /// Each screen's `.navigationBarBackButtonHidden`s, by where each one
+    /// is in the tree.
+    @ObservationIgnored
+    private var backButtonHidden: [NavigationScreenID: [[Int]: Bool]] = [:]
+
+    /// What `screen`'s `.toolbar`s listed, in tree order: an outer one's
+    /// entries before an inner one's (its path is a prefix of the inner
+    /// one's), siblings first to last.
+    func toolbar(for screen: NavigationScreenID) -> [FiledToolbarEntry] {
+        _ = barVersion
+        guard let filed = toolbars[screen] else { return [] }
+        return filed
+            .sorted { $0.key.lexicographicallyPrecedes($1.key) }
+            .flatMap { path, toolbar in
+                toolbar.entries.enumerated().map { index, entry in
+                    FiledToolbarEntry(
+                        id: FiledToolbarEntry.ID(path: path, index: index),
+                        entry: entry,
+                        environment: toolbar.environment
+                    )
+                }
+            }
+    }
+
+    /// The items can't be compared, so every filing counts as a change: the
+    /// bar is rebuilt each time the `.toolbar` is, and so shows what the
+    /// screen shows.
+    func setToolbar(_ entries: [ToolbarEntry], environment: EnvironmentValues, at path: [Int], for screen: NavigationScreenID) {
+        toolbars[screen, default: [:]][path] = (entries, environment)
+        barVersion &+= 1
+    }
+
+    func removeToolbar(at path: [Int], for screen: NavigationScreenID) {
+        guard toolbars[screen]?.removeValue(forKey: path) != nil else { return }
+        barVersion &+= 1
+    }
+
+    /// Whether any `.navigationBarBackButtonHidden` on `screen` hides it.
+    func isBackButtonHidden(for screen: NavigationScreenID) -> Bool {
+        _ = barVersion
+        return backButtonHidden[screen]?.values.contains(true) ?? false
+    }
+
+    func setBackButtonHidden(_ hidden: Bool, at path: [Int], for screen: NavigationScreenID) {
+        guard backButtonHidden[screen]?[path] != hidden else { return }
+        backButtonHidden[screen, default: [:]][path] = hidden
+        barVersion &+= 1
+    }
+
+    func removeBackButtonHidden(at path: [Int], for screen: NavigationScreenID) {
+        guard backButtonHidden[screen]?.removeValue(forKey: path) != nil else { return }
+        barVersion &+= 1
+    }
+
     // MARK: Transitions
 
     /// The transition each screen asked for with `.navigationTransition`.
@@ -143,6 +219,15 @@ final class NavigationStackStorage {
         }
         if barVisibilities.keys.contains(where: { !screens.contains($0) }) {
             barVisibilities = barVisibilities.filter { screens.contains($0.key) }
+        }
+        if bottomBarVisibilities.keys.contains(where: { !screens.contains($0) }) {
+            bottomBarVisibilities = bottomBarVisibilities.filter { screens.contains($0.key) }
+        }
+        if toolbars.keys.contains(where: { !screens.contains($0) }) {
+            toolbars = toolbars.filter { screens.contains($0.key) }
+        }
+        if backButtonHidden.keys.contains(where: { !screens.contains($0) }) {
+            backButtonHidden = backButtonHidden.filter { screens.contains($0.key) }
         }
     }
 }
@@ -339,12 +424,13 @@ public struct NavigationStack<Data, Root: View> {
         let shown = screens + (transition.leaving.map { [$0] } ?? [])
         let _ = storage.retain(Set(shown.map(\.id) + [.root]))
 
-        // The screens first and the bar second, so the bar is built *after*
-        // them: a screen's `.navigationTitle` and `.toolbarVisibility` are
-        // filed while the screen builds, and the bar reads them in the same
-        // pass. The layout then puts the bar on top and the screens below
-        // it, inset by however tall the bar came out — nothing at all when
-        // the top screen hid it.
+        // The screens first and the bars after, so the bars are built
+        // *after* them: a screen's `.navigationTitle`, `.toolbar` and
+        // `.toolbarVisibility` are filed while the screen builds, and the
+        // bars read them in the same pass. The layout then puts the bars at
+        // the top and bottom and the screens between them, inset by however
+        // tall each bar came out — nothing at all for a bar that isn't
+        // there.
         NavigationStackLayout {
             // Every screen stays in the tree; only the top one is on screen.
             // A covered screen is parked — never laid out, drawn or hit
@@ -379,6 +465,8 @@ public struct NavigationStack<Data, Root: View> {
                 router: router,
                 storage: storage
             )
+
+            NavigationBottomBar(screen: top?.id ?? .root, showsBack: top != nil, storage: storage)
         }
         .environment(\.navigationRouter, router)
     }
@@ -449,40 +537,47 @@ private struct NavigationScreenView {
     }
 }
 
-/// A stack's two parts, in build order: its screens, then its bar. The bar
-/// goes across the top at the height it chose — none when hidden — and the
-/// screens take the rest.
+/// A stack's three parts, in build order: its screens, its navigation bar
+/// and its bottom bar. Each bar goes across its edge at the height it chose
+/// — none when hidden — and the screens take what is left between them.
 private struct NavigationStackLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> Size {
         guard let screens = subviews.first else { return .zero }
-        let bar = barHeight(subviews, width: proposal.width)
+        let bars = barHeight(subviews, 1, width: proposal.width) + barHeight(subviews, 2, width: proposal.width)
         let size = screens.sizeThatFits(ProposedViewSize(
             width: proposal.width,
-            height: proposal.height.map { max($0 - bar, 0) }
+            height: proposal.height.map { max($0 - bars, 0) }
         ))
-        return Size(width: size.width, height: size.height + bar)
+        return Size(width: size.width, height: size.height + bars)
     }
 
     func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let screens = subviews.first else { return }
-        let bar = barHeight(subviews, width: bounds.width)
+        let top = barHeight(subviews, 1, width: bounds.width)
+        let bottom = barHeight(subviews, 2, width: bounds.width)
         screens.place(
-            at: Point(x: bounds.minX, y: bounds.minY + bar),
-            proposal: ProposedViewSize(width: bounds.width, height: max(bounds.height - bar, 0))
+            at: Point(x: bounds.minX, y: bounds.minY + top),
+            proposal: ProposedViewSize(width: bounds.width, height: max(bounds.height - top - bottom, 0))
         )
         if subviews.count > 1 {
             subviews[1].place(
                 at: Point(x: bounds.minX, y: bounds.minY),
-                proposal: ProposedViewSize(width: bounds.width, height: bar)
+                proposal: ProposedViewSize(width: bounds.width, height: top)
+            )
+        }
+        if subviews.count > 2 {
+            subviews[2].place(
+                at: Point(x: bounds.minX, y: bounds.maxY - bottom),
+                proposal: ProposedViewSize(width: bounds.width, height: bottom)
             )
         }
     }
 
     /// A hidden bar builds nothing, so it measures — or counts — as none.
-    private func barHeight(_ subviews: Subviews, width: Double?) -> Double {
-        guard subviews.count > 1 else { return 0 }
-        return subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+    private func barHeight(_ subviews: Subviews, _ index: Int, width: Double?) -> Double {
+        guard subviews.count > index else { return 0 }
+        return subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
     }
 }
 
@@ -502,14 +597,25 @@ private struct NavigationBar {
     let storage: NavigationStackStorage
 
     var body: some View {
-        // `.automatic` is shown: a stack's bar is there unless a screen
-        // hides it.
-        if storage.barVisibility(for: screen) != .hidden {
-            HStack(spacing: 12) {
+        let showsBack = self.showsBack && !storage.isBackButtonHidden(for: screen)
+        let items = NavigationBarItems(storage.toolbar(for: screen), backButtonShown: showsBack)
+        let title = (storage.title(for: screen) ?? fallbackTitle).flatMap { $0.isEmpty ? nil : $0 }
+        // `.automatic` shows the bar when the screen has something for it:
+        // a title, toolbar items or a back button. A root with none of
+        // them has no bar, and the screen gets its whole height.
+        let isShown = switch storage.barVisibility(for: screen) {
+        case .visible: true
+        case .hidden: false
+        case .automatic: title != nil || showsBack || items.fillsNavigationBar
+        }
+        if isShown {
+            HStack(spacing: NavigationBarItems.spacing) {
                 if showsBack {
                     // A chevron alone, no title, as iOS 26 draws it, and in
                     // the primary label color, not the accent: black in
-                    // light, white in dark.
+                    // light, white in dark. A back button in any other look
+                    // is the screen's own: `.navigationBarBackButtonHidden()`
+                    // and a `ToolbarItem(placement: .navigation)`.
                     SvgView(Icons.shared.back)
                         .renderingMode(.template)
                         .resizable()
@@ -522,20 +628,122 @@ private struct NavigationBar {
                         .onTapGesture { router.pop() }
                 }
 
-                Text(storage.title(for: screen) ?? fallbackTitle ?? "")
-                    .font(.system(size: 17, weight: .semibold))
-                    // One line, truncated — a title bar that reflows its own
-                    // height as the window narrows is not a title bar, and a
-                    // long title would otherwise push the content down.
-                    .lineLimit(1)
+                ForEach(items.leading) { entry in
+                    ToolbarEntryView(entry: entry)
+                }
 
-                Spacer()
+                if items.principal == nil, let title {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        // One line, truncated — a title bar that reflows its
+                        // own height as the window narrows is not a title
+                        // bar, and a long title would otherwise push the
+                        // content down.
+                        .lineLimit(1)
+                        // All the room the items leave, rather than a share
+                        // of it with a spacer: it truncates only where it
+                        // would run into the trailing items.
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Spacer()
+                }
+
+                ForEach(items.trailing) { entry in
+                    ToolbarEntryView(entry: entry)
+                }
+
+                if !items.overflow.isEmpty {
+                    NavigationBarOverflow(items: items.overflow)
+                }
+            }
+            // `.principal` instead of the title, in the middle of the bar.
+            .overlay {
+                if let principal = items.principal {
+                    ToolbarEntryView(entry: principal)
+                }
             }
             .padding(horizontal: 12, vertical: 0)
             // A fixed height: the screens are inset by exactly this much.
             .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
             .background(ShapeStyle.secondaryBackground)
             .overlay(alignment: .bottom) {
+                Rectangle().fill(.separator).frame(height: 1)
+            }
+        }
+    }
+}
+
+/// The "…" at the trailing edge of the bar, which opens the
+/// `.secondaryAction` items as a menu under itself.
+@View
+private struct NavigationBarOverflow {
+    let items: [FiledToolbarEntry]
+
+    @Environment(\.menuPresenter) private var presenter
+    @State private var isPressed = false
+
+    var body: some View {
+        SvgView(Icons.shared.more)
+            .renderingMode(.template)
+            .resizable()
+            .frame(width: NavigationBar.chevronSize + 4, height: NavigationBar.chevronSize + 4)
+            .foregroundStyle(.primary)
+            .frame(width: NavigationBar.backSize, height: NavigationBar.backSize)
+            .contentShape(Rectangle())
+            .opacity(isPressed ? 0.35 : 1)
+            ._hitTarget(HitTarget(
+                onPress: { _ in isPressed = true },
+                onRelease: { _, inside in
+                    isPressed = false
+                    guard inside else { return }
+                    presenter?.present(AnyView(ForEach(items) { entry in
+                        ToolbarEntryView(entry: entry)
+                    }))
+                }
+            ))
+    }
+}
+
+/// The bar along the bottom of a stack, with the top screen's `.bottomBar`
+/// and `.status` items. There when the screen has any, unless it hides it
+/// with `.toolbarVisibility(.hidden, for: .bottomBar)`.
+@View
+private struct NavigationBottomBar {
+    let screen: NavigationScreenID
+    let showsBack: Bool
+    let storage: NavigationStackStorage
+
+    var body: some View {
+        let showsBack = self.showsBack && !storage.isBackButtonHidden(for: screen)
+        let items = NavigationBarItems(storage.toolbar(for: screen), backButtonShown: showsBack).bottom
+        let isShown = switch storage.bottomBarVisibility(for: screen) {
+        case .visible: true
+        case .hidden: false
+        case .automatic: !items.isEmpty
+        }
+        if isShown {
+            HStack(spacing: NavigationBarItems.spacing) {
+                // One item alone is centred. Otherwise they go in order from
+                // the leading edge, a `.status` item centred between
+                // flexible spaces, and a `ToolbarSpacer` where it was put.
+                let centresAlone = items.count == 1
+                ForEach(items) { entry in
+                    if entry.placement == .status || centresAlone {
+                        Spacer(minLength: 0)
+                        ToolbarEntryView(entry: entry)
+                        Spacer(minLength: 0)
+                    } else {
+                        ToolbarEntryView(entry: entry)
+                    }
+                }
+                if !centresAlone, !items.contains(where: { $0.placement == .status || $0.isFlexibleSpace }) {
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(horizontal: 12, vertical: 0)
+            .frame(maxWidth: .infinity, minHeight: NavigationBar.height, maxHeight: NavigationBar.height)
+            .background(ShapeStyle.secondaryBackground)
+            .overlay(alignment: .top) {
                 Rectangle().fill(.separator).frame(height: 1)
             }
         }
