@@ -152,6 +152,22 @@ final class AnimationStore {
 
     private var values: [[Int]: [Slot: AnimatedVector]] = [:]
 
+    /// The same, for a parameter of a type of its own — an opacity, an
+    /// offset — kept as that type rather than as an array of numbers.
+    private var states: [[Int]: [Slot: AnyAnimatableDataState]] = [:]
+
+    /// The value for `slot` of the view at `path`, moved to `target` — at
+    /// once, or over `animation` from wherever it is now.
+    func state<Data: VectorArithmetic>(at path: [Int], slot: Slot, target: Data, animation: Animation?) -> AnimatableDataState<Data> {
+        if let existing = states[path]?[slot] as? AnimatableDataState<Data> {
+            existing.update(to: target, animation: animation, in: self)
+            return existing
+        }
+        let created = AnimatableDataState(target)
+        states[path, default: [:]][slot] = created
+        return created
+    }
+
     /// The value for `slot` of the view at `path`, moved to `target` — at
     /// once, or over `animation` from wherever it is now.
     func value(at path: [Int], slot: Slot, target: [Double], animation: Animation?) -> AnimatedVector {
@@ -273,6 +289,7 @@ final class AnimationStore {
     func forget(paths: Set<[Int]>) {
         for path in paths {
             values[path] = nil
+            states[path] = nil
             observed[path] = nil
             animatableData[path] = nil
             animating.remove(path)
@@ -381,6 +398,12 @@ extension BuildContext {
     /// `target` under this build's transaction.
     func animatedValue(_ slot: AnimationStore.Slot, _ target: [Double]) -> AnimatedVector {
         animations.value(at: path, slot: slot, target: target, animation: transaction.animation)
+    }
+
+    /// The animated value for `slot` of the view being built, of a type of
+    /// its own, moving to `target` under this build's transaction.
+    func animatedState<Data: VectorArithmetic>(_ slot: AnimationStore.Slot, _ target: Data) -> AnimatableDataState<Data> {
+        animations.state(at: path, slot: slot, target: target, animation: transaction.animation)
     }
 
     /// The same for a paint: only a flat or dynamic color has anything to

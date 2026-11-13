@@ -252,6 +252,15 @@ final class AnimatableDataState<Data: VectorArithmetic>: AnyAnimatableDataState 
         target = newTarget
     }
 
+    /// The value to draw in the pass under way, asking for another frame
+    /// while it is still on its way.
+    func current() -> Data {
+        guard let store = AnimationStore.current else { return target }
+        let sample = sample(at: store.now)
+        if !sample.isFinished { store.requestFrame() }
+        return sample.value
+    }
+
     /// The value showing at `now`, and whether it has arrived.
     func sample(at now: Double) -> (value: Data, isFinished: Bool) {
         guard let motion else { return (target, true) }

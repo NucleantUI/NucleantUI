@@ -229,11 +229,11 @@ struct DecorationContent: NodeContent {
 
 /// `.opacity(_:)`.
 struct OpacityContent: NodeContent {
-    let opacity: AnimatedVector
+    let opacity: AnimatableDataState<Double>
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         var inner = context
-        inner.opacity *= min(max(opacity.current()[0], 0), 1)
+        inner.opacity *= min(max(opacity.current(), 0), 1)
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
     }
 }
@@ -263,14 +263,14 @@ struct HiddenContent: NodeContent {
 /// moves the view from where it is showing, and a transition built from
 /// an offset has its `willAppear` amount to start from.
 struct OffsetContent: NodeContent {
-    /// `[x, y]`, animated.
-    let offset: AnimatedVector
+    /// x and y, animated.
+    let offset: AnimatableDataState<AnimatablePair<Double, Double>>
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         let xy = offset.current()
         var inner = context
-        if xy[0] != 0 || xy[1] != 0 {
-            inner.transform = context.transform.concatenating(.translation(x: xy[0], y: xy[1]))
+        if xy.first != 0 || xy.second != 0 {
+            inner.transform = context.transform.concatenating(.translation(x: xy.first, y: xy.second))
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
     }
@@ -323,8 +323,8 @@ struct PositionContent: NodeContent {
 struct TransformContent: NodeContent {
     /// The parameter, animated: radians for a rotation, (x, y) for a scale.
     enum Kind {
-        case rotation(AnimatedVector)
-        case scale(AnimatedVector)
+        case rotation(AnimatableDataState<Double>)
+        case scale(AnimatableDataState<AnimatablePair<Double, Double>>)
     }
 
     let kind: Kind
@@ -334,10 +334,10 @@ struct TransformContent: NodeContent {
         let base: Transform
         switch kind {
         case .rotation(let radians):
-            base = .rotation(.radians(radians.current()[0]))
+            base = .rotation(.radians(radians.current()))
         case .scale(let factors):
             let xy = factors.current()
-            base = .scale(x: xy[0], y: xy[1])
+            base = .scale(x: xy.first, y: xy.second)
         }
         var inner = context
         inner.transform = context.transform

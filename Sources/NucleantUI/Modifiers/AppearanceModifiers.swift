@@ -140,7 +140,7 @@ struct OpacityModifier: PrimitiveModifier, Equatable {
     let opacity: Double
 
     func makeContent(_ context: inout BuildContext) -> OpacityContent {
-        OpacityContent(opacity: context.animatedValue(.opacity, [opacity]))
+        OpacityContent(opacity: context.animatedState(.opacity, opacity))
     }
 }
 
@@ -156,7 +156,7 @@ struct OffsetModifier: PrimitiveModifier, Equatable {
     let offset: Size
 
     func makeContent(_ context: inout BuildContext) -> OffsetContent {
-        OffsetContent(offset: context.animatedValue(.offset, [offset.width, offset.height]))
+        OffsetContent(offset: context.animatedState(.offset, AnimatablePair(offset.width, offset.height)))
     }
 }
 
@@ -166,7 +166,7 @@ struct OffsetXYModifier: PrimitiveModifier, Equatable {
     let y: Double
 
     func makeContent(_ context: inout BuildContext) -> OffsetContent {
-        OffsetContent(offset: context.animatedValue(.offset, [x, y]))
+        OffsetContent(offset: context.animatedState(.offset, AnimatablePair(x, y)))
     }
 }
 
@@ -176,7 +176,7 @@ struct RotationEffectModifier: PrimitiveModifier, Equatable {
     let anchor: UnitPoint
 
     func makeContent(_ context: inout BuildContext) -> TransformContent {
-        TransformContent(kind: .rotation(context.animatedValue(.rotation, [angle.radians])), anchor: anchor)
+        TransformContent(kind: .rotation(context.animatedState(.rotation, angle.radians)), anchor: anchor)
     }
 }
 
@@ -187,7 +187,7 @@ struct ScaleEffectModifier: PrimitiveModifier, Equatable {
     let anchor: UnitPoint
 
     func makeContent(_ context: inout BuildContext) -> TransformContent {
-        TransformContent(kind: .scale(context.animatedValue(.scale, [x, y])), anchor: anchor)
+        TransformContent(kind: .scale(context.animatedState(.scale, AnimatablePair(x, y))), anchor: anchor)
     }
 }
 
