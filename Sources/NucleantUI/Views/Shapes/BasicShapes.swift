@@ -116,6 +116,57 @@ extension Capsule: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode { makeShapeNode(&context) }
 }
 
+/// The chevron a `NavigationStack` draws as its back button, Material's
+/// `arrow_back_ios_new`, as a shape: fill or stroke it in any style for a
+/// back button of your own.
+///
+/// It keeps the icon's proportions. The icon's 24-point box is scaled to
+/// the frame's shorter side and centred, as a `Circle` is, so in a 20 × 20
+/// frame it is the stack's chevron, point for point:
+///
+/// ```swift
+/// .navigationBarBackButtonHidden()
+/// .toolbar {
+///     ToolbarItem(placement: .navigation) {
+///         ArrowBack()
+///             .fill(Color.orange)
+///             .frame(width: 20, height: 20)
+///             .frame(width: 36, height: 36)
+///             .contentShape(Rectangle())
+///             .onTapGesture { router?.pop() }
+///     }
+/// }
+/// ```
+@View
+public struct ArrowBack: Shape {
+    /// The icon's polygon, in its 24-point box.
+    private static let points = [
+        Point(x: 17.77, y: 3.77),
+        Point(x: 16, y: 2),
+        Point(x: 6, y: 12),
+        Point(x: 16, y: 22),
+        Point(x: 17.77, y: 20.23),
+        Point(x: 9.54, y: 12),
+    ]
+
+    public init(_viewID: ViewID = #viewID) { self._viewID = _viewID }
+
+    public func path(in rect: Rect) -> Path {
+        let side = min(rect.width, rect.height)
+        let scale = side / 24
+        let left = rect.midX - side / 2
+        let top = rect.midY - side / 2
+        var path = Path()
+        path.addLines(Self.points.map { Point(x: left + $0.x * scale, y: top + $0.y * scale) })
+        path.closeSubpath()
+        return path
+    }
+}
+
+extension ArrowBack: BuiltinView {
+    func makeNode(_ context: inout BuildContext) -> ViewNode { makeShapeNode(&context) }
+}
+
 /// A caller-supplied path, built in the view's own coordinate space (origin at
 /// the frame's top-left) and moved into place by the framework.
 @View

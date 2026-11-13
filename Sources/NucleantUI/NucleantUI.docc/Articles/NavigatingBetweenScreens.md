@@ -116,7 +116,11 @@ asks for one with `.toolbarVisibility(.visible, for: .navigationBar)`.
 The back button is a chevron in the primary label color. For any other
 icon, label or color, hide it with `.navigationBarBackButtonHidden()` and
 put your own in the `.navigation` placement, which then takes the leading
-edge. The bar stays:
+edge. The bar stays.
+
+The chevron itself is a shape, ``ArrowBack``. Filled in any color and
+framed at 20 points in a 36-point square, it is the stack's back button,
+drawn and placed the same:
 
 ```swift
 @View
@@ -128,13 +132,19 @@ struct DetailScreen {
             .navigationBarBackButtonHidden()
             .toolbar {
                 ToolbarItem(placement: .navigation) {
-                    Button("Close") { router?.pop() }
-                        .tint(.red)
+                    ArrowBack()
+                        .fill(Color.orange)
+                        .frame(width: 20, height: 20)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                        .onTapGesture { router?.pop() }
                 }
             }
     }
 }
 ```
+
+Any other view works there too, such as `Button("Close") { router?.pop() }`.
 
 ## Hiding the bar
 
