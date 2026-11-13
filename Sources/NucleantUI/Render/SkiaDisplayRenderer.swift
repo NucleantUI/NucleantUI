@@ -2,11 +2,10 @@
 //  SkiaDisplayRenderer.swift
 //  NucleantUI
 //
-//  The Skia sibling of `ThorDisplayRenderer`: turns a `DisplayList` into
-//  Skia draw calls on a node's `SkCanvas`. With `SKIA_MODE` (Package.swift's
-//  `skiaMode`) it is the one that draws the views — the window canvas,
-//  `.drawingGroup()`, the per-view painter and the `.shader` layers — in
-//  place of the ThorVG one.
+//  Turns a `DisplayList` into Skia draw calls on a node's `SkCanvas`. It
+//  draws the views in every build — the window canvas, `.drawingGroup()`,
+//  the per-view painter, the `.shader` layers and all text. Skia is always
+//  the renderer; see "Renderer" in Package.swift.
 //
 //  Skia is immediate: a draw call records into the surface, and nothing is
 //  held between passes the way ThorVG's paints are. A render therefore

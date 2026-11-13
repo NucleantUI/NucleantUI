@@ -12,27 +12,20 @@ import Foundation
 /// its `Dispatch` stand-in only under it.
 let isWasm = ProcessInfo.processInfo.environment["WASM_BUILD"] == "1"
 
-// MARK: - Primary renderer
+// MARK: - Renderer
 
-/// Which backend's canvases the views' display list is drawn into — the
-/// window canvas, `.drawingGroup()`, the per-view painter and the `.shader`
-/// layers. `true` defines `SKIA_MODE`, which compiles
-/// `App/CanvasBackend+Skia.swift` (Skia nodes, `SkiaDisplayRenderer`);
-/// `false` compiles `App/CanvasBackend+Thor.swift` (ThorVG nodes,
-/// `ThorDisplayRenderer`) instead. Exactly one is in a build, and the code
-/// above them names neither. `ThorCanvas` views keep their own ThorVG nodes
-/// in both (`App/ThorCanvasNodes.swift`); text is measured through ThorVG
-/// in both.
+/// Skia draws everything: the window canvas, `.drawingGroup()`, the per-view
+/// painter, the `.shader` layers and all text. Everything except what a
+/// shader draws itself, and what a `ThorCanvas` view draws: ThorVG is only
+/// for that view, through its own nodes (`App/ThorCanvasNodes.swift`).
 ///
-/// Skia by default. `NUCLEANT_SKIA_MODE=1|0` in the environment wins.
-/// (SwiftPM caches the evaluated manifest, but re-evaluates it when the
-/// environment it read changes.)
-let skiaMode: Bool = {
-    if let flag = ProcessInfo.processInfo.environment["NUCLEANT_SKIA_MODE"] {
-        return ["1", "true", "yes"].contains(flag.lowercased())
-    }
-    return true
-}()
+/// Always Skia: `SKIA_MODE` is defined in every build (`skiaModeSettings`
+/// below), which compiles `App/CanvasBackend+Skia.swift` (Skia nodes,
+/// `SkiaDisplayRenderer`). There is no switch, and there is not to be one.
+/// No environment variable, flag or test turns it off. The ThorVG backend
+/// for the views (`App/CanvasBackend+Thor.swift`, under `#if !SKIA_MODE`)
+/// stays in the tree but is never compiled in. Nothing is built, tested or
+/// judged against it.
 
 // MARK: - Dependency source
 
@@ -138,7 +131,8 @@ let traceBuild = ["1", "true", "yes"].contains(
 )
 
 /// `#if SKIA_MODE` / `#if NUCLEANT_TRACE` in the framework and its tests.
-let skiaModeSettings: [SwiftSetting] = (skiaMode ? [.define("SKIA_MODE")] : [])
+/// `SKIA_MODE` always: see "Renderer" above.
+let skiaModeSettings: [SwiftSetting] = [.define("SKIA_MODE")]
     + (traceBuild ? [.define("NUCLEANT_TRACE")] : [])
 
 let package = Package(
