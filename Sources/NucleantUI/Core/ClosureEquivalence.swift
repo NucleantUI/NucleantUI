@@ -113,6 +113,10 @@ private final class StoredFields {
 
 private let wordSize = MemoryLayout<UInt>.size
 
+/// A heap object's header: its metadata and its reference counts — two
+/// words on every platform (`HeapObject` in the runtime).
+private let heapObjectHeaderSize = 2 * wordSize
+
 /// Metadata kinds, as the runtime numbers them.
 private let structKind: UInt = 0x200
 private let optionalKind: UInt = 0x202
@@ -201,9 +205,16 @@ private struct CaptureLayout {
     /// capture types, of metadata sources and of generic bindings (32 bits
     /// each), then one relative pointer to a mangled type name per capture.
     /// The bindings come first in the context, a word each.
+    ///
+    /// A context whose layout is only known at run time — one holding a
+    /// value of a type from a library built for evolution, a Foundation
+    /// `Date` or a struct with one in it — records no offset (0): its
+    /// captures start right after the object's header, two words on every
+    /// platform, each at its own alignment, as the runtime lays them out.
     private static func read(_ metadata: UnsafeRawPointer) -> CaptureLayout? {
         guard metadata.load(as: UInt.self) == heapLocalVariableKind else { return nil }
-        let firstCapture = Int(metadata.load(fromByteOffset: wordSize, as: UInt32.self))
+        let recordedFirstCapture = Int(metadata.load(fromByteOffset: wordSize, as: UInt32.self))
+        let firstCapture = recordedFirstCapture != 0 ? recordedFirstCapture : heapObjectHeaderSize
         guard let descriptor = metadata.load(fromByteOffset: 2 * wordSize, as: UnsafeRawPointer?.self) else {
             return nil
         }
