@@ -806,9 +806,6 @@ public struct DrawContext: Sendable {
     public var transform: Transform = .identity
     public var clip: Rect?
     public var clipCornerRadius: Double = 0
-    /// Clips set under a rotation, which no rect on screen can stand for —
-    /// `clip` holds the box around them.
-    public var transformedClips: [TransformedClip] = []
 
     /// True while the list being filled is a *capture* that wants every
     /// pixel of the subtree in it — a `.shader` layer, a `.hidden()` view's
@@ -817,21 +814,11 @@ public struct DrawContext: Sendable {
     /// the capture rather than into it.
     var flattensRenderNodes = false
 
-    /// Set by a `.shader` effect for the view it is applied to: a canvas
-    /// node placed inside (`ThorCanvas`, `ThorCanvasRender`) reports itself
-    /// here instead of compositing, so its image can be the effect's input.
-    var shaderCanvasInput: ShaderCanvasInput?
-
     /// The clip of the containers above the nearest enclosing render node,
     /// which took it out of `clip` so its content compares equal as it
     /// scrolls under the clip and cuts it at the composite instead. A node
     /// or shader slot inside is cut by this and by `clip` both.
     var nodeClip: Rect?
-
-    /// How a node placed somewhere new in this pass moves there — the
-    /// transaction's animation, or `.animation(_:value:)`'s below it. Only
-    /// set in a pass that built something; `nil` means it jumps.
-    var animation: Animation?
 
     /// True inside a view being drawn where it was, not where layout puts
     /// it — a removed view exiting, a drag snapshot. Nothing inside starts
@@ -843,10 +830,88 @@ public struct DrawContext: Sendable {
     /// one — while the body around it keeps moving.
     var frozenTransitionContent: ObjectIdentifier?
 
+    /// What holds a reference and is set in few places — a rotated clip, a
+    /// shader effect, an animation, a scroll view — behind one object, which
+    /// the rest of the tree passes along as it is: every node copies its
+    /// context, and a copy then retains one reference, not one for each.
+    /// Setting a value makes a new one; setting the value it holds keeps it.
+    private(set) var shared = Shared.none
+
+    final class Shared: Sendable {
+        let transformedClips: [TransformedClip]
+        let shaderCanvasInput: ShaderCanvasInput?
+        let animation: Animation?
+        let coordinateSpaces: [CoordinateSpaceFrame]
+
+        static let none = Shared(transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [])
+
+        init(
+            transformedClips: [TransformedClip],
+            shaderCanvasInput: ShaderCanvasInput?,
+            animation: Animation?,
+            coordinateSpaces: [CoordinateSpaceFrame]
+        ) {
+            self.transformedClips = transformedClips
+            self.shaderCanvasInput = shaderCanvasInput
+            self.animation = animation
+            self.coordinateSpaces = coordinateSpaces
+        }
+    }
+
+    /// Clips set under a rotation, which no rect on screen can stand for —
+    /// `clip` holds the box around them.
+    public var transformedClips: [TransformedClip] {
+        get { shared.transformedClips }
+        set {
+            guard newValue != shared.transformedClips else { return }
+            shared = Shared(
+                transformedClips: newValue, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces
+            )
+        }
+    }
+
+    /// Set by a `.shader` effect for the view it is applied to: a canvas
+    /// node placed inside (`ThorCanvas`, `ThorCanvasRender`) reports itself
+    /// here instead of compositing, so its image can be the effect's input.
+    var shaderCanvasInput: ShaderCanvasInput? {
+        get { shared.shaderCanvasInput }
+        set {
+            guard newValue !== shared.shaderCanvasInput else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: newValue,
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces
+            )
+        }
+    }
+
+    /// How a node placed somewhere new in this pass moves there — the
+    /// transaction's animation, or `.animation(_:value:)`'s below it. Only
+    /// set in a pass that built something; `nil` means it jumps.
+    var animation: Animation? {
+        get { shared.animation }
+        set {
+            guard newValue != shared.animation else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: newValue, coordinateSpaces: shared.coordinateSpaces
+            )
+        }
+    }
+
     /// The coordinate spaces named above this point — by `.coordinateSpace`
     /// and by every scroll view — with where each was placed, innermost
     /// last, for a `GeometryProxy` to measure in.
-    var coordinateSpaces: [CoordinateSpaceFrame] = []
+    var coordinateSpaces: [CoordinateSpaceFrame] {
+        get { shared.coordinateSpaces }
+        set {
+            guard newValue != shared.coordinateSpaces else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: shared.animation, coordinateSpaces: newValue
+            )
+        }
+    }
 
     /// What a render node or shader slot placed here is cut to at the
     /// composite: every clip above it, whichever node took it over.
