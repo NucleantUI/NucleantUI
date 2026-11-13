@@ -113,15 +113,21 @@ final class PreferenceObservation {
 final class PreferenceObservers {
     private var observations: [[Int]: PreferenceObservation] = [:]
 
+    /// The paths of `observations`, outermost first: a stable order, rather
+    /// than dictionary order. Sorted again only after one came or went — a
+    /// view that re-runs files its observation at the path it had.
+    private var order: [[Int]]?
+
     func observe(_ observation: PreferenceObservation, at path: [Int]) {
-        observation.delivered = observations[path]?.delivered
-        observations[path] = observation
+        let previous = observations.updateValue(observation, forKey: path)
+        observation.delivered = previous?.delivered
+        if previous == nil { order = nil }
     }
 
     func forget(paths: Set<[Int]>) {
         guard !observations.isEmpty else { return }
-        for path in paths {
-            observations[path] = nil
+        for path in paths where observations.removeValue(forKey: path) != nil {
+            order = nil
         }
     }
 
@@ -129,9 +135,8 @@ final class PreferenceObservers {
     /// with the pass's other effects, after the tree is built and placed.
     func changes() -> [@MainActor () -> Void] {
         guard !observations.isEmpty else { return [] }
-        // Outermost first: a stable order, rather than dictionary order.
-        return observations
-            .sorted { $0.key.lexicographicallyPrecedes($1.key) }
-            .compactMap { $0.value.change() }
+        let order = self.order ?? observations.keys.sorted { $0.lexicographicallyPrecedes($1) }
+        self.order = order
+        return order.compactMap { observations[$0]?.change() }
     }
 }
