@@ -64,12 +64,9 @@ public struct EnvironmentValues: @unchecked Sendable {
     /// a class it was handed anew — counts as changed, which only ever costs
     /// a rebuild, and only of the views that read it.
     @MainActor
-    func agrees(with other: EnvironmentValues, on keys: Set<ObjectIdentifier>) -> Bool {
-        if version == other.version { return true }
-        for key in keys where !hasSameValue(at: key, as: other) {
-            return false
-        }
-        return true
+    func agrees(with other: EnvironmentValues, on keys: EnvironmentKeySet) -> Bool {
+        if version == other.version || keys.isEmpty { return true }
+        return EnvironmentReads.shared.allKeys(in: keys) { key in hasSameValue(at: key, as: other) }
     }
 
     /// The keys whose values differ between this and `other`, a key set in

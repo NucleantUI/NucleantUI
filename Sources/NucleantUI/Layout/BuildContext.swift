@@ -612,7 +612,7 @@ final class RebuildRecords {
         /// (`EnvironmentReads`) — the only ones a change of which rebuilds
         /// it when its parent re-runs. Only ever grows while the view
         /// stands: a rebuild below adds what it read (`addEnvironmentReads`).
-        var environmentReads: Set<ObjectIdentifier> = []
+        var environmentReads = EnvironmentKeySet()
         let stackAxis: Axis?
         /// The view built here: rebuilds it in place, and says whether a
         /// freshly built view is equivalent to it.
@@ -766,7 +766,7 @@ final class RebuildRecords {
             return entry.environment.agrees(with: environment, on: entry.environmentReads)
         }
 
-        var environmentReads: Set<ObjectIdentifier> {
+        var environmentReads: EnvironmentKeySet {
             node.value.unsafelyUnwrapped.environmentReads
         }
 
@@ -836,7 +836,7 @@ final class RebuildRecords {
     /// rebuild that started there, a `GeometryReader`'s content built during
     /// placement — added to that entry and every one above it, whose
     /// subtrees hold it.
-    func addEnvironmentReads(_ keys: Set<ObjectIdentifier>, along path: [Int]) {
+    func addEnvironmentReads(_ keys: EnvironmentKeySet, along path: [Int]) {
         guard !keys.isEmpty else { return }
         var node: PathTrie<Entry>.Node? = live.root
         var depth = 0
