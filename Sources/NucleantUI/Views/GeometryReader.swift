@@ -138,8 +138,7 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         EnvironmentReads.shared.begin()
         let child = build(at: placed, context: context)
         let environmentReads = EnvironmentReads.shared.end()
-        DependencyTracker.shared.pop()
-        context.records.addReads(DependencyTracker.shared.takeReads(for: path), at: path)
+        context.records.addReads(DependencyTracker.shared.pop(), at: path)
         context.records.addEnvironmentReads(environmentReads, along: path)
         releaseDeparted(context)
 

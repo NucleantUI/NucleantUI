@@ -123,16 +123,16 @@ public struct BuildContext {
 final class EffectQueue {
     /// Identities that have already run their `onAppear`, so it fires once per
     /// appearance rather than once per rebuild.
-    private var appeared: Set<StateKey> = []
+    private var appeared = EffectTable<Void>()
     private var pending: [() -> Void] = []
 
     /// The `onDisappear` action of every view standing — the latest build's,
     /// so it runs with what that build captured.
-    private var disappearing: [StateKey: () -> Void] = [:]
+    private var disappearing = EffectTable<() -> Void>()
 
     /// The value each `.onChange` standing last saw, to compare the next
     /// build's against.
-    private var observed: [StateKey: OpaqueValue] = [:]
+    private var observed = EffectTable<OpaqueValue>()
 
     /// Every `.onPreferenceChange` standing — checked after each pass that
     /// built, and forgotten with the views that attached them.
@@ -140,10 +140,10 @@ final class EffectQueue {
 
     /// The value each `.onGeometryChange` with a new-value action worked
     /// out when it was last placed.
-    private var geometryValues: [StateKey: OpaqueValue] = [:]
+    private var geometryValues = EffectTable<OpaqueValue>()
 
     /// The same, for each `.onGeometryChange` with an old-and-new action.
-    private var geometryTransitions: [StateKey: OpaqueValue] = [:]
+    private var geometryTransitions = EffectTable<OpaqueValue>()
 
     /// Whether placement built views this pass — a `GeometryReader`'s
     /// content — so that a pass that only laid out still gets the work that
@@ -151,13 +151,13 @@ final class EffectQueue {
     private var builtDuringLayout = false
 
     func onAppear(_ key: StateKey, _ action: @escaping () -> Void) {
-        guard !appeared.contains(key) else { return }
-        appeared.insert(key)
+        guard appeared[key] == nil else { return }
+        appeared.set((), for: key)
         pending.append(action)
     }
 
     func onDisappear(_ key: StateKey, _ action: @escaping () -> Void) {
-        disappearing[key] = action
+        disappearing.set(action, for: key)
     }
 
     /// Queue `action` with the value last seen here and `value`, if they
@@ -170,12 +170,12 @@ final class EffectQueue {
         _ action: @escaping (V, V) -> Void
     ) {
         guard let previous = observed[key]?.value(as: V.self) else {
-            observed[key] = OpaqueValue(value)
+            observed.set(OpaqueValue(value), for: key)
             if initial { pending.append { action(value, value) } }
             return
         }
         guard previous != value else { return }
-        observed[key] = OpaqueValue(value)
+        observed.set(OpaqueValue(value), for: key)
         pending.append { action(previous, value) }
     }
 
@@ -188,7 +188,7 @@ final class EffectQueue {
         _ action: @escaping @MainActor (V) -> Void
     ) {
         if let previous = geometryValues[key]?.value(as: V.self), previous == value { return }
-        geometryValues[key] = OpaqueValue(value)
+        geometryValues.set(OpaqueValue(value), for: key)
         pending.append { action(value) }
     }
 
@@ -200,12 +200,12 @@ final class EffectQueue {
         _ action: @escaping @MainActor (V, V) -> Void
     ) {
         guard let previous = geometryTransitions[key]?.value(as: V.self) else {
-            geometryTransitions[key] = OpaqueValue(value)
+            geometryTransitions.set(OpaqueValue(value), for: key)
             pending.append { action(value, value) }
             return
         }
         guard previous != value else { return }
-        geometryTransitions[key] = OpaqueValue(value)
+        geometryTransitions.set(OpaqueValue(value), for: key)
         pending.append { action(previous, value) }
     }
 
@@ -226,26 +226,79 @@ final class EffectQueue {
     }
 
     /// Forget the views at `paths`, so one that comes back appears again —
-    /// and run their `onDisappear` actions with this pass's effects.
+    /// and run their `onDisappear` actions with this pass's effects. One
+    /// removal per path from each table, however many entries the others
+    /// hold.
     func forget(paths: Set<[Int]>) {
         preferenceObservers.forget(paths: paths)
-        if !appeared.isEmpty {
-            appeared = appeared.filter { !paths.contains($0.path) }
+        appeared.removeAll(at: paths)
+        observed.removeAll(at: paths)
+        geometryValues.removeAll(at: paths)
+        geometryTransitions.removeAll(at: paths)
+        pending.append(contentsOf: disappearing.removeAll(at: paths))
+    }
+}
+
+/// Values by `StateKey`, filed under the key's path first, so that the
+/// views at a set of paths are forgotten with one removal per path rather
+/// than a pass over every entry. A path holds one view, and so — for one
+/// kind of effect — usually one key; any other key with the same path is
+/// kept beside it.
+private struct EffectTable<Value> {
+    private struct Filed {
+        var key: StateKey
+        var value: Value
+        var more: [(key: StateKey, value: Value)] = []
+    }
+
+    private var byPath: [[Int]: Filed] = [:]
+
+    subscript(key: StateKey) -> Value? {
+        guard let filed = byPath[key.path] else { return nil }
+        if filed.key == key { return filed.value }
+        for entry in filed.more where entry.key == key { return entry.value }
+        return nil
+    }
+
+    mutating func set(_ value: Value, for key: StateKey) {
+        guard var filed = byPath.removeValue(forKey: key.path) else {
+            byPath[key.path] = Filed(key: key, value: value)
+            return
         }
-        if !observed.isEmpty {
-            observed = observed.filter { !paths.contains($0.key.path) }
+        if filed.key == key {
+            filed.value = value
+        } else if let index = filed.more.firstIndex(where: { $0.key == key }) {
+            filed.more[index].value = value
+        } else {
+            filed.more.append((key, value))
         }
-        if !geometryValues.isEmpty {
-            geometryValues = geometryValues.filter { !paths.contains($0.key.path) }
+        byPath[key.path] = filed
+    }
+
+    /// Take out every value filed under any of `paths`: a removal per path,
+    /// or — for more paths than the table holds, a whole screen leaving —
+    /// one pass over what it holds.
+    @discardableResult
+    mutating func removeAll(at paths: Set<[Int]>) -> [Value] {
+        guard !byPath.isEmpty else { return [] }
+        var removed: [Value] = []
+        func take(_ filed: Filed) {
+            removed.append(filed.value)
+            for entry in filed.more { removed.append(entry.value) }
         }
-        if !geometryTransitions.isEmpty {
-            geometryTransitions = geometryTransitions.filter { !paths.contains($0.key.path) }
+        if paths.count <= byPath.count {
+            for path in paths {
+                if let filed = byPath.removeValue(forKey: path) { take(filed) }
+            }
+        } else {
+            var gone: [[Int]] = []
+            for (path, filed) in byPath where paths.contains(path) {
+                take(filed)
+                gone.append(path)
+            }
+            for path in gone { byPath[path] = nil }
         }
-        guard !disappearing.isEmpty else { return }
-        for (key, action) in disappearing where paths.contains(key.path) {
-            disappearing[key] = nil
-            pending.append(action)
-        }
+        return removed
     }
 }
 

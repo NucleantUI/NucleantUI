@@ -75,15 +75,6 @@ final class FocusTarget {
 }
 
 extension ViewNode {
-    /// The focus target at `path` in this subtree, if that view still stands.
-    func focusTarget(at path: [Int]) -> FocusTarget? {
-        if let target = content.focusTarget, target.path == path { return target }
-        for child in children {
-            if let found = child.focusTarget(at: path) { return found }
-        }
-        return nil
-    }
-
     /// Every enabled tab stop in this subtree, in the order they are laid
     /// out — what Tab walks through.
     func tabStops(into stops: inout [FocusTarget]) {

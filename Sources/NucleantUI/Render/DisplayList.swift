@@ -560,7 +560,8 @@ public struct DrawContext: Sendable {
         opacity >= 1 ? color : color.opacity(opacity)
     }
 
-    /// `style` under this scheme, faded the same way.
+    /// `style` under this scheme, faded the same way. A gradient at full
+    /// opacity is drawn as it is: fading its stops by 1 would only copy them.
     func resolve(_ style: ShapeStyle) -> ShapeStyle {
         switch style {
         case .color(let color):
@@ -568,8 +569,10 @@ public struct DrawContext: Sendable {
         case .dynamic(let light, let dark):
             return .color(resolve(colorScheme == .dark ? dark : light))
         case .linearGradient(let gradient, let start, let end):
+            guard opacity < 1 else { return style }
             return .linearGradient(faded(gradient), startPoint: start, endPoint: end)
         case .radialGradient(let gradient, let center, let startRadius, let endRadius):
+            guard opacity < 1 else { return style }
             return .radialGradient(faded(gradient), center: center, startRadius: startRadius, endRadius: endRadius)
         }
     }

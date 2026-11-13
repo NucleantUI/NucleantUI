@@ -134,4 +134,53 @@ struct GeometryTests {
             }
         }
     }
+
+    /// Transforms of every kind that reach `Rect.applying`: none, a move, a
+    /// scale with and without a flip, a rotation, and these combined.
+    private static let transforms: [Transform] = [
+        .identity,
+        .translation(x: 3.5, y: -2),
+        .scale(x: 2, y: -0.5),
+        .scale(x: -1, y: 3).concatenating(.translation(x: 10, y: 4)),
+        .rotation(.degrees(30)),
+        .rotation(.degrees(-135)).concatenating(.scale(x: 1.5, y: 0.25)),
+        .around(Point(x: 20, y: 30), .rotation(.degrees(90))),
+        .around(Point(x: -4, y: 12), .scale(x: 0.5, y: 2)),
+    ]
+
+    @Test func aRectUnderATransformIsTheBoxAroundItsFourCorners() {
+        let finite = [
+            Rect(x: 0, y: 0, width: 10, height: 5),
+            Rect(x: -3, y: 7.5, width: 0, height: 2),
+            Rect(x: 1, y: -4, width: 6, height: 0.25),
+        ]
+        for transform in Self.transforms {
+            for rect in finite {
+                let corners = [
+                    Point(x: rect.minX, y: rect.minY), Point(x: rect.maxX, y: rect.minY),
+                    Point(x: rect.minX, y: rect.maxY), Point(x: rect.maxX, y: rect.maxY),
+                ].map(transform.apply)
+                let xs = corners.map(\.x), ys = corners.map(\.y)
+                let box = Rect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+                #expect(rect.applying(transform) == box, "\(rect) under \(transform)")
+            }
+        }
+    }
+
+    @Test func aTransformAroundAnAnchorIsTheProductOfThree() {
+        let anchors = [Point(x: 0, y: 0), Point(x: 12.5, y: -3), Point(x: 100, y: 240)]
+        let bases: [Transform] = [
+            .rotation(.degrees(33)), .rotation(.degrees(180)),
+            .scale(x: 2, y: 0.5), .scale(x: -1, y: 1),
+            .rotation(.degrees(-20)).concatenating(.translation(x: 7, y: -9)),
+        ]
+        for anchor in anchors {
+            for base in bases {
+                let product = Transform.translation(x: anchor.x, y: anchor.y)
+                    .concatenating(base)
+                    .concatenating(.translation(x: -anchor.x, y: -anchor.y))
+                #expect(Transform.around(anchor, base) == product, "\(base) around \(anchor)")
+            }
+        }
+    }
 }

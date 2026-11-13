@@ -130,6 +130,25 @@ struct SubmitScoped {
     }
 }
 
+/// A field that `knobs.isShown` takes out of the tree and puts back, with
+/// what it holds readable from outside.
+@View
+struct RemovableField {
+    let knobs: Knobs
+    let probe: FocusProbe<String>
+    @State private var text = ""
+
+    var body: some View {
+        probe.read = { text }
+        return VStack(spacing: 0) {
+            if knobs.isShown {
+                TextField("T", text: $text).frame(width: 200, height: 100)
+            }
+            Color.orange.frame(width: 200, height: 100)
+        }
+    }
+}
+
 extension HostedViews {
     @MainActor
     @Suite
@@ -227,6 +246,35 @@ extension HostedViews {
             await open.tap(center)
             await open.key(KeyCode.return, "\r")
             #expect(log.take() == ["outer submit"])
+        }
+
+        @Test func aFieldKeepsTheKeysAsItIsBuiltAgainForEachOne() async {
+            let knobs = Knobs()
+            let probe = FocusProbe("")
+            let harness = Harness(RemovableField(knobs: knobs, probe: probe))
+            await harness.tap(Point(x: 100, y: 50))
+            #expect(harness.host.hasFocusedView)
+            for character in "abc" {
+                await harness.key(0, String(character))
+            }
+            #expect(probe.read() == "abc", "every key reaches the field it rebuilt")
+            #expect(harness.host.hasFocusedView)
+        }
+
+        @Test func aFocusedFieldThatLeavesGivesUpTheKeys() async {
+            let knobs = Knobs()
+            let probe = FocusProbe("")
+            let harness = Harness(RemovableField(knobs: knobs, probe: probe))
+            await harness.tap(Point(x: 100, y: 50))
+            #expect(harness.host.hasFocusedView)
+
+            await harness.change { knobs.isShown = false }
+            #expect(!harness.host.hasFocusedView, "gone with its view")
+
+            await harness.change { knobs.isShown = true }
+            #expect(!harness.host.hasFocusedView, "a field that comes back is not focused again")
+            await harness.key(0, "z")
+            #expect(probe.read() == "", "and keys don't reach it")
         }
 
         @Test(arguments: [

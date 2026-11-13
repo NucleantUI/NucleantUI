@@ -150,8 +150,15 @@ final class DependencyTracker {
 
     private init() {}
 
-    /// The view identity currently having its `body` evaluated, innermost last.
-    private var stack: [[Int]] = []
+    /// One view having its `body` evaluated, and the slots it read so far —
+    /// each once, in the order first read.
+    private struct Frame {
+        let path: [Int]
+        var reads: [any AnyStateStorage] = []
+    }
+
+    /// The views currently having their `body` evaluated, innermost last.
+    private var stack: [Frame] = []
 
     /// How many layout-and-draw passes are running. A read during one with
     /// no `body` running is a read no view records (see
@@ -169,37 +176,36 @@ final class DependencyTracker {
         placements -= 1
     }
 
-    /// Slots read by each view still being built, collected until the
-    /// builder takes them.
-    private var reads: [[Int]: [ObjectIdentifier: any AnyStateStorage]] = [:]
-
+    /// A view at `path` begins evaluating: the reads from here until the
+    /// matching `pop` are its own.
     func push(_ path: [Int]) {
-        stack.append(path)
+        stack.append(Frame(path: path))
     }
 
-    func pop() {
-        stack.removeLast()
+    /// The view at the top is done: the slots it read, handed over once for
+    /// its record.
+    @discardableResult
+    func pop() -> [any AnyStateStorage] {
+        stack.removeLast().reads
     }
 
     func recordRead(_ storage: any AnyStateStorage, via chain: [AnyKeyPath]) {
-        guard let path = stack.last else { return }
+        guard !stack.isEmpty else { return }
+        let top = stack.count - 1
+        let path = stack[top].path
         var chains = storage.readers[path] ?? []
         if !chains.contains(chain) {
             chains.append(chain)
             storage.readers[path] = chains
         }
-        reads[path, default: [:]][ObjectIdentifier(storage)] = storage
+        // Read again, most likely the slot read last.
+        for read in stack[top].reads.reversed() where read === storage { return }
+        stack[top].reads.append(storage)
     }
 
-    /// Whether the view at `path` has read any slot so far in its build.
-    func hasReads(for path: [Int]) -> Bool {
-        !(reads[path]?.isEmpty ?? true)
-    }
-
-    /// The slots the view at `path` read, handed over once for its record.
-    func takeReads(for path: [Int]) -> [any AnyStateStorage] {
-        guard let taken = reads.removeValue(forKey: path) else { return [] }
-        return Array(taken.values)
+    /// Whether the view being evaluated has read any slot so far.
+    var currentViewHasReads: Bool {
+        !(stack.last?.reads.isEmpty ?? true)
     }
 }
 

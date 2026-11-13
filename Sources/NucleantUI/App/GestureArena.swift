@@ -540,12 +540,14 @@ final class GestureArena {
         participants.values.contains { $0.isAlive && $0.isDrag && $0.pointers[pointer] != nil }
     }
 
-    /// Point the gestures in flight at the actions of the latest build.
-    func refreshAttachments(from root: ViewNode) {
+    /// Point the gestures in flight at the actions of the latest build. The
+    /// view that attached one is found through its record; the tree is
+    /// walked only when the node there holds no such attachment.
+    func refreshAttachments(from root: ViewNode, records: RebuildRecords) {
         for participant in participants.values where participant.isAlive && !participant.isPress {
-            guard let path = participant.attachment?.path,
-                  let current = root.gestureAttachment(at: path)
-            else { continue }
+            guard let path = participant.attachment?.path else { continue }
+            let recorded = records.node(for: path)?.content.gestureAttachment
+            guard let current = recorded?.path == path ? recorded : root.gestureAttachment(at: path) else { continue }
             participant.attachment = current
         }
     }

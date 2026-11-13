@@ -94,10 +94,11 @@ final class ViewNode {
     /// so an entry stays valid for as long as the node does. What can grow
     /// is the *number* of proposals a long-lived node has seen (every window
     /// size during a drag-resize), hence the cap.
-    private var measurements: [ProposedSize: Size] = [:]
+    private var measurements = MeasurementCache()
     /// `flexibility(along:)` walks the subtree; cached alongside the sizes
-    /// and dropped with them.
-    private var flexibilities: [Axis: LayoutPriorityClass] = [:]
+    /// and dropped with them, one for each axis.
+    private var horizontalFlexibility: LayoutPriorityClass?
+    private var verticalFlexibility: LayoutPriorityClass?
 
     init(content: any NodeContent, children: [ViewNode] = []) {
         self.content = content
@@ -126,8 +127,9 @@ final class ViewNode {
     func invalidateMeasurementsUpwards() {
         var node: ViewNode? = self
         while let current = node {
-            current.measurements.removeAll(keepingCapacity: true)
-            current.flexibilities.removeAll(keepingCapacity: true)
+            current.measurements.removeAll()
+            current.horizontalFlexibility = nil
+            current.verticalFlexibility = nil
             // Preferences reduced from the old subtree, and a custom
             // layout's cache built from it, are stale the same way.
             current.preferenceCache.removeAll(keepingCapacity: true)
@@ -181,18 +183,25 @@ final class ViewNode {
 
     /// How this node competes for space in a stack — see `NodeContent`.
     func flexibility(along axis: Axis) -> LayoutPriorityClass {
-        if let cached = flexibilities[axis] { return cached }
-        let result = content.flexibility(along: axis, node: self)
-        flexibilities[axis] = result
-        return result
+        switch axis {
+        case .horizontal:
+            if let cached = horizontalFlexibility { return cached }
+            let result = content.flexibility(along: axis, node: self)
+            horizontalFlexibility = result
+            return result
+        case .vertical:
+            if let cached = verticalFlexibility { return cached }
+            let result = content.flexibility(along: axis, node: self)
+            verticalFlexibility = result
+            return result
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedSize) -> Size {
-        if let cached = measurements[proposal] { return cached }
+        if let cached = measurements.size(for: proposal) { return cached }
         if PerfTrace.isEnabled { PerfTrace.sizeCalls += 1 }
         let size = content.sizeThatFits(proposal, node: self)
-        if measurements.count >= 16 { measurements.removeAll(keepingCapacity: true) }
-        measurements[proposal] = size
+        measurements.insert(size, for: proposal)
         return size
     }
 
@@ -228,6 +237,65 @@ final class ViewNode {
         if let store, store.hasExits {
             placeLeavingChildren(context: context, store: store, into: &list)
         }
+    }
+}
+
+/// The sizes a node gave, by the proposal that asked: the last four in the
+/// node itself, found by comparing — most nodes are asked one to three
+/// proposals in a pass, so most never hash one or allocate — and the ones
+/// before them in a table, so a node a stack asks from both ends, at a
+/// share and again while placing still finds every answer it gave. The
+/// table is emptied at sixteen, as the whole cache once was.
+struct MeasurementCache {
+    private var proposals = (ProposedSize.unspecified, ProposedSize.unspecified, ProposedSize.unspecified, ProposedSize.unspecified)
+    private var sizes = (Size.zero, Size.zero, Size.zero, Size.zero)
+    /// How many of the four slots hold an answer, and which one the next
+    /// answer takes once all do.
+    private var count = 0
+    private var next = 0
+    private var older: [ProposedSize: Size]?
+
+    func size(for proposal: ProposedSize) -> Size? {
+        if count > 0, proposals.0 == proposal { return sizes.0 }
+        if count > 1, proposals.1 == proposal { return sizes.1 }
+        if count > 2, proposals.2 == proposal { return sizes.2 }
+        if count > 3, proposals.3 == proposal { return sizes.3 }
+        return older?[proposal]
+    }
+
+    /// File `size` for `proposal`, which has no answer yet. With the four
+    /// slots full, the oldest of them moves to the table.
+    mutating func insert(_ size: Size, for proposal: ProposedSize) {
+        let slot: Int
+        if count < 4 {
+            slot = count
+            count += 1
+        } else {
+            slot = next
+            next = (next + 1) & 3
+            let evicted: (ProposedSize, Size)
+            switch slot {
+            case 0: evicted = (proposals.0, sizes.0)
+            case 1: evicted = (proposals.1, sizes.1)
+            case 2: evicted = (proposals.2, sizes.2)
+            default: evicted = (proposals.3, sizes.3)
+            }
+            if older == nil { older = [:] }
+            if older!.count >= 16 { older!.removeAll(keepingCapacity: true) }
+            older![evicted.0] = evicted.1
+        }
+        switch slot {
+        case 0: (proposals.0, sizes.0) = (proposal, size)
+        case 1: (proposals.1, sizes.1) = (proposal, size)
+        case 2: (proposals.2, sizes.2) = (proposal, size)
+        default: (proposals.3, sizes.3) = (proposal, size)
+        }
+    }
+
+    mutating func removeAll() {
+        count = 0
+        next = 0
+        older?.removeAll(keepingCapacity: true)
     }
 }
 
@@ -489,7 +557,6 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     // any `@State` read below is attributed to it — that attribution is what
     // lets a later write rebuild only this subtree.
     DependencyTracker.shared.push(path)
-    defer { DependencyTracker.shared.pop() }
 
     var node: ViewNode
     var isBoundary = false
@@ -520,7 +587,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         // own reads asked for. Not one whose body dissolves into the
         // parent's layout (a `Group`, a `ForEach`): a node is one laid-out
         // box.
-        isBoundary = (wasBoundary || context.isDirty(at: path) || DependencyTracker.shared.hasReads(for: path))
+        isBoundary = (wasBoundary || context.isDirty(at: path) || DependencyTracker.shared.currentViewHasReads)
             && !node.content.isTransparent
         if isBoundary {
             let body = node
@@ -537,7 +604,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     if let predecessor, predecessor !== node, node.ownerPath == path {
         node.inheritMotion(from: predecessor)
     }
-    let reads = DependencyTracker.shared.takeReads(for: path)
+    let reads = DependencyTracker.shared.pop()
     let environmentReads = EnvironmentReads.shared.end()
 
     // Remember how to rebuild exactly this view in exactly this position, and

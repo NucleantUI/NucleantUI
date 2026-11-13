@@ -76,10 +76,18 @@ public struct Transform: Hashable, Sendable {
     }
 
     /// A transform that rotates/scales about `anchor` rather than the origin.
+    ///
+    /// `translation(anchor) × transform × translation(-anchor)`, written out:
+    /// the rotation and scale terms stay as they are, and the translation
+    /// becomes `anchor + t - M × anchor`, `M` being those four terms — the
+    /// same arithmetic the product does, in the same order, without the
+    /// multiplications by 0 and 1.
     public static func around(_ anchor: Point, _ transform: Transform) -> Transform {
-        Transform.translation(x: anchor.x, y: anchor.y)
-            .concatenating(transform)
-            .concatenating(Transform.translation(x: -anchor.x, y: -anchor.y))
+        let t = transform
+        return Transform(
+            e11: t.e11, e12: t.e12, e13: (t.e13 + anchor.x) - (t.e11 * anchor.x + t.e12 * anchor.y),
+            e21: t.e21, e22: t.e22, e23: (t.e23 + anchor.y) - (t.e21 * anchor.x + t.e22 * anchor.y)
+        )
     }
 }
 

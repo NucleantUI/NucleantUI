@@ -155,8 +155,7 @@ struct ThorCanvasContent: NodeContent {
             trackingObservation(at: path) {
                 render(node.thorContext, size)
             }
-            DependencyTracker.shared.pop()
-            node.reads = DependencyTracker.shared.takeReads(for: path)
+            node.reads = DependencyTracker.shared.pop()
             node.generation = generation
             node.renderedSize = rect.size
             rasterize = true

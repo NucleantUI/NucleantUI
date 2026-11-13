@@ -114,7 +114,6 @@ struct CanvasContent: NodeContent {
                     renderer(&graphics, size)
                 }
                 DependencyTracker.shared.pop()
-                _ = DependencyTracker.shared.takeReads(for: path)
             }
         )))
     }

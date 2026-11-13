@@ -66,16 +66,23 @@ extension Rect {
     }
 
     /// The box around this rect's corners under `transform`.
+    ///
+    /// Without a rotation or a shear, x lands where x alone says and y where
+    /// y does, so two opposite corners already hold every coordinate the
+    /// other two would; otherwise all four are needed.
     func applying(_ transform: Transform) -> Rect {
         guard !transform.isIdentity else { return self }
-        let corners = [
-            transform.apply(to: Point(x: minX, y: minY)),
-            transform.apply(to: Point(x: maxX, y: minY)),
-            transform.apply(to: Point(x: minX, y: maxY)),
-            transform.apply(to: Point(x: maxX, y: maxY)),
-        ]
-        let xs = corners.map(\.x), ys = corners.map(\.y)
-        return Rect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        let a = transform.apply(to: origin)
+        let d = transform.apply(to: origin + size)
+        var lo = a.lanewiseMin(d)
+        var hi = a.lanewiseMax(d)
+        if transform.e12 != 0 || transform.e21 != 0 {
+            let b = transform.apply(to: Point(x: maxX, y: minY))
+            let c = transform.apply(to: Point(x: minX, y: maxY))
+            lo = lo.lanewiseMin(b.lanewiseMin(c))
+            hi = hi.lanewiseMax(b.lanewiseMax(c))
+        }
+        return Rect(origin: lo, size: hi - lo)
     }
 }
 
