@@ -189,6 +189,7 @@ let package = Package(
             resources: [
                 .copy("Resources/Fonts"),
                 .embedInCode("Resources/Icons/arrow_back_ios_new.svg"),
+                .embedInCode("Resources/Icons/more_horiz.svg"),
                 .copy("Resources/Icons/MaterialIcons-LICENSE.txt"),
             ],
             swiftSettings: skiaModeSettings

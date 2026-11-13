@@ -5,6 +5,8 @@
 //  A to-do list: filters, a scrolling list of rows that toggle on tap, and
 //  a detail screen pushed with NavigationLink that edits the same task
 //  through a Binding and can delete it (popping itself via the router).
+//  "Add" and "Clear done" are toolbar items in the list's bar, the second
+//  in its "…" menu; "Delete" is one in the detail screen's.
 //
 //  There is no text input in the framework yet, so "Add" pulls the next
 //  title from a backlog instead of a text field.
@@ -209,16 +211,20 @@ struct TaskDetail {
             }
 
             Spacer()
-
-            Button("Delete task") {
-                task.isDeleted = true
-                router?.pop()
-            }
-            .tint(Color(hex: 0xC03A3A))
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.background)
+        // At the bar's trailing edge.
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button("Delete") {
+                    task.isDeleted = true
+                    router?.pop()
+                }
+                .tint(Color(hex: 0xC03A3A))
+            }
+        }
     }
 }
 
@@ -239,22 +245,26 @@ struct TaskList {
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.background)
+        // "Add" on the bar's trailing side; "Clear done", used less, in its
+        // "…" menu.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("+ Add") { add() }
+                    .tint(Theme.accent)
+                    .disabled(nextBacklog >= backlog.count)
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button("Clear done") { tasks.removeAll { $0.isDone || $0.isDeleted } }
+            }
+        }
     }
 
     var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Today").font(.system(size: 26, weight: .bold))
-                Text("\(remaining) of \(live.count) left")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button("+ Add") { add() }
-                .tint(Theme.accent)
-                .disabled(nextBacklog >= backlog.count)
-            Button("Clear done") { tasks.removeAll { $0.isDone || $0.isDeleted } }
-                .tint(Theme.muted)
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Today").font(.system(size: 26, weight: .bold))
+            Text("\(remaining) of \(live.count) left")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 

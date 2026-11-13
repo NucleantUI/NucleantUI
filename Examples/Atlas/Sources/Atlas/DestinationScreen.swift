@@ -8,6 +8,11 @@
 //  registers the destination — and back into it when popped. Each
 //  highlight is a link whose page slides in the stack's own way.
 //
+//  The page draws its own back button: the stack's is hidden with
+//  `.navigationBarBackButtonHidden()`, and an `ArrowBack`, the same chevron
+//  as a shape, takes its place in a `.navigation` toolbar item, filled with
+//  the destination's sun.
+//
 
 import NucleantUI
 
@@ -15,6 +20,7 @@ import NucleantUI
 struct DestinationScreen {
     let atlas: Atlas
     let destination: Destination
+    @Environment(\.navigationRouter) private var router
 
     var body: some View {
         ScrollView {
@@ -64,6 +70,17 @@ struct DestinationScreen {
         }
         .background(destination.palette.deep)
         .navigationTitle(destination.name)
+        .navigationBarBackButtonHidden()
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                ArrowBack()
+                    .fill(destination.palette.sun)
+                    .frame(width: 20, height: 20)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+                    .onTapGesture { router?.pop() }
+            }
+        }
     }
 }
 

@@ -23,6 +23,8 @@ struct BackButtonStack {
     var body: some View {
         NavigationStack(path: $path) {
             BarTestStrip(log: log, name: "root")
+                // Titled, so the root keeps its bar after the pop.
+                .navigationTitle("Root")
                 .navigationDestination(for: Int.self) { page in
                     BarTestStrip(log: log, name: "page \(page)")
                 }

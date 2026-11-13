@@ -161,8 +161,9 @@ not resolve anchors yet.
 
 ## Shapes, text and images
 
-``Rectangle``, ``RoundedRectangle``, ``Circle``, ``Ellipse``, ``Capsule`` and
-``PathShape`` are filled or stroked with a ``Color`` or a gradient:
+``Rectangle``, ``RoundedRectangle``, ``Circle``, ``Ellipse``, ``Capsule``,
+``ArrowBack`` (the back button's chevron) and ``PathShape`` are filled or
+stroked with a ``Color`` or a gradient:
 
 ```swift
 RoundedRectangle(cornerRadius: 12)

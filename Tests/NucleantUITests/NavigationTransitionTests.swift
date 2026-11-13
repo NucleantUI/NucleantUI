@@ -40,6 +40,9 @@ struct PagedStack {
                     .matchedTransitionSource(id: 1, in: zoom)
                     .offset(x: 20, y: 60)
             }
+            // Titled, so the root keeps its bar and its screen the same
+            // place as the screens pushed on it.
+            .navigationTitle("Pages")
             .navigationDestination(for: Int.self) { page in
                 if zooms {
                     Color.blue.navigationTransition(.zoom(sourceID: page, in: zoom))
@@ -199,6 +202,9 @@ struct ShaderPagedStack {
     var body: some View {
         NavigationStack(path: $pages.path) {
             Color.red
+                // Titled, so the root keeps its bar and its screen the same
+                // place as the screen pushed on it.
+                .navigationTitle("Pages")
                 .navigationDestination(for: Int.self) { _ in
                     Color.blue.navigationTransition(.shader(
                         ShaderFunction("fragColor = layer(uv) * progress;"),
