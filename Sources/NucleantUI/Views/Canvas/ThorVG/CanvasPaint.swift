@@ -55,7 +55,7 @@ extension ThorShape {
     public func append(_ path: Path, transform: Transform = .identity) {
         var current = Point.zero
         var subpathStart = Point.zero
-        for element in path.applying(transform).elements {
+        for element in path.applying(transform).elementSequence {
             switch element {
             case .move(let point):
                 _ = move_to(x: point.x, y: point.y)

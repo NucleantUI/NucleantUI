@@ -33,7 +33,7 @@ extension Path {
             current = start
         }
 
-        for element in elements {
+        for element in elementSequence {
             switch element {
             case .move(let p):
                 closeSubpath()

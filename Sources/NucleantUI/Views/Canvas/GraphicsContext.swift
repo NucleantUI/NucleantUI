@@ -258,12 +258,7 @@ public struct GraphicsContext {
     /// the fill paint. Drawing happens on the main actor, which owns the
     /// fonts and the measurer.
     private func drawEmbedded(_ path: Path, on canvas: SkCanvas) {
-        guard path.elements.contains(where: {
-            switch $0 {
-            case .text, .image: return true
-            default: return false
-            }
-        }) else { return }
+        guard !path.embedded.isEmpty else { return }
         EmbeddedDrawing.draw(path, on: canvas, fill: scratch.fill, image: scratch.image, opacity: opacity)
     }
 
@@ -323,7 +318,7 @@ public struct GraphicsContext {
     }
 
     private static func append(_ path: Path, to skPath: SkPath) {
-        for element in path.elements {
+        for element in path.elementSequence {
             switch element {
             case .move(let point):
                 skPath.moveTo(point)
@@ -375,16 +370,14 @@ public struct GraphicsContext {
 private enum EmbeddedDrawing {
     /// Text in the fill paint's color or shader, an image faded by `opacity`.
     static func draw(_ path: Path, on canvas: SkCanvas, fill: SkPaint, image paint: SkPaint, opacity: Double) {
-        for element in path.elements {
-            switch element {
+        for item in path.embedded {
+            switch item {
             case .text(let string, let origin, let font):
                 drawText(string, at: origin, font: font, on: canvas, paint: fill)
             case .image(let raster, let rect):
                 guard rect.width > 0, rect.height > 0, let image = skImage(for: raster) else { continue }
                 paint.setAlphaf(Float(min(max(opacity, 0), 1)))
                 canvas.drawImageRect(image, pos: SIMD2<Float>(rect.origin), size: SIMD2<Float>(rect.size), paint: paint)
-            default:
-                break
             }
         }
     }

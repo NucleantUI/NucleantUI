@@ -8,6 +8,12 @@
 //
 
 /// A resolved path in absolute window coordinates.
+///
+/// Kept the way path libraries keep one: a byte per element saying what it
+/// is, and the points of every element in one array — a line takes its
+/// byte and one point, not the room of the largest element. Texts and
+/// images, which the renderer draws after the geometry, are a short list of
+/// their own.
 public struct Path: Hashable, Sendable {
     public enum Element: Hashable, Sendable {
         case move(Point)
@@ -26,7 +32,27 @@ public struct Path: Hashable, Sendable {
         case image(RasterImage, in: Rect)
     }
 
-    public var elements: [Element] = []
+    /// What an element is.
+    enum Verb: UInt8, Hashable, Sendable {
+        case move, line, quad, cubic, close, rect, ellipse
+        /// A text or an image: the next of `embedded`.
+        case embedded
+    }
+
+    /// A text or an image in the path.
+    enum Embedded: Hashable, Sendable {
+        case text(String, origin: Point, font: Font)
+        case image(RasterImage, in: Rect)
+    }
+
+    /// What each element is, in order.
+    private(set) var verbs: [Verb] = []
+    /// The elements' points, in order: a move's or a line's one; a quad's
+    /// control and end; a cubic's two controls and end; a rect's origin,
+    /// size and corner radii; an ellipse's center and radii.
+    private(set) var points: [Point] = []
+    /// The texts and images, in order.
+    private(set) var embedded: [Embedded] = []
 
     public init() {}
 
@@ -34,35 +60,167 @@ public struct Path: Hashable, Sendable {
         build(&self)
     }
 
-    public var isEmpty: Bool { elements.isEmpty }
+    public var isEmpty: Bool { verbs.isEmpty }
 
-    public mutating func move(to point: Point) { elements.append(.move(point)) }
-    public mutating func addLine(to point: Point) { elements.append(.line(point)) }
-
-    public mutating func addCurve(to end: Point, control1: Point, control2: Point) {
-        elements.append(.cubic(control1: control1, control2: control2, end: end))
+    /// The elements, in order — made from what the path keeps, on each ask.
+    /// Code that only walks them reads `elementSequence`, which makes no
+    /// array.
+    public var elements: [Element] {
+        get {
+            var result: [Element] = []
+            result.reserveCapacity(verbs.count)
+            for element in elementSequence { result.append(element) }
+            return result
+        }
+        set {
+            verbs.removeAll(keepingCapacity: true)
+            points.removeAll(keepingCapacity: true)
+            embedded.removeAll(keepingCapacity: true)
+            for element in newValue { append(element) }
+        }
     }
 
-    public mutating func closeSubpath() { elements.append(.close) }
+    /// The elements one at a time, read from what the path keeps as they
+    /// are asked for.
+    var elementSequence: ElementSequence { ElementSequence(path: self) }
+
+    /// The only element, for a path of one — a rect or an ellipse the
+    /// renderer draws in one call.
+    var soleElement: Element? {
+        guard verbs.count == 1 else { return nil }
+        var sequence = elementSequence
+        return sequence.next()
+    }
+
+    struct ElementSequence: Sequence, IteratorProtocol {
+        private let path: Path
+        private var verb = 0
+        private var point = 0
+        private var item = 0
+
+        fileprivate init(path: Path) {
+            self.path = path
+        }
+
+        mutating func next() -> Element? {
+            guard verb < path.verbs.count else { return nil }
+            let kind = path.verbs[verb]
+            let p = point
+            verb += 1
+            switch kind {
+            case .move:
+                point += 1
+                return .move(path.points[p])
+            case .line:
+                point += 1
+                return .line(path.points[p])
+            case .quad:
+                point += 2
+                return .quad(control: path.points[p], end: path.points[p + 1])
+            case .cubic:
+                point += 3
+                return .cubic(control1: path.points[p], control2: path.points[p + 1], end: path.points[p + 2])
+            case .close:
+                return .close
+            case .rect:
+                point += 3
+                let radii = path.points[p + 2]
+                return .rect(Rect(origin: path.points[p], size: path.points[p + 1]), radiusX: radii.x, radiusY: radii.y)
+            case .ellipse:
+                point += 2
+                let radii = path.points[p + 1]
+                return .ellipse(center: path.points[p], radiusX: radii.x, radiusY: radii.y)
+            case .embedded:
+                item += 1
+                switch path.embedded[item - 1] {
+                case .text(let string, let origin, let font):
+                    return .text(string, origin: origin, font: font)
+                case .image(let image, let rect):
+                    return .image(image, in: rect)
+                }
+            }
+        }
+    }
+
+    /// `element`, after the rest.
+    mutating func append(_ element: Element) {
+        switch element {
+        case .move(let point):
+            move(to: point)
+        case .line(let point):
+            addLine(to: point)
+        case .quad(let control, let end):
+            verbs.append(.quad)
+            points.append(control)
+            points.append(end)
+        case .cubic(let control1, let control2, let end):
+            addCurve(to: end, control1: control1, control2: control2)
+        case .close:
+            closeSubpath()
+        case .rect(let rect, let radiusX, let radiusY):
+            addRoundedRect(rect, radiusX: radiusX, radiusY: radiusY)
+        case .ellipse(let center, let radiusX, let radiusY):
+            verbs.append(.ellipse)
+            points.append(center)
+            points.append(Point(x: radiusX, y: radiusY))
+        case .text(let string, let origin, let font):
+            addText(string, at: origin, font: font)
+        case .image(let image, let rect):
+            addImage(image, in: rect)
+        }
+    }
+
+    /// `other`'s elements, after this path's.
+    mutating func append(contentsOf other: Path) {
+        verbs.append(contentsOf: other.verbs)
+        points.append(contentsOf: other.points)
+        embedded.append(contentsOf: other.embedded)
+    }
+
+    public mutating func move(to point: Point) {
+        verbs.append(.move)
+        points.append(point)
+    }
+
+    public mutating func addLine(to point: Point) {
+        verbs.append(.line)
+        points.append(point)
+    }
+
+    public mutating func addCurve(to end: Point, control1: Point, control2: Point) {
+        verbs.append(.cubic)
+        points.append(control1)
+        points.append(control2)
+        points.append(end)
+    }
+
+    public mutating func closeSubpath() {
+        verbs.append(.close)
+    }
 
     public mutating func addRect(_ rect: Rect, cornerRadius: Double = 0) {
-        elements.append(.rect(rect, radiusX: cornerRadius, radiusY: cornerRadius))
+        addRoundedRect(rect, radiusX: cornerRadius, radiusY: cornerRadius)
     }
 
     public mutating func addRoundedRect(_ rect: Rect, radiusX: Double, radiusY: Double) {
-        elements.append(.rect(rect, radiusX: radiusX, radiusY: radiusY))
+        verbs.append(.rect)
+        points.append(rect.origin)
+        points.append(rect.size)
+        points.append(Point(x: radiusX, y: radiusY))
     }
 
     public mutating func addText(_ string: String, at origin: Point, font: Font) {
-        elements.append(.text(string, origin: origin, font: font))
+        verbs.append(.embedded)
+        embedded.append(.text(string, origin: origin, font: font))
     }
 
     public mutating func addImage(_ image: RasterImage, in rect: Rect) {
-        elements.append(.image(image, in: rect))
+        verbs.append(.embedded)
+        embedded.append(.image(image, in: rect))
     }
 
     public mutating func addEllipse(in rect: Rect) {
-        elements.append(.ellipse(
+        append(.ellipse(
             center: rect.center,
             radiusX: rect.width / 2,
             radiusY: rect.height / 2
@@ -70,28 +228,45 @@ public struct Path: Hashable, Sendable {
     }
 
     /// Every element shifted — how a shape built in a view's local space
-    /// becomes absolute.
+    /// becomes absolute. The points that are positions move; a rect's size
+    /// and the radii stay.
     public func offsetBy(dx: Double, dy: Double) -> Path {
         guard dx != 0 || dy != 0 else { return self }
-        func shift(_ p: Point) -> Point { .init(x: p.x + dx, y: p.y + dy) }
+        let shift = Point(x: dx, y: dy)
         var copy = self
-        copy.elements = elements.map { element in
-            switch element {
-            case .move(let p):  return .move(shift(p))
-            case .line(let p):  return .line(shift(p))
-            case .quad(let control, let end):
-                return .quad(control: shift(control), end: shift(end))
-            case .cubic(let c1, let c2, let end):
-                return .cubic(control1: shift(c1), control2: shift(c2), end: shift(end))
-            case .close:        return .close
-            case .rect(let r, let rx, let ry):
-                return .rect(r.offsetBy(dx: dx, dy: dy), radiusX: rx, radiusY: ry)
-            case .ellipse(let c, let rx, let ry):
-                return .ellipse(center: shift(c), radiusX: rx, radiusY: ry)
-            case .text(let string, let origin, let font):
-                return .text(string, origin: shift(origin), font: font)
-            case .image(let image, let rect):
-                return .image(image, in: rect.offsetBy(dx: dx, dy: dy))
+        var p = 0
+        for verb in verbs {
+            switch verb {
+            case .move, .line:
+                copy.points[p] += shift
+                p += 1
+            case .quad:
+                copy.points[p] += shift
+                copy.points[p + 1] += shift
+                p += 2
+            case .cubic:
+                copy.points[p] += shift
+                copy.points[p + 1] += shift
+                copy.points[p + 2] += shift
+                p += 3
+            case .close, .embedded:
+                break
+            case .rect:
+                copy.points[p] += shift
+                p += 3
+            case .ellipse:
+                copy.points[p] += shift
+                p += 2
+            }
+        }
+        if !embedded.isEmpty {
+            copy.embedded = embedded.map { item in
+                switch item {
+                case .text(let string, let origin, let font):
+                    return .text(string, origin: origin + shift, font: font)
+                case .image(let image, let rect):
+                    return .image(image, in: rect.offsetBy(dx: dx, dy: dy))
+                }
             }
         }
         return copy

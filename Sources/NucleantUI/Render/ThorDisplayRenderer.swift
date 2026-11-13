@@ -173,7 +173,7 @@ public final class ThorDisplayRenderer {
         // Where the pen is, which a quadratic needs to become a cubic.
         var current = Point.zero
         var subpathStart = Point.zero
-        for element in path.elements {
+        for element in path.elementSequence {
             switch element {
             case .move(let point):
                 _ = tvg_shape_move_to(shape, f(point.x), f(point.y))

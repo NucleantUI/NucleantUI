@@ -21,20 +21,32 @@ extension Path {
             if p.y < minY { minY = p.y }
             if p.y > maxY { maxY = p.y }
         }
-        for element in elements {
-            switch element {
-            case .move(let p), .line(let p):
-                include(p)
-            case .quad(let control, let end):
-                include(control); include(end)
-            case .cubic(let c1, let c2, let end):
-                include(c1); include(c2); include(end)
-            case .close:
+        // One sweep over the points, the verbs saying which are positions:
+        // a rect keeps its size and an ellipse its radii there too.
+        var p = 0
+        for verb in verbs {
+            switch verb {
+            case .move, .line:
+                include(points[p])
+                p += 1
+            case .quad:
+                include(points[p]); include(points[p + 1])
+                p += 2
+            case .cubic:
+                include(points[p]); include(points[p + 1]); include(points[p + 2])
+                p += 3
+            case .close, .embedded:
                 break
-            case .rect(let r, _, _):
-                include(Point(x: r.minX, y: r.minY)); include(Point(x: r.maxX, y: r.maxY))
-            case .ellipse(let c, let rx, let ry):
-                include(Point(x: c.x - rx, y: c.y - ry)); include(Point(x: c.x + rx, y: c.y + ry))
+            case .rect:
+                include(points[p]); include(points[p] + points[p + 1])
+                p += 3
+            case .ellipse:
+                include(points[p] - points[p + 1]); include(points[p] + points[p + 1])
+                p += 2
+            }
+        }
+        for item in embedded {
+            switch item {
             case .text(let string, let origin, let font):
                 let extent = Path.textExtent(string, font: font)
                 include(origin); include(Point(x: origin.x + extent.width, y: origin.y + extent.height))

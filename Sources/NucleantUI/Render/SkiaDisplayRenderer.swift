@@ -259,7 +259,7 @@ public final class SkiaDisplayRenderer {
         // A rect, a rounded rect or an ellipse alone — a background, a
         // border, a control's track and thumb — is drawn as one; anything
         // else through the path.
-        let primitive = draw.path.elements.count == 1 ? draw.path.elements[0] : nil
+        let primitive = draw.path.soleElement
         switch primitive {
         case .rect?, .ellipse?:
             break
@@ -328,8 +328,8 @@ public final class SkiaDisplayRenderer {
     /// transform, which already hold.
     private func emitEmbedded(_ path: Path, fill: _ResolvedPaint, on canvas: SkCanvas) {
         let color = fill.flatColor
-        for element in path.elements {
-            switch element {
+        for item in path.embedded {
+            switch item {
             case .text(let string, let origin, let font):
                 emit(TextDraw(
                     string: string,
@@ -340,14 +340,12 @@ public final class SkiaDisplayRenderer {
                 ), on: canvas)
             case .image(let image, let rect):
                 emit(ImageDraw(image: image, frame: rect, opacity: Double(color.alpha)), on: canvas)
-            default:
-                break
             }
         }
     }
 
     private func append(_ path: Path, to skPath: SkPath) {
-        for element in path.elements {
+        for element in path.elementSequence {
             switch element {
             case .move(let point):
                 skPath.moveTo(point)
