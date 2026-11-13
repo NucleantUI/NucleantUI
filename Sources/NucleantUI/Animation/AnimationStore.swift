@@ -167,7 +167,7 @@ final class AnimationStore {
     // MARK: - Implicit animation values
 
     /// The last value `.animation(_:value:)` saw at each path.
-    private var observed: [[Int]: OpaqueValue] = [:]
+    private var observed: [[Int]: AnyBox] = [:]
 
     /// Whether `value` differs from the one last seen at `path`. The first
     /// sighting — or a value of another type, a different view now standing
@@ -175,7 +175,7 @@ final class AnimationStore {
     func valueChanged<V: Equatable>(_ value: V, at path: [Int]) -> Bool {
         let previous = observed[path]?.value(as: V.self)
         guard previous != value else { return false }
-        observed[path] = OpaqueValue(value)
+        observed[path] = Box(value)
         return previous != nil
     }
 
@@ -183,7 +183,7 @@ final class AnimationStore {
 
     /// Each `Animatable` view's or shape's data on its way somewhere, by
     /// path — an `AnimatableDataState` of the type's own data.
-    var animatableData: [[Int]: OpaqueReference] = [:]
+    var animatableData: [[Int]: AnyAnimatableDataState] = [:]
 
     /// `Animatable` views still between values: rebuilt next frame, at the
     /// value that frame shows.

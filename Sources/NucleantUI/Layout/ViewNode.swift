@@ -97,7 +97,7 @@ class ViewNode {
 
     /// What this subtree reduced to for each preference key asked about so
     /// far — see `PreferenceKey.swift`. Dropped with the measurements.
-    var preferenceCache: [ObjectIdentifier: OpaqueValue] = [:]
+    var preferenceCache: [ObjectIdentifier: AnyBox] = [:]
 
     /// Measurements taken so far, keyed by the proposal that produced them.
     ///

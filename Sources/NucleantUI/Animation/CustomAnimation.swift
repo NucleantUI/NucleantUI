@@ -79,14 +79,14 @@ public struct AnimationContext<Value: VectorArithmetic> {
 
 /// A custom animation's own storage, keyed by `AnimationStateKey` types.
 public struct AnimationState<Value: VectorArithmetic> {
-    var storage: [ObjectIdentifier: OpaqueValue] = [:]
+    var storage: [ObjectIdentifier: AnyBox] = [:]
 
     public init() {}
 
     public subscript<K: AnimationStateKey>(key: K.Type) -> K.Value {
         get { storage[ObjectIdentifier(key)]?.value(as: K.Value.self) ?? K.defaultValue }
         // A fresh box per write, so a copy of the state keeps its own value.
-        set { storage[ObjectIdentifier(key)] = OpaqueValue(newValue) }
+        set { storage[ObjectIdentifier(key)] = Box(newValue) }
     }
 
     /// The same storage, seen as state for another value type.

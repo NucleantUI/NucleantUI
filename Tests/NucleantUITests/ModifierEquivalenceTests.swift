@@ -107,3 +107,29 @@ struct ModifierEquivalenceTests {
         #expect(!appearing()._isEquivalent(to: appearing()))
     }
 }
+
+/// What an `AnyView` and the stores' boxes hold, compared and taken back
+/// out as the type it is.
+@MainActor
+@Suite
+struct ErasedStorageTests {
+
+    @Test func anErasedViewComparesAsTheViewItHolds() {
+        func erased(_ text: String) -> AnyView { AnyView(Text(text)) }
+        func color() -> AnyView { AnyView(Color.orange) }
+        #expect(erased("a")._isEquivalent(to: erased("a")))
+        #expect(!erased("a")._isEquivalent(to: erased("b")))
+        #expect(!erased("a")._isEquivalent(to: color()), "a view of another type")
+        let one = erased("a")
+        #expect(one._isEquivalent(to: one), "the same storage")
+    }
+
+    @Test func aBoxGivesItsValueBackOnlyAsItsType() {
+        let box: AnyBox = Box(3)
+        #expect(box.value(as: Int.self) == 3)
+        #expect(box.value(as: Double.self) == nil)
+        #expect(box.value(as: Int?.self) == nil, "an optional is another type")
+        let optional: AnyBox = Box(Int?.none)
+        #expect(optional.value(as: Int?.self) == .some(nil))
+    }
+}

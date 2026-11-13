@@ -68,7 +68,7 @@ extension ViewNode {
         // Each node says what flows up through it — see
         // `NodeContent.preference(_:below:)`.
         combined = contentPreference(key, below: combined)
-        preferenceCache[id] = OpaqueValue(combined)
+        preferenceCache[id] = Box(combined)
         return combined
     }
 }
@@ -82,7 +82,7 @@ final class PreferenceObservation {
     weak var node: ViewNode?
     /// The value last delivered, kept across rebuilds of the observing view
     /// so a parent re-running doesn't re-deliver an unchanged value.
-    var delivered: OpaqueValue?
+    var delivered: AnyBox?
     /// The action to run if the value has changed since `delivered`.
     private let check: @MainActor (PreferenceObservation) -> (@MainActor () -> Void)?
 
@@ -98,7 +98,7 @@ final class PreferenceObservation {
             if let previous = observation.delivered?.value(as: K.Value.self), previous == value {
                 return nil
             }
-            observation.delivered = OpaqueValue(value)
+            observation.delivered = Box(value)
             return { action(value) }
         }
     }

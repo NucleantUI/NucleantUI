@@ -200,7 +200,7 @@ final class EffectQueue {
 
     /// The value each `.onChange` standing last saw, to compare the next
     /// build's against.
-    private var observed = EffectTable<OpaqueValue>()
+    private var observed = EffectTable<AnyBox>()
 
     /// Every `.onPreferenceChange` standing — checked after each pass that
     /// built, and forgotten with the views that attached them.
@@ -208,10 +208,10 @@ final class EffectQueue {
 
     /// The value each `.onGeometryChange` with a new-value action worked
     /// out when it was last placed.
-    private var geometryValues = EffectTable<OpaqueValue>()
+    private var geometryValues = EffectTable<AnyBox>()
 
     /// The same, for each `.onGeometryChange` with an old-and-new action.
-    private var geometryTransitions = EffectTable<OpaqueValue>()
+    private var geometryTransitions = EffectTable<AnyBox>()
 
     /// Whether placement built views this pass — a `GeometryReader`'s
     /// content — so that a pass that only laid out still gets the work that
@@ -238,12 +238,12 @@ final class EffectQueue {
         _ action: @escaping (V, V) -> Void
     ) {
         guard let previous = observed[key]?.value(as: V.self) else {
-            observed.set(OpaqueValue(value), for: key)
+            observed.set(Box(value), for: key)
             if initial { pending.append { action(value, value) } }
             return
         }
         guard previous != value else { return }
-        observed.set(OpaqueValue(value), for: key)
+        observed.set(Box(value), for: key)
         pending.append { action(previous, value) }
     }
 
@@ -256,7 +256,7 @@ final class EffectQueue {
         _ action: @escaping @MainActor (V) -> Void
     ) {
         if let previous = geometryValues[key]?.value(as: V.self), previous == value { return }
-        geometryValues.set(OpaqueValue(value), for: key)
+        geometryValues.set(Box(value), for: key)
         pending.append { action(value) }
     }
 
@@ -268,12 +268,12 @@ final class EffectQueue {
         _ action: @escaping @MainActor (V, V) -> Void
     ) {
         guard let previous = geometryTransitions[key]?.value(as: V.self) else {
-            geometryTransitions.set(OpaqueValue(value), for: key)
+            geometryTransitions.set(Box(value), for: key)
             pending.append { action(value, value) }
             return
         }
         guard previous != value else { return }
-        geometryTransitions.set(OpaqueValue(value), for: key)
+        geometryTransitions.set(Box(value), for: key)
         pending.append { action(previous, value) }
     }
 

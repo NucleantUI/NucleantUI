@@ -333,11 +333,15 @@ extension Optional where Wrapped: View {
     }
 }
 
-// The rest carry closures, so there is nothing to compare.
-
+/// The same erased view: the same storage, or a view of the same type,
+/// equivalent as that type's are.
 extension AnyView {
-    public func _isEquivalent(to other: AnyView) -> Bool { false }
+    public func _isEquivalent(to other: AnyView) -> Bool {
+        storage === other.storage || storage.isEquivalent(to: other.storage)
+    }
 }
+
+// The rest carry closures, so there is nothing to compare.
 
 extension ForEach {
     public func _isEquivalent(to other: ForEach<Data, ID, Content>) -> Bool { false }

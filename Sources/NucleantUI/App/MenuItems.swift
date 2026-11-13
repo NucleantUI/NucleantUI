@@ -133,7 +133,7 @@ extension ForEach: MenuItemSource {
 
 extension AnyView: MenuItemSource {
     func _menuItems(_ lowering: inout MenuLowering) -> [MenuBar.Item] {
-        lowerMenuItems(&lowering)
+        storage.lowerMenuItems(&lowering)
     }
 }
 

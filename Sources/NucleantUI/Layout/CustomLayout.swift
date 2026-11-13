@@ -321,14 +321,14 @@ extension View {
 /// The layout values set on one view, by key. Values set further out
 /// replace those set further in.
 struct LayoutValues {
-    private var values: [ObjectIdentifier: OpaqueValue] = [:]
+    private var values: [ObjectIdentifier: AnyBox] = [:]
 
     func value<K: LayoutValueKey>(for key: K.Type) -> K.Value? {
         values[ObjectIdentifier(key)]?.value(as: K.Value.self)
     }
 
     mutating func set<K: LayoutValueKey>(_ value: K.Value, for key: K.Type) {
-        values[ObjectIdentifier(key)] = OpaqueValue(value)
+        values[ObjectIdentifier(key)] = Box(value)
     }
 }
 
