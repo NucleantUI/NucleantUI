@@ -184,3 +184,28 @@ struct GeometryTests {
         }
     }
 }
+
+@MainActor
+@Suite
+struct InverseTransformTests {
+    @Test func aPointIsMappedBackAsTheInverseWould() {
+        let transforms: [Transform] = [
+            .identity,
+            .translation(x: 12.5, y: -40),
+            .rotation(.degrees(30)).concatenating(.translation(x: 3, y: 4)),
+            .around(Point(x: 50, y: 50), .scale(x: 2, y: 0.5)),
+        ]
+        let points = [Point(x: 0, y: 0), Point(x: 17.25, y: -3), Point(x: 400, y: 80)]
+        for transform in transforms {
+            for point in points {
+                let expected = transform.inverted()!.apply(to: point)
+                let mapped = transform.inverseApplied(to: point)!
+                #expect(abs(mapped.x - expected.x) < 1e-9 && abs(mapped.y - expected.y) < 1e-9, "\(point) under \(transform)")
+                // And back.
+                let back = transform.apply(to: mapped)
+                #expect(abs(back.x - point.x) < 1e-9 && abs(back.y - point.y) < 1e-9)
+            }
+        }
+        #expect(Transform.scale(x: 0, y: 1).inverseApplied(to: .zero) == nil, "a degenerate transform maps nothing back")
+    }
+}

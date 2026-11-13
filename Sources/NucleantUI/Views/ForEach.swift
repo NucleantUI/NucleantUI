@@ -10,7 +10,9 @@
 /// an id here.
 public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     public let data: Data
-    let identify: (Data.Element) -> ID
+    /// Where an element keeps its id — the key path itself, which compares
+    /// by value, where a closure reading it could not be compared at all.
+    let id: KeyPath<Data.Element, ID>
     let build: (Data.Element) -> Content
 
     public init(
@@ -19,11 +21,16 @@ public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View>
         @ViewBuilder content: @escaping (Data.Element) -> Content
     ) {
         self.data = data
-        self.identify = { $0[keyPath: id] }
+        self.id = id
         self.build = content
     }
 
     public var body: Never { bodyUnavailable() }
+
+    /// `element`'s id.
+    func identify(_ element: Data.Element) -> ID {
+        element[keyPath: id]
+    }
 }
 
 extension ForEach where Data.Element: Identifiable, ID == Data.Element.ID {

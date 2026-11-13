@@ -168,8 +168,7 @@ extension ViewNode {
     /// `point` with this node's ambient transform undone — `nil` for a
     /// degenerate transform (a zero `scaleEffect`), which can't be hit.
     func mapIntoLocalSpace(_ point: Point) -> Point? {
-        guard !transform.isIdentity else { return point }
-        return transform.inverted()?.apply(to: point)
+        transform.inverseApplied(to: point)
     }
 
     /// Whether `point` still falls inside this node — asked on pointer release
@@ -184,29 +183,26 @@ extension Hit {
     /// The window point mapped into this result's node space, for a later
     /// event in the same gesture.
     func localPoint(for windowPoint: Point) -> Point? {
-        let local: Point
-        if transform.isIdentity {
-            local = windowPoint
-        } else if let inverse = transform.inverted() {
-            local = inverse.apply(to: windowPoint)
-        } else {
-            return nil
-        }
+        guard let local = transform.inverseApplied(to: windowPoint) else { return nil }
         return Point(x: local.x - frame.minX, y: local.y - frame.minY)
     }
 
     func contains(_ windowPoint: Point) -> Bool {
-        if transform.isIdentity { return frame.contains(windowPoint) }
-        guard let inverse = transform.inverted() else { return false }
-        return frame.contains(inverse.apply(to: windowPoint))
+        guard let local = transform.inverseApplied(to: windowPoint) else { return false }
+        return frame.contains(local)
     }
 }
 
 extension Transform {
     /// `point` with this transform undone: `nil` for a degenerate transform
     /// (a zero `scaleEffect`), which can't be hit.
+    ///
+    /// A move alone — an `.offset`, a scroll position, the common case — is
+    /// undone by taking it away, with no inverse to work out.
     func inverseApplied(to point: Point) -> Point? {
-        guard !isIdentity else { return point }
+        if e11 == 1, e12 == 0, e21 == 0, e22 == 1 {
+            return Point(x: point.x - e13, y: point.y - e23)
+        }
         return inverted()?.apply(to: point)
     }
 }

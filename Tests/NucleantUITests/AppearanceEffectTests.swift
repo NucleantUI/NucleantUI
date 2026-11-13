@@ -116,3 +116,82 @@ extension HostedViews {
         }
     }
 }
+
+/// Rows whose closure logs each time it runs, under a parent that
+/// `shelf.value` runs again.
+@View
+struct LoggedRowClosure {
+    let shelf: Shelf
+    let log: Log
+
+    var body: some View {
+        // Read, so a change of it runs this body again.
+        let _ = shelf.value
+        VStack(spacing: 0) {
+            ForEach(shelf.items, id: \.self) { item in
+                row(item)
+            }
+        }
+    }
+
+    private func row(_ item: Int) -> some View {
+        log("row \(item)")
+        return Color.orange.frame(width: 10, height: 10)
+    }
+}
+
+/// Rows whose closure captures a value the parent works out from
+/// `shelf.value`.
+@View
+struct CapturingRowClosure {
+    let shelf: Shelf
+    let log: Log
+
+    var body: some View {
+        let mark = shelf.value % 2 == 0 ? "even" : "odd"
+        VStack(spacing: 0) {
+            ForEach(shelf.items, id: \.self) { item in
+                row(item, mark)
+            }
+        }
+    }
+
+    private func row(_ item: Int, _ mark: String) -> some View {
+        log("row \(item) \(mark)")
+        return Color.orange.frame(width: 10, height: 10)
+    }
+}
+
+extension HostedViews {
+    @MainActor
+    @Suite
+    struct ForEachEquivalenceTests {
+
+        @Test func aCaptureThatChangedBuildsTheRowsAgain() async {
+            let shelf = Shelf()
+            shelf.items = [1, 2]
+            let log = Log()
+            let harness = Harness(CapturingRowClosure(shelf: shelf, log: log))
+            #expect(log.take() == ["row 1 even", "row 2 even"])
+
+            await harness.change { shelf.value = 2 }
+            #expect(log.take().isEmpty, "the capture came out the same")
+
+            await harness.change { shelf.value = 3 }
+            #expect(log.take() == ["row 1 odd", "row 2 odd"], "the closure captured another value")
+        }
+
+        @Test func theSameRowsAreNotBuiltAgain() async {
+            let shelf = Shelf()
+            let log = Log()
+            let harness = Harness(LoggedRowClosure(shelf: shelf, log: log))
+            #expect(log.take() == ["row 1", "row 2", "row 3"])
+
+            await harness.change { shelf.value += 1 }
+            #expect(log.take().isEmpty, "the same data and closure: no row closure runs")
+
+            await harness.change { shelf.items = [1, 3] }
+            #expect(log.take() == ["row 1", "row 3"], "other data: each row closure runs")
+        }
+    }
+}

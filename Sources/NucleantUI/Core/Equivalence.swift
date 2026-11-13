@@ -341,8 +341,15 @@ extension AnyView {
     }
 }
 
-// The rest carry closures, so there is nothing to compare.
-
+/// The same rows: the same data, read for its ids the same way, and a row
+/// closure running the same code over equivalent captures — the way a view
+/// compares its stored closures. Then not one row closure has to run for a
+/// parent that ran again. Data that can't be compared, or a closure whose
+/// captures can't be read, makes it a new one each time, as it always was.
 extension ForEach {
-    public func _isEquivalent(to other: ForEach<Data, ID, Content>) -> Bool { false }
+    public func _isEquivalent(to other: ForEach<Data, ID, Content>) -> Bool {
+        id == other.id
+            && _areEquivalent(data, other.data)
+            && _areEquivalentClosures(self, other, \.build, name: "build")
+    }
 }
