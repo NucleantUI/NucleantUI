@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `9fafb43`.
+Last updated after `ee269ed`.
 
 ## Small fixes that are certain
 
@@ -67,9 +67,16 @@ Last updated after `9fafb43`.
 
 ## [Phase 4](phase-4-placement-and-display-list.md): placing and drawing only what changed
 
-- [ ] **4.1** Every pass places the whole tree. Steps 1 (a version per
-  list), 2 (skip a clean subtree), 3 (frames relative to the boundary).
-  The largest gain per frame in the plan, and the most work.
+- [~] **4.1** Every pass places the whole tree
+  - [ ] step 1: a version per list in place of a deep comparison
+  - [x] step 2: skip a clean subtree — `ee269ed`. Kinds say whether they
+    place purely (`NodeContent.placesPurely`, off by default); a clean,
+    stable pure subtree appends what it kept. Clean means nothing asked for
+    a frame and no state was read while it was placed. Checked in Bookmarks,
+    Flashcards, MindMap and Reader by placing each appended subtree fresh
+    too: about 70,000 appends, none different.
+  - [ ] step 3: frames relative to the boundary, so a scrolled or moved
+    subtree is kept too
 - [x] **4.2** Paths in their own space — `d6af0fd`
 - [x] **4.3** The path kept on the node — `d6af0fd`
 - [x] **4.4** One draw state shared by the five commands — `5e8fe6e`. The
@@ -148,7 +155,9 @@ Last updated after `9fafb43`.
 
 - `Scripts/bench_animations.py` has a baseline from before the branch
   (`.build/bench/opt-before`: `bookmarks-layout`, `flashcards-card`). No
-  run since; the comparison is still to do.
+  run since; the comparison is still to do. Tried after `e24ea3d`
+  (2026-11-14): the machine was busy (load around 6), so no numbers were
+  taken.
 - `0f10917` measured Bookmarks' Cards/List rebuild from samples: 1171
   before, 881 after (debug build).
 
