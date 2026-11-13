@@ -77,7 +77,7 @@ extension _ShapeView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let drawn = context.drawnShape(shape)
         let fill = fillsWithForeground ? context.environment.foregroundStyle : self.fill
-        return ViewNode(content: ShapeContent(
+        return ContentNode(content: ShapeContent(
             makePath: { rect in drawn().path(in: rect) },
             fill: fill,
             stroke: stroke,

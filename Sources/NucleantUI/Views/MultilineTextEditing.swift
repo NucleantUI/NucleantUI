@@ -675,7 +675,7 @@ extension TextAreaLines: BuiltinView {
             if row >= lines.count { return characters.count }
             return TextAreaLayout.offset(nearestX: point.x - horizontalInset, on: lines[row], in: characters)
         }
-        return ViewNode(content: TextAreaContent(
+        return ContentNode(content: TextAreaContent(
             text: text,
             font: font,
             color: color,

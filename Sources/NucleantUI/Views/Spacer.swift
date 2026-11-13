@@ -20,7 +20,7 @@ extension Spacer: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         // The axis is stamped in by whichever stack builds it — see
         // `HStack`/`VStack`. Outside a stack a spacer just fills.
-        ViewNode(content: SpacerContent(minLength: minLength, axis: context.stackAxis))
+        ContentNode(content: SpacerContent(minLength: minLength, axis: context.stackAxis))
     }
 }
 
@@ -38,7 +38,7 @@ extension Divider: BuiltinView {
         // stack it behaves as a horizontal rule, the same default SwiftUI has.
         let axis = context.stackAxis ?? .vertical
         let color = context.environment.foregroundStyle.opacity(0.25)
-        return ViewNode(content: DividerContent(axis: axis, color: color))
+        return ContentNode(content: DividerContent(axis: axis, color: color))
     }
 }
 

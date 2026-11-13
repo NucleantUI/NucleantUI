@@ -29,7 +29,7 @@ extension ScrollView: BuiltinView {
         // a `Spacer` inside doesn't stretch along the enclosing stack's.
         inner.stackAxis = nil
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: ScrollContent(axes: axes, offset: $offset),
             children: [child]
         )

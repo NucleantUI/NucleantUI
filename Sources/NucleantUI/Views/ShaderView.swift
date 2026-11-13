@@ -495,7 +495,7 @@ extension Shader: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         // Read once per build: compiling is the function's business, and
         // the slot compares the words it is handed every pass.
-        ViewNode(content: ShaderModuleContent(
+        ContentNode(content: ShaderModuleContent(
             path: context.path,
             words: function.spirv,
             input: function.input,

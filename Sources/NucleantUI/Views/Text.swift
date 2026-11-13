@@ -206,7 +206,7 @@ extension Text: BuiltinView {
                 minimumScaleFactor: settings.minimumScaleFactor
             )
         )
-        return ViewNode(content: TextContent(
+        return ContentNode(content: TextContent(
             input: input,
             style: style,
             alignment: alignment ?? environment.multilineTextAlignment,

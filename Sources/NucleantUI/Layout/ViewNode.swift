@@ -9,11 +9,22 @@
 //  testing without threading everything through inout, and so that graft is
 //  a pointer swap.
 //
+//  What a node *is* — its layout and drawing — is its content, held by the
+//  subclass `ContentNode<C>` in the node itself, its type known there, so
+//  every call into it is made for that type. What a node can do for the
+//  walks over the tree — be hit, take keys, clip what is under it — is read
+//  off the content once, when the node is made, into `traits`.
+//
 
 @MainActor
-final class ViewNode {
+class ViewNode {
 
-    let content: any NodeContent
+    /// What this node can do, read off its content when it was made.
+    let traits: NodeTraits
+
+    /// `traits` of this node and of every node below it: a walk looking for
+    /// one kind of node passes over a subtree that has none.
+    private(set) var subtreeTraits: NodeTraits
 
     private(set) var children: [ViewNode]
 
@@ -114,9 +125,12 @@ final class ViewNode {
     /// children it was worked out for change.
     var stackCache: StackRunCache?
 
-    init(content: any NodeContent, children: [ViewNode] = []) {
-        self.content = content
+    fileprivate init(traits: NodeTraits, children: [ViewNode]) {
+        self.traits = traits
         self.children = children
+        var subtree = traits
+        for child in children { subtree.formUnion(child.subtreeTraits) }
+        self.subtreeTraits = subtree
         if PerfTrace.isEnabled { PerfTrace.nodesBuilt += 1 }
         for (index, child) in children.enumerated() {
             child.parent = self
@@ -133,7 +147,52 @@ final class ViewNode {
         children[index] = replacement
         replacement.parent = self
         replacement.indexInParent = index
+        subtreeTraitsChanged()
     }
+
+    /// Work `subtreeTraits` out again from the children, here and above,
+    /// as far up as it changes.
+    private func subtreeTraitsChanged() {
+        var node: ViewNode? = self
+        while let current = node {
+            var subtree = current.traits
+            for child in current.children { subtree.formUnion(child.subtreeTraits) }
+            guard subtree != current.subtreeTraits else { return }
+            current.subtreeTraits = subtree
+            node = current.parent
+        }
+    }
+
+    // MARK: - The content
+
+    /// The content, as an existential — boxed on each access, for the few
+    /// questions asked of it by its type or of one of its abilities a trait
+    /// says it has.
+    var content: any NodeContent { fatalError("ViewNode is abstract") }
+
+    /// The content, if it is a `T` — asked of the content where it is
+    /// stored, without boxing it as `content` does.
+    func content<T>(as type: T.Type) -> T? { nil }
+
+    /// The content's answers, made for its type by `ContentNode`.
+    fileprivate func contentSizeThatFits(_ proposal: ProposedSize) -> Size { fatalError("ViewNode is abstract") }
+
+    fileprivate func contentPlace(in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        fatalError("ViewNode is abstract")
+    }
+
+    fileprivate func contentFlexibility(along axis: Axis) -> LayoutPriorityClass { fatalError("ViewNode is abstract") }
+
+    /// The children in paint order, when the content says it isn't
+    /// `children` — see `NodeContent.hitTestOrder`.
+    func contentHitTestOrder() -> [ViewNode]? { nil }
+
+    /// The content's value for preference `key` — see `NodeContent.preference`.
+    func contentPreference<K: PreferenceKey>(_ key: K.Type, below: K.Value?) -> K.Value? { below }
+
+    /// True when the node contributes its children to the parent's layout
+    /// rather than laying them out itself — see `NodeContent.isTransparent`.
+    var isTransparent: Bool { traits.contains(.transparent) }
 
     /// Discard measurements that the swap above may have falsified.
     ///
@@ -150,7 +209,9 @@ final class ViewNode {
             // Preferences reduced from the old subtree, and a custom
             // layout's cache built from it, are stale the same way.
             current.preferenceCache.removeAll(keepingCapacity: true)
-            (current.content as? LayoutCacheOwner)?.subviewsChanged()
+            if current.traits.contains(.layoutCacheOwner) {
+                (current.content as? LayoutCacheOwner)?.subviewsChanged()
+            }
             node = current.parent
         }
     }
@@ -166,7 +227,7 @@ final class ViewNode {
     var layoutChildren: [ViewNode] {
         if let flattenedChildren { return flattenedChildren }
         var isFlat = true
-        for child in children where child.isLeaving || child.content.isTransparent {
+        for child in children where child.isLeaving || child.isTransparent {
             isFlat = false
             break
         }
@@ -177,7 +238,7 @@ final class ViewNode {
             var flattened: [ViewNode] = []
             flattened.reserveCapacity(children.count)
             for child in children where !child.isLeaving {
-                if child.content.isTransparent {
+                if child.isTransparent {
                     flattened.append(contentsOf: child.layoutChildren)
                 } else {
                     flattened.append(child)
@@ -198,7 +259,7 @@ final class ViewNode {
         while let current = node {
             current.flattenedChildren = nil
             current.stackCache = nil
-            guard current.content.isTransparent else { return }
+            guard current.isTransparent else { return }
             node = current.parent
         }
     }
@@ -211,7 +272,7 @@ final class ViewNode {
     /// worth a second layout mode — write the modifier inside the group.
     var singleChild: ViewNode? {
         for child in children where !child.isLeaving {
-            if !child.content.isTransparent { return child }
+            if !child.isTransparent { return child }
             if let inner = child.singleChild { return inner }
         }
         return nil
@@ -222,12 +283,12 @@ final class ViewNode {
         switch axis {
         case .horizontal:
             if let cached = horizontalFlexibility { return cached }
-            let result = content.flexibility(along: axis, node: self)
+            let result = contentFlexibility(along: axis)
             horizontalFlexibility = result
             return result
         case .vertical:
             if let cached = verticalFlexibility { return cached }
-            let result = content.flexibility(along: axis, node: self)
+            let result = contentFlexibility(along: axis)
             verticalFlexibility = result
             return result
         }
@@ -236,7 +297,7 @@ final class ViewNode {
     func sizeThatFits(_ proposal: ProposedSize) -> Size {
         if let cached = measurements.size(for: proposal) { return cached }
         if PerfTrace.isEnabled { PerfTrace.sizeCalls += 1 }
-        let size = content.sizeThatFits(proposal, node: self)
+        let size = contentSizeThatFits(proposal)
         measurements.insert(size, for: proposal)
         return size
     }
@@ -269,7 +330,7 @@ final class ViewNode {
         }
         transform = context.transform
         self.proposal = proposal
-        content.place(node: self, in: rect, proposal: proposal, context: context, into: &list)
+        contentPlace(in: rect, proposal: proposal, context: context, into: &list)
         if let store, store.hasExits {
             placeLeavingChildren(context: context, store: store, into: &list)
         }
@@ -332,6 +393,104 @@ struct MeasurementCache {
         count = 0
         next = 0
         older?.removeAll(keepingCapacity: true)
+    }
+}
+
+/// A node with its content: the content stored in the node, and every call
+/// into it made for its type.
+@MainActor
+final class ContentNode<C: NodeContent>: ViewNode {
+    let nodeContent: C
+
+    init(content: C, children: [ViewNode] = []) {
+        self.nodeContent = content
+        super.init(traits: NodeTraits(of: content), children: children)
+    }
+
+    override var content: any NodeContent { nodeContent }
+
+    override func content<T>(as type: T.Type) -> T? { nodeContent as? T }
+
+    override fileprivate func contentSizeThatFits(_ proposal: ProposedSize) -> Size {
+        nodeContent.sizeThatFits(proposal, node: self)
+    }
+
+    override fileprivate func contentPlace(in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        nodeContent.place(node: self, in: rect, proposal: proposal, context: context, into: &list)
+    }
+
+    override fileprivate func contentFlexibility(along axis: Axis) -> LayoutPriorityClass {
+        nodeContent.flexibility(along: axis, node: self)
+    }
+
+    override func contentHitTestOrder() -> [ViewNode]? {
+        nodeContent.hitTestOrder(node: self)
+    }
+
+    override func contentPreference<K: PreferenceKey>(_ key: K.Type, below: K.Value?) -> K.Value? {
+        nodeContent.preference(key, below: below)
+    }
+}
+
+/// What a node can do, for the walks over the tree: one bit per ability its
+/// content has, read when the node is made. A content is a value that does
+/// not change, so neither do they.
+struct NodeTraits: OptionSet, Sendable {
+    let rawValue: UInt32
+
+    static let transparent = NodeTraits(rawValue: 1 << 0)
+    static let hitTarget = NodeTraits(rawValue: 1 << 1)
+    static let dragSource = NodeTraits(rawValue: 1 << 2)
+    static let dropTarget = NodeTraits(rawValue: 1 << 3)
+    static let contextMenuSource = NodeTraits(rawValue: 1 << 4)
+    static let hoverTarget = NodeTraits(rawValue: 1 << 5)
+    static let textureInput = NodeTraits(rawValue: 1 << 6)
+    static let focusTarget = NodeTraits(rawValue: 1 << 7)
+    static let gestureAttachment = NodeTraits(rawValue: 1 << 8)
+    /// `.allowsHitTesting(false)`: nothing here or below is hit.
+    static let blocksHitTesting = NodeTraits(rawValue: 1 << 9)
+    static let hitShape = NodeTraits(rawValue: 1 << 10)
+    static let focusBinding = NodeTraits(rawValue: 1 << 11)
+    static let keyPressHandler = NodeTraits(rawValue: 1 << 12)
+    static let parked = NodeTraits(rawValue: 1 << 13)
+    static let clipsChildren = NodeTraits(rawValue: 1 << 14)
+    /// A layout that keeps a cache made from the subviews below it.
+    static let layoutCacheOwner = NodeTraits(rawValue: 1 << 15)
+    /// A layout with a say in the spacing it asks of its neighbours.
+    static let spacingSource = NodeTraits(rawValue: 1 << 16)
+    /// Keeps its new size while it moves rather than passing through the
+    /// sizes in between — see `NodeContent.animatesSize`.
+    static let keepsSizeWhileMoving = NodeTraits(rawValue: 1 << 17)
+    /// A container's slot that a transition stands on (`TransitionSlotContent`).
+    static let transitionSlot = NodeTraits(rawValue: 1 << 18)
+
+    init(rawValue: UInt32) {
+        self.rawValue = rawValue
+    }
+
+    @MainActor
+    init<C: NodeContent>(of content: C) {
+        var traits: NodeTraits = []
+        if content.isTransparent { traits.insert(.transparent) }
+        if content.hitTarget != nil { traits.insert(.hitTarget) }
+        if content.dragSource != nil { traits.insert(.dragSource) }
+        if content.dropTarget != nil { traits.insert(.dropTarget) }
+        if content.contextMenuSource != nil { traits.insert(.contextMenuSource) }
+        if content.hoverTarget != nil { traits.insert(.hoverTarget) }
+        if content.textureInput != nil { traits.insert(.textureInput) }
+        if content.focusTarget != nil { traits.insert(.focusTarget) }
+        if content.gestureAttachment != nil { traits.insert(.gestureAttachment) }
+        if !content.allowsHitTesting { traits.insert(.blocksHitTesting) }
+        if content.hitShape != nil { traits.insert(.hitShape) }
+        if content.focusBinding != nil { traits.insert(.focusBinding) }
+        if content.keyPressHandler != nil { traits.insert(.keyPressHandler) }
+        if content.isParked { traits.insert(.parked) }
+        if content.clipsChildren { traits.insert(.clipsChildren) }
+        if !content.animatesSize { traits.insert(.keepsSizeWhileMoving) }
+        if C.self is any LayoutCacheOwner.Type { traits.insert(.layoutCacheOwner) }
+        if C.self is any LayoutSpacingSource.Type { traits.insert(.spacingSource) }
+        if C.self == TransitionSlotContent.self { traits.insert(.transitionSlot) }
+        self = traits
     }
 }
 
@@ -624,10 +783,10 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         // parent's layout (a `Group`, a `ForEach`): a node is one laid-out
         // box.
         isBoundary = (wasBoundary || context.isDirtyHere || DependencyTracker.shared.currentViewHasReads)
-            && !node.content.isTransparent
+            && !node.isTransparent
         if isBoundary {
             let body = node
-            node = ViewNode(
+            node = ContentNode(
                 content: RenderBoundaryContent(key: RenderNodeKey(path: path, identity: identity)),
                 children: [body]
             )

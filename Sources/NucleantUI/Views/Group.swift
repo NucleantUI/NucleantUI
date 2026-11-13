@@ -20,6 +20,6 @@ public struct Group<Content: View> {
 extension Group: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let child = context.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: GroupContent(), children: [child])
+        return ContentNode(content: GroupContent(), children: [child])
     }
 }

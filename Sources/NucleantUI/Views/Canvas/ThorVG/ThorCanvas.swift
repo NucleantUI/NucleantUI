@@ -71,7 +71,7 @@ public struct ThorCanvas {
 
 extension ThorCanvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: ThorCanvasContent(
+        ContentNode(content: ThorCanvasContent(
             key: RenderNodeKey(path: context.path, identity: context.viewIdentity, id: nodeID),
             path: context.path,
             onInit: onInit,

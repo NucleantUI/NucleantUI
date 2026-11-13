@@ -84,7 +84,7 @@ final class TransitionSlot {
         self.index = index
         self.content = content
         effects = TransitionEffects([])
-        self.node = ViewNode(content: TransitionSlotContent(content: content, effects: effects), children: [body])
+        self.node = ContentNode(content: TransitionSlotContent(content: content, effects: effects), children: [body])
         self.transition = transition
     }
 
@@ -94,7 +94,7 @@ final class TransitionSlot {
         self.index = index
         self.content = content
         self.effects = TransitionEffects(effects)
-        self.node = ViewNode(content: TransitionSlotContent(content: content, effects: self.effects), children: [content])
+        self.node = ContentNode(content: TransitionSlotContent(content: content, effects: self.effects), children: [content])
         self.transition = transition
     }
 
@@ -200,7 +200,8 @@ extension ViewNode {
     /// node itself otherwise. What a container that looks at what kind of
     /// children it has — a `Grid` finding its rows — looks at.
     var underTransition: ViewNode {
-        guard let slot = content as? TransitionSlotContent, let child = slot.content.singleChild else {
+        guard traits.contains(.transitionSlot),
+              let slot = content(as: TransitionSlotContent.self), let child = slot.content.singleChild else {
             return self
         }
         return child.underTransition
@@ -266,7 +267,7 @@ extension BuildContext {
         let node = child.node
         // A group dissolves into the container's layout: there is no one
         // view to move.
-        guard !node.content.isTransparent else { return node }
+        guard !node.isTransparent else { return node }
         let transition = node.transitionTrait ?? .opacity
         let box = transition.box
         guard !box.isIdentity else { return node }
@@ -316,7 +317,7 @@ extension BuildContext {
         built: [(index: Int, node: ViewNode, isNew: Bool)],
         into slots: inout [Int: TransitionSlot]
     ) {
-        guard !child.content.isTransparent else { return }
+        guard !child.isTransparent else { return }
         let transition = child.transitionTrait ?? .opacity
         let box = transition.box
         guard !box.isIdentity, transaction.animation != nil || box.animatesRemoval else { return }
@@ -384,7 +385,7 @@ extension BuildContext {
         transition: AnyTransition,
         phase: TransitionPhase
     ) -> TransitionSlot {
-        let content = ViewNode(content: TransitionContentContent(), children: [child])
+        let content = ContentNode(content: TransitionContentContent(), children: [child])
         if let effects = transition.box.effects(in: phase) {
             return TransitionSlot(index: index, content: content, effects: effects, transition: transition)
         }
@@ -460,7 +461,7 @@ extension ViewNode {
         for child in children {
             if child.isLeaving {
                 child.placeLeaving(context: context, store: store, into: &list)
-            } else if child.content.isTransparent {
+            } else if child.isTransparent {
                 child.placeLeavingChildren(context: context, store: store, into: &list)
             }
         }

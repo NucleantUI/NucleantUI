@@ -56,7 +56,7 @@ struct NodeCacheTests {
 
     @Test func eachProposalIsMeasuredOnce() {
         let questions = Questions()
-        let node = ViewNode(content: CountingContent(questions: questions))
+        let node = ContentNode(content: CountingContent(questions: questions))
         let asked = proposals(6) + [.unspecified, .zero, .infinity]
         for proposal in asked {
             #expect(node.sizeThatFits(proposal) == expected(proposal))
@@ -70,7 +70,7 @@ struct NodeCacheTests {
 
     @Test func twentyProposalsAreAllKept() {
         let questions = Questions()
-        let node = ViewNode(content: CountingContent(questions: questions))
+        let node = ContentNode(content: CountingContent(questions: questions))
         let asked = proposals(20)
         for proposal in asked { _ = node.sizeThatFits(proposal) }
         for proposal in asked {
@@ -81,7 +81,7 @@ struct NodeCacheTests {
 
     @Test func pastTwentyTheOldestAreAskedAgain() {
         let questions = Questions()
-        let node = ViewNode(content: CountingContent(questions: questions))
+        let node = ContentNode(content: CountingContent(questions: questions))
         let asked = proposals(21)
         for proposal in asked { _ = node.sizeThatFits(proposal) }
         #expect(questions.sizes == 21)
@@ -96,7 +96,7 @@ struct NodeCacheTests {
 
     @Test func aChangeBelowDropsTheSizesAndTheFlexibilities() {
         let questions = Questions()
-        let node = ViewNode(content: CountingContent(questions: questions))
+        let node = ContentNode(content: CountingContent(questions: questions))
         let asked = proposals(6)
         for proposal in asked { _ = node.sizeThatFits(proposal) }
         #expect(node.flexibility(along: .horizontal) == .flexible)

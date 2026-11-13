@@ -51,7 +51,7 @@ extension TextureView: BuiltinView where Source.Node == NucleantRenderNode {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let source = self.source
         let send: @MainActor (TextureInputEvent) -> Void = { source.textureInput($0) }
-        return ViewNode(content: TextureContent(
+        return ContentNode(content: TextureContent(
             key: RenderNodeKey(path: context.path, identity: context.viewIdentity, id: nodeID),
             sourceID: ObjectIdentifier(source),
             didChange: { source.textureDidChange($0) },

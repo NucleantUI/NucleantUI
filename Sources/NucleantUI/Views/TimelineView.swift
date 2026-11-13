@@ -211,8 +211,8 @@ extension TimelineView: BuiltinView {
 
         // Redrawn on its own clock: a node of its own, so the redraw lands
         // there rather than in whatever encloses it.
-        guard !node.content.isTransparent else { return node }
-        let boundary = ViewNode(
+        guard !node.isTransparent else { return node }
+        let boundary = ContentNode(
             content: RenderBoundaryContent(key: RenderNodeKey(path: path, identity: context.viewIdentity)),
             children: [node]
         )

@@ -86,7 +86,7 @@ final class DragSession {
     @discardableResult
     func move(to point: Point, in root: ViewNode?) -> Bool {
         location = point
-        let found = root?.hitTest(point) { node -> DropTarget? in
+        let found = root?.hitTest(point, lookingFor: .dropTarget) { node -> DropTarget? in
             guard let target = node.content.dropTarget, target.accepts(payload) else { return nil }
             return target
         }

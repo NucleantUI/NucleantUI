@@ -78,8 +78,8 @@ extension ViewNode {
     /// Every enabled tab stop in this subtree, in the order they are laid
     /// out — what Tab walks through.
     func tabStops(into stops: inout [FocusTarget]) {
-        guard !content.isParked, removal == nil else { return }
-        if let target = content.focusTarget, target.isTabStop, target.isEnabled {
+        guard subtreeTraits.contains(.focusTarget), !traits.contains(.parked), removal == nil else { return }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.isTabStop, target.isEnabled {
             stops.append(target)
         }
         for child in children {

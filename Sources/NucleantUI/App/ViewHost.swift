@@ -557,9 +557,9 @@ public final class ViewHost {
             scrollTarget = scrollsOnDrag
                 ? rootNode?.hitTest(point, matching: { $0.handlesScroll })
                 : nil
-            dragSourceHit = rootNode?.hitTest(point) { $0.content.dragSource }
+            dragSourceHit = rootNode?.hitTest(point, lookingFor: .dragSource) { $0.content.dragSource }
             contextMenuHit = opensContextMenuOnLongPress
-                ? rootNode?.hitTest(point) { $0.content.contextMenuSource }
+                ? rootNode?.hitTest(point, lookingFor: .contextMenuSource) { $0.content.contextMenuSource }
                 : nil
             if contextMenuHit != nil || (dragSourceHit != nil && scrollTarget != nil) {
                 // A finger resting on a view with a menu opens it; on a
@@ -845,7 +845,7 @@ public final class ViewHost {
     /// that was, that it no longer is. Same path, same node — the object
     /// is refreshed so the closure called is the current one.
     private func updateHover(at point: Point) {
-        let found = rootNode?.hitTest(point) { $0.content.hoverTarget }
+        let found = rootNode?.hitTest(point, lookingFor: .hoverTarget) { $0.content.hoverTarget }
         guard found?.value.path != hovered?.value.path else {
             hovered = found
             return
@@ -858,7 +858,7 @@ public final class ViewHost {
     /// Tell the `TextureView` under `point` where the pointer is, and the
     /// one it was over, if another, that it left.
     private func updateTextureHover(at point: Point) {
-        let found = rootNode?.hitTest(point) { $0.content.textureInput }
+        let found = rootNode?.hitTest(point, lookingFor: .textureInput) { $0.content.textureInput }
         if let previous = textureHovered, previous.value.path != found?.value.path {
             previous.value.send(.pointerExited)
         }
@@ -871,7 +871,7 @@ public final class ViewHost {
     /// A press at `point`: the view under it that takes keys, if any, gets
     /// them; the one that had them is told it lost them.
     private func updateFocus(at point: Point) {
-        let found = rootNode?.hitTest(point) { node in
+        let found = rootNode?.hitTest(point, lookingFor: .focusTarget) { node in
             node.content.focusTarget.flatMap { $0.isEnabled ? $0 : nil }
         }?.value
         guard found?.path != focusedPath else { return }
@@ -888,7 +888,9 @@ public final class ViewHost {
     /// as the path is long; the tree is walked only when that node holds no
     /// such target — the view left, or is on its way out.
     private func focusNode(at path: [Int]) -> ViewNode? {
-        if let node = records.node(for: path), node.content.focusTarget?.path == path { return node }
+        if let node = records.node(for: path), node.traits.contains(.focusTarget), node.content.focusTarget?.path == path {
+            return node
+        }
         return rootNode?.focusNode(at: path)
     }
 
@@ -923,7 +925,7 @@ public final class ViewHost {
     /// pointer, or one a press there gives the keys to.
     func takesPress(at point: Point) -> Bool {
         if takesPointer(at: point) { return true }
-        return rootNode?.hitTest(point) { node in
+        return rootNode?.hitTest(point, lookingFor: .focusTarget) { node in
             node.content.focusTarget.flatMap { $0.isEnabled ? $0 : nil }
         } != nil
     }
@@ -1000,7 +1002,9 @@ public final class ViewHost {
             return false
         }
         for scope in node.focusScope {
-            if let handler = scope.content.keyPressHandler, handler.handle(press) { return true }
+            if scope.traits.contains(.keyPressHandler), let handler = scope.content.keyPressHandler, handler.handle(press) {
+                return true
+            }
         }
         return false
     }
@@ -1031,7 +1035,7 @@ public final class ViewHost {
         var holding: [ObjectIdentifier: FocusBindingRecord] = [:]
         if let path = focusedPath, let node = focusNode(at: path) {
             for scope in node.focusScope {
-                if let record = scope.content.focusBinding, holding[record.group] == nil {
+                if scope.traits.contains(.focusBinding), let record = scope.content.focusBinding, holding[record.group] == nil {
                     holding[record.group] = record
                 }
             }
@@ -1112,7 +1116,7 @@ public final class ViewHost {
         if contextMenu != nil {
             dismissContextMenu()
         }
-        guard let hit = rootNode?.hitTest(point, select: { $0.content.contextMenuSource }) else {
+        guard let hit = rootNode?.hitTest(point, lookingFor: .contextMenuSource, select: { $0.content.contextMenuSource }) else {
             InputTrace.log("right click \(point) — no menu")
             return
         }

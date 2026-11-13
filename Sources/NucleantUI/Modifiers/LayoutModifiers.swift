@@ -72,7 +72,7 @@ extension _ModifierView: BuiltinView where Modifier: PrimitiveModifier {
         modifier.modifyEnvironment(&inner.environment)
         let nodeContent = modifier.makeContent(&inner)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        let node = ViewNode(content: nodeContent, children: [child])
+        let node = ContentNode(content: nodeContent, children: [child])
         // A `.transition` belongs to the whole modified view, wherever in
         // its chain of modifiers it was written.
         node.transitionTrait = nodeContent.transitionTrait ?? child.transitionTrait
@@ -119,7 +119,7 @@ extension _DecoratedView: BuiltinView {
         // `children[1]` directly and must not see them flattened.
         let contentNode = context.child(0) { ctx in buildNode(content, &ctx) }
         let decorationNode = context.child(1) { ctx in buildNode(decoration, &ctx) }
-        let node = ViewNode(
+        let node = ContentNode(
             content: DecorationContent(order: order, alignment: alignment),
             children: [contentNode, decorationNode]
         )

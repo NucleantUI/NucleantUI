@@ -64,8 +64,8 @@ extension GeometryReader: BuiltinView {
         // Never placed: there is nothing to build it for yet, and nothing
         // standing inside to keep — placement builds it.
         let child = log.current.map { reader.build(at: $0, context: inner) }
-            ?? ViewNode(content: GroupContent())
-        return ViewNode(content: reader, children: [child])
+            ?? ContentNode(content: GroupContent())
+        return ContentNode(content: reader, children: [child])
     }
 }
 

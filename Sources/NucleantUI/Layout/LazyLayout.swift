@@ -117,12 +117,12 @@ extension ViewNode {
     /// How many layout children this node stands for — what an item built
     /// under a lazy cursor adds to its count.
     var lazyLayoutCount: Int {
-        content.isTransparent ? layoutChildren.count : 1
+        isTransparent ? layoutChildren.count : 1
     }
 
     /// Tag every node `self` flattens into as part of one element.
     func tagLazyElement(_ tag: LazyElementTag) {
-        if content.isTransparent {
+        if isTransparent {
             for child in children where !child.isLeaving {
                 child.tagLazyElement(tag)
             }
@@ -170,14 +170,14 @@ extension ForEach {
 
         var children: [ViewNode] = []
         if lower > 0 {
-            children.append(ViewNode(content: LazyGapContent(owner: cursor.owner, start: start, count: lower)))
+            children.append(ContentNode(content: LazyGapContent(owner: cursor.owner, start: start, count: lower)))
         }
         children += rows.transitionChildren(built)
         if upper < count {
-            children.append(ViewNode(content: LazyGapContent(owner: cursor.owner, start: start + upper, count: count - upper)))
+            children.append(ContentNode(content: LazyGapContent(owner: cursor.owner, start: start + upper, count: count - upper)))
         }
         cursor.position = start + count
-        return ViewNode(content: GroupContent(), children: children)
+        return ContentNode(content: GroupContent(), children: children)
     }
 
     /// Every element built, under the cursor: each is a section whose own
@@ -193,7 +193,7 @@ extension ForEach {
             }
             return (index: index, node: node, isNew: isNew)
         }
-        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
+        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }
 
@@ -218,7 +218,7 @@ extension ViewNode {
         var items: [LazyItem] = []
         var next = 0
         for child in layoutChildren {
-            if let gap = child.content as? LazyGapContent, gap.owner == owner {
+            if let gap = child.content(as: LazyGapContent.self), gap.owner == owner {
                 items.append(LazyItem(kind: .gap, units: gap.units))
                 next = gap.units.upperBound
             } else if let tag = child.lazyTag, tag.owner == owner {

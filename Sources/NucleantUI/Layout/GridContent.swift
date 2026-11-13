@@ -140,8 +140,8 @@ struct GridContent: NodeContent {
     /// row arriving or leaving (placed through it, so the row's cells move
     /// and fade with it).
     private static func gridRow(in node: ViewNode) -> (ViewNode, GridRowContent)? {
-        if let content = node.content as? GridRowContent { return (node, content) }
-        if node.content is RenderBoundaryContent, let child = node.singleChild {
+        if let content = node.content(as: GridRowContent.self) { return (node, content) }
+        if node.content(as: RenderBoundaryContent.self) != nil, let child = node.singleChild {
             return gridRow(in: child)
         }
         let child = node.underTransition

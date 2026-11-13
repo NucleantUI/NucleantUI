@@ -59,7 +59,7 @@ extension ViewNode {
         defer { layoutRect = target }
 
         if store.isCommitPass, let animation = context.animation, let last = layoutRect, last != target {
-            let resizes = content.animatesSize
+            let resizes = !traits.contains(.keepsSizeWhileMoving)
             let offset = NodeMotion.Offset(
                 AnimatablePair(last.midX - target.midX, last.midY - target.midY),
                 AnimatablePair(resizes ? last.width - target.width : 0, resizes ? last.height - target.height : 0)
@@ -84,7 +84,7 @@ extension ViewNode {
         } else if store.isCommitPass, context.animation == nil, let last = layoutRect, last != target {
             // Moved at once: under a drag, note where to, and when.
             if store.transaction.tracksVelocity {
-                let resizes = content.animatesSize
+                let resizes = !traits.contains(.keepsSizeWhileMoving)
                 motion.sampler.add(NodeMotion.Offset(
                     AnimatablePair(target.midX, target.midY),
                     AnimatablePair(resizes ? target.width : 0, resizes ? target.height : 0)
@@ -127,7 +127,7 @@ extension ViewNode {
     /// replaces a view (an `if` whose other branch is still exiting) would
     /// otherwise slide its new contents over from where the old stood.
     func inheritMotion(from old: ViewNode) {
-        guard layoutRect == nil, !content.isTransparent else { return }
+        guard layoutRect == nil, !isTransparent else { return }
         layoutRect = old.layoutRect
         motion = old.motion
     }

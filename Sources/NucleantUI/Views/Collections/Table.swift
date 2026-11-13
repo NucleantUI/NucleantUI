@@ -640,7 +640,7 @@ extension _TableRowCells: BuiltinView {
         let children = cells.cells.enumerated().map { index, cell in
             inner.child(index) { ctx in cell(value, owner, &ctx) }
         }
-        return ViewNode(
+        return ContentNode(
             content: TableCellsContent(layout: cells.layout, verticalPadding: TableLook.rowPadding, minimumHeight: 22),
             children: children
         )
@@ -750,7 +750,7 @@ extension _TableHeaderCells: BuiltinView {
         let children = cells.enumerated().map { index, cell in
             inner.child(index) { buildNode(cell, &$0) }
         }
-        return ViewNode(
+        return ContentNode(
             content: TableHeaderContent(layout: layout),
             children: children
         )

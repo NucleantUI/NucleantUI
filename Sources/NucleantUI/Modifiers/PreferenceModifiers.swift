@@ -87,7 +87,7 @@ struct _PreferenceChangeView<K: PreferenceKey, Content: View> where K.Value: Equ
 extension _PreferenceChangeView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let child = context.child(0) { ctx in buildNode(content, &ctx) }
-        let node = ViewNode(content: PreferenceObserverContent(), children: [child])
+        let node = ContentNode(content: PreferenceObserverContent(), children: [child])
         node.transitionTrait = child.transitionTrait
         node.gridCellTraits = child.gridCellTraits
         node.layoutValues = child.layoutValues

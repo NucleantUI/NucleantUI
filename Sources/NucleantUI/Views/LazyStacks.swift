@@ -60,7 +60,7 @@ extension LazyVStack: BuiltinView {
         inner.stackAxis = .vertical
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: LazyStackContent(
                 axis: .vertical,
                 alignment: Alignment(horizontal: alignment, vertical: .center),
@@ -111,7 +111,7 @@ extension LazyHStack: BuiltinView {
         inner.stackAxis = .horizontal
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: LazyStackContent(
                 axis: .horizontal,
                 alignment: Alignment(horizontal: .center, vertical: alignment),

@@ -67,7 +67,7 @@ extension ViewNode {
         }
         // Each node says what flows up through it — see
         // `NodeContent.preference(_:below:)`.
-        combined = content.preference(key, below: combined)
+        combined = contentPreference(key, below: combined)
         preferenceCache[id] = OpaqueValue(combined)
         return combined
     }

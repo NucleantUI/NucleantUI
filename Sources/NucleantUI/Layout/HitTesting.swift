@@ -75,7 +75,7 @@ extension ViewNode {
     /// The frontmost node under `point` (window coordinates) whose target
     /// satisfies `matching`.
     func hitTest(_ point: Point, matching: (HitTarget) -> Bool) -> HitResult? {
-        hitTest(point) { node in
+        hitTest(point, lookingFor: .hitTarget) { node in
             guard let target = node.content.hitTarget, target.isEnabled, matching(target) else {
                 return nil
             }
@@ -88,24 +88,31 @@ extension ViewNode {
     ///
     /// Depth-first with children reversed: the display list paints children in
     /// order, so the last one drawn is on top and must be tested first.
-    func hitTest<Value>(_ point: Point, select: (ViewNode) -> Value?) -> Hit<Value>? {
+    ///
+    /// `wanted` is what a node `select` answers for has — a hover target, a
+    /// drop target. A subtree with none of it is passed over at once, and
+    /// `select` is asked only of a node with some; empty, every node is
+    /// asked.
+    func hitTest<Value>(_ point: Point, lookingFor wanted: NodeTraits = [], select: (ViewNode) -> Value?) -> Hit<Value>? {
+        if !wanted.isEmpty, subtreeTraits.isDisjoint(with: wanted) { return nil }
         // Off screen, whatever the frames left over from an earlier pass say
         // — or on its way out, drawn but no longer there.
-        guard !content.isParked, removal == nil else { return nil }
+        guard !traits.contains(.parked), removal == nil else { return nil }
         // `.allowsHitTesting(false)`: nothing here can be hit.
-        guard content.allowsHitTesting else { return nil }
+        guard !traits.contains(.blocksHitTesting) else { return nil }
         // A clipping node's children only exist inside its frame.
-        if content.clipsChildren {
+        if traits.contains(.clipsChildren) {
             guard let local = mapIntoLocalSpace(point), frame.contains(local) else { return nil }
         }
         // Nor, under a `.contentShape`, outside the shape.
-        if let shape = content.hitShape {
+        if traits.contains(.hitShape), let shape = content.hitShape {
             guard let local = mapIntoLocalSpace(point), shape.contains(local, in: frame) else { return nil }
         }
-        for child in (content.hitTestOrder(node: self) ?? children).reversed() {
-            if let hit = child.hitTest(point, select: select) { return hit }
+        for child in (contentHitTestOrder() ?? children).reversed() {
+            if let hit = child.hitTest(point, lookingFor: wanted, select: select) { return hit }
         }
 
+        if !wanted.isEmpty, traits.isDisjoint(with: wanted) { return nil }
         guard let value = select(self) else { return nil }
         // Where its content is drawn, through any effect between the two.
         let drawn = contentTransform
@@ -150,8 +157,8 @@ extension ViewNode {
             let inner = probe.layoutChildren
             guard inner.count == 1 else { return true }
             probe = inner[0]
-            if !probe.content.allowsHitTesting { return false }
-            if let shape = probe.content.hitShape {
+            if probe.traits.contains(.blocksHitTesting) { return false }
+            if probe.traits.contains(.hitShape), let shape = probe.content.hitShape {
                 guard let local = probe.mapIntoLocalSpace(point) else { return false }
                 return shape.contains(local, in: probe.frame)
             }

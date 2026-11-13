@@ -43,7 +43,7 @@ extension ViewNode {
 
     /// The press chain at `point` (window coordinates).
     func pressChain(at point: Point) -> PressChain {
-        let leaf = hitTest(point) { node -> ViewNode? in
+        let leaf = hitTest(point, lookingFor: [.hitTarget, .gestureAttachment]) { node -> ViewNode? in
             if let target = node.content.hitTarget, target.isEnabled, target.handlesPointer { return node }
             if let attachment = node.content.gestureAttachment, attachment.includesGesture { return node }
             return nil
@@ -58,12 +58,13 @@ extension ViewNode {
         }
         for (index, node) in lineage.enumerated() {
             let depth = lineage.count - 1 - index
-            if chain.press == nil, let target = node.content.hitTarget, target.isEnabled, target.handlesPointer,
+            if chain.press == nil, node.traits.contains(.hitTarget), let target = node.content.hitTarget,
+               target.isEnabled, target.handlesPointer,
                let hit = node.hitRecord(target, at: point) {
                 chain.press = hit
                 chain.pressDepth = depth
             }
-            guard let attachment = node.content.gestureAttachment else { continue }
+            guard node.traits.contains(.gestureAttachment), let attachment = node.content.gestureAttachment else { continue }
             // `including: .gesture` — what is inside does not take part.
             if !attachment.includesSubviews {
                 chain = PressChain()
@@ -92,7 +93,10 @@ extension ViewNode {
     /// The gesture attachment at `path` in this subtree, if that view still
     /// stands.
     fileprivate func gestureAttachment(at path: [Int]) -> GestureAttachment? {
-        if let attachment = content.gestureAttachment, attachment.path == path { return attachment }
+        guard subtreeTraits.contains(.gestureAttachment) else { return nil }
+        if traits.contains(.gestureAttachment), let attachment = content.gestureAttachment, attachment.path == path {
+            return attachment
+        }
         for child in children {
             if let found = child.gestureAttachment(at: path) { return found }
         }
@@ -546,7 +550,9 @@ final class GestureArena {
     func refreshAttachments(from root: ViewNode, records: RebuildRecords) {
         for participant in participants.values where participant.isAlive && !participant.isPress {
             guard let path = participant.attachment?.path else { continue }
-            let recorded = records.node(for: path)?.content.gestureAttachment
+            let recorded = records.node(for: path).flatMap { node in
+                node.traits.contains(.gestureAttachment) ? node.content.gestureAttachment : nil
+            }
             guard let current = recorded?.path == path ? recorded : root.gestureAttachment(at: path) else { continue }
             participant.attachment = current
         }

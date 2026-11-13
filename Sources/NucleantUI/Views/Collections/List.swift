@@ -1071,7 +1071,7 @@ extension _CollectionFocus: BuiltinView {
             isTabStop: true
         )
         let child = context.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: CollectionFocusContent(focus: target), children: [child])
+        return ContentNode(content: CollectionFocusContent(focus: target), children: [child])
     }
 }
 

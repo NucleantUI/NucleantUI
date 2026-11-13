@@ -317,7 +317,7 @@ extension _SliderTrack: BuiltinView {
                 &ctx
             )
         }
-        return ViewNode(
+        return ContentNode(
             content: SliderTrackContent(fraction: fraction, knobDiameter: knobDiameter),
             children: [track, filled, knob]
         )

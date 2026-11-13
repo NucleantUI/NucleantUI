@@ -36,7 +36,7 @@ public struct Image {
 
 extension Image: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: ImageContent(image: image, isResizable: isResizable))
+        ContentNode(content: ImageContent(image: image, isResizable: isResizable))
     }
 }
 

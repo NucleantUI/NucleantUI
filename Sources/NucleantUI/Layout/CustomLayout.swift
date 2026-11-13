@@ -199,6 +199,7 @@ public struct LayoutSubview: Equatable {
         // A subview arriving or leaving asks what the view under its
         // transition asks.
         let view = node.underTransition
+        guard view.traits.contains(.spacingSource) else { return ViewSpacing() }
         return (view.content as? LayoutSpacingSource)?.spacing(node: view) ?? ViewSpacing()
     }
 
@@ -350,7 +351,7 @@ extension _LayoutValueModifier: BuiltinView {
     }
 
     private func mark(_ node: ViewNode) {
-        if node.content.isTransparent {
+        if node.isTransparent {
             for child in node.layoutChildren { mark(child) }
         } else {
             var values = node.layoutValues ?? LayoutValues()
@@ -385,7 +386,7 @@ extension _LayoutView: BuiltinView {
         var inner = context
         inner.stackAxis = layout._stackOrientation
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: CustomLayoutContent(layout: layout), children: [child])
+        return ContentNode(content: CustomLayoutContent(layout: layout), children: [child])
     }
 }
 

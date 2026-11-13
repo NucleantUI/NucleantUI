@@ -67,6 +67,6 @@ extension ForEach: BuiltinView {
         }
         // Rows added come in with their transition (a fade, without one);
         // rows removed go out with it.
-        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
+        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }

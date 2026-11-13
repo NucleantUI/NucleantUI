@@ -65,7 +65,7 @@ public struct Canvas {
 
 extension Canvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: CanvasContent(path: context.path, renderer: renderer))
+        ContentNode(content: CanvasContent(path: context.path, renderer: renderer))
     }
 }
 

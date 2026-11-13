@@ -18,7 +18,7 @@ public struct EmptyView: View, Equatable {
 
 extension EmptyView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: GroupContent(), children: [])
+        ContentNode(content: GroupContent(), children: [])
     }
 }
 
@@ -41,7 +41,7 @@ extension TupleView: BuiltinView {
             children.append(context.child(index) { ctx in buildNode(view, &ctx) })
             index += 1
         }
-        return ViewNode(content: GroupContent(), children: children)
+        return ContentNode(content: GroupContent(), children: children)
     }
 }
 
@@ -63,7 +63,7 @@ extension _ViewArray: BuiltinView {
             let node = context.child(index) { ctx in buildNode(element, &ctx) }
             return (index: index, node: node, isNew: isNew)
         }
-        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
+        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }
 
@@ -111,7 +111,7 @@ extension _ConditionalContent: BuiltinView where TrueContent: View, FalseContent
         // other branch transitions out, the two share a group.
         let children = context.transitionChildren([(index, node, isNew)])
         guard children.count > 1 else { return children.first ?? node }
-        return ViewNode(content: GroupContent(), children: children)
+        return ContentNode(content: GroupContent(), children: children)
     }
 }
 
@@ -132,7 +132,7 @@ extension Optional: BuiltinView where Wrapped: View {
             // slot its transition stands on it in.
             return context.transitionChildren([(0, node, isNew)]).first ?? node
         case .none:
-            return ViewNode(content: GroupContent(), children: context.transitionChildren([]))
+            return ContentNode(content: GroupContent(), children: context.transitionChildren([]))
         }
     }
 }
@@ -236,7 +236,7 @@ extension _HostRoot: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let content = context.child(0) { ctx in buildNode(self.content, &ctx) }
         let overlay = context.child(1) { ctx in buildNode(self.overlay, &ctx) }
-        return ViewNode(content: HostRootContent(capture: capture), children: [content, overlay])
+        return ContentNode(content: HostRootContent(capture: capture), children: [content, overlay])
     }
 }
 

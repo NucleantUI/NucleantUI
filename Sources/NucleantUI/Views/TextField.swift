@@ -1120,7 +1120,7 @@ extension TextFieldLine: BuiltinView {
             }
             return offset
         }
-        return ViewNode(content: TextFieldLineContent(
+        return ContentNode(content: TextFieldLineContent(
             text: text,
             font: font,
             color: color,

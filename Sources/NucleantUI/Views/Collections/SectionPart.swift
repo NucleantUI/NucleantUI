@@ -21,7 +21,7 @@ extension _SectionPart: BuiltinView {
         let section = context.path.dropLast().hashValue
         let node = context.child(0) { ctx in buildNode(content, &ctx) }
         // An empty header is no node at all; nothing to pin.
-        if !node.content.isTransparent {
+        if !node.isTransparent {
             node.sectionTag = SectionTag(role: role, section: section)
         }
         return node

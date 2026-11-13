@@ -65,7 +65,7 @@ extension Grid: BuiltinView {
         var inner = context
         inner.stackAxis = .vertical
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: GridContent(
                 alignment: alignment,
                 horizontalSpacing: horizontalSpacing,
@@ -106,7 +106,7 @@ extension GridRow: BuiltinView {
         var inner = context
         inner.stackAxis = .horizontal
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: GridRowContent(alignment: alignment), children: [child])
+        return ContentNode(content: GridRowContent(alignment: alignment), children: [child])
     }
 }
 
@@ -151,7 +151,7 @@ extension _GridCellModifier: BuiltinView {
     }
 
     private func mark(_ node: ViewNode) {
-        if node.content.isTransparent {
+        if node.isTransparent {
             for child in node.layoutChildren { mark(child) }
         } else {
             node.gridCellTraits = traits.merged(over: node.gridCellTraits)

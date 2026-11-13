@@ -83,7 +83,7 @@ extension LazyVGrid: BuiltinView {
         inner.stackAxis = nil
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: LazyGridContent(
                 axis: .vertical,
                 tracks: columns,
@@ -138,7 +138,7 @@ extension LazyHGrid: BuiltinView {
         inner.stackAxis = nil
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: LazyGridContent(
                 axis: .horizontal,
                 tracks: rows,

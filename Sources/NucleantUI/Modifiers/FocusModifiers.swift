@@ -325,7 +325,8 @@ extension ViewNode {
     /// The node holding the focus target at `path`, if that view still
     /// stands.
     func focusNode(at path: [Int]) -> ViewNode? {
-        if let target = content.focusTarget, target.path == path { return self }
+        guard subtreeTraits.contains(.focusTarget) else { return nil }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.path == path { return self }
         for child in children {
             if let found = child.focusNode(at: path) { return found }
         }
@@ -342,7 +343,7 @@ extension ViewNode {
         var probe = self
         while true {
             let inner = probe.layoutChildren
-            guard inner.count == 1, inner[0].content.focusTarget == nil else { break }
+            guard inner.count == 1, !inner[0].traits.contains(.focusTarget) else { break }
             probe = inner[0]
             inside.append(probe)
         }
@@ -357,8 +358,8 @@ extension ViewNode {
 
     /// Every `.focused` mark standing in this subtree, with its node.
     func focusBindings(into records: inout [(record: FocusBindingRecord, node: ViewNode)]) {
-        guard !content.isParked, !isLeaving else { return }
-        if let record = content.focusBinding {
+        guard subtreeTraits.contains(.focusBinding), !traits.contains(.parked), !isLeaving else { return }
+        if traits.contains(.focusBinding), let record = content.focusBinding {
             records.append((record, self))
         }
         for child in children {
@@ -369,8 +370,8 @@ extension ViewNode {
     /// The first enabled view under this node that takes keys — where the
     /// keys go when a focus state names this node's view.
     func firstFocusTarget() -> FocusTarget? {
-        guard !content.isParked, !isLeaving else { return nil }
-        if let target = content.focusTarget, target.isEnabled { return target }
+        guard subtreeTraits.contains(.focusTarget), !traits.contains(.parked), !isLeaving else { return nil }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.isEnabled { return target }
         for child in children {
             if let found = child.firstFocusTarget() { return found }
         }

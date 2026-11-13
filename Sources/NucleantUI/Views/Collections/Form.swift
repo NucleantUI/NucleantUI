@@ -475,10 +475,10 @@ extension _FormColumns: BuiltinView {
             inner.child(line.id) { ctx -> ViewNode in
                 let label = ctx.child(0) { buildNode(line.label?.multilineTextAlignment(.trailing), &$0) }
                 let control = ctx.child(1) { buildNode(line.control, &$0) }
-                return ViewNode(content: FormLineContent(metrics: metrics), children: [label, control])
+                return ContentNode(content: FormLineContent(metrics: metrics), children: [label, control])
             }
         }
-        return ViewNode(
+        return ContentNode(
             content: FormColumnsContent(metrics: metrics, gaps: lines.map(\.gap)),
             children: children
         )
@@ -737,7 +737,7 @@ extension _LabeledRow: BuiltinView {
         inner.stackAxis = nil
         let label = inner.child(0) { buildNode(self.label, &$0) }
         let control = inner.child(1) { buildNode(self.control, &$0) }
-        return ViewNode(content: LabeledRowContent(fillsControl: fillsControl), children: [label, control])
+        return ContentNode(content: LabeledRowContent(fillsControl: fillsControl), children: [label, control])
     }
 }
 

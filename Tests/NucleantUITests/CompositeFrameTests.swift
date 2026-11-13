@@ -41,7 +41,7 @@ struct FrameProbe {
 
 extension FrameProbe: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: FrameProbeContent(log: log))
+        ContentNode(content: FrameProbeContent(log: log))
     }
 }
 

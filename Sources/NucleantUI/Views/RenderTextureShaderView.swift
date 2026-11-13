@@ -51,7 +51,7 @@ public struct RenderTextureShaderView<Function: ShaderProtocol> {
 
 extension RenderTextureShaderView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: RenderTextureShaderContent(
+        ContentNode(content: RenderTextureShaderContent(
             path: context.path,
             texture: texture,
             words: function.spirv,

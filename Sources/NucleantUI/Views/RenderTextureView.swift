@@ -35,7 +35,7 @@ public struct RenderTextureView {
 
 extension RenderTextureView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: RenderTextureContent(
+        ContentNode(content: RenderTextureContent(
             key: RenderNodeKey(path: context.path, identity: context.viewIdentity),
             texture: texture,
             isResizable: isResizable

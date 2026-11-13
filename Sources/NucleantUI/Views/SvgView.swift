@@ -62,7 +62,7 @@ extension SvgView {
 
 extension SvgView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: SvgContent(
+        ContentNode(content: SvgContent(
             image: image,
             isResizable: isResizable,
             tint: renderingMode == .template ? context.environment.foregroundStyle : nil
