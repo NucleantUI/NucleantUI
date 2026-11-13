@@ -87,6 +87,27 @@ struct ShapeDrawingTests {
         #expect(moved.origin == nil)
         #expect(moved.bounds == Rect(x: 13, y: 14, width: 5, height: 5))
         #expect(moved.path == path.offsetBy(dx: 3, dy: 4))
+        #expect(moved.pathBox == Rect(x: 13, y: 14, width: 5, height: 5), "the box moved with the path")
+    }
+
+    @Test func aShapeCarriesItsPathsBoxAndKeepsItWithThePath() {
+        var path = Path()
+        path.move(to: Point(x: 2, y: 3))
+        path.addLine(to: Point(x: 12, y: -4))
+        var draw = ShapeDraw(path: path, bounds: Rect(x: 0, y: 0, width: 4, height: 4), fill: .color(.red))
+        #expect(draw.pathBox == path.boundingBox)
+        #expect(DrawCommand.shape(draw).paintBounds == Rect(x: -1, y: -5, width: 14, height: 10),
+                "the path's box and the bounds together, and a pixel round them")
+        draw.path.addLine(to: Point(x: 20, y: 20))
+        #expect(draw.pathBox == Rect(x: 2, y: -4, width: 18, height: 24), "a change of the path is a change of its box")
+    }
+
+    @Test func aShapeViewsCommandHasItsPathsBox() {
+        guard let draw = shapes(Capsule().fill(Color.red).frame(width: 30, height: 10)).first else {
+            Issue.record("no shape")
+            return
+        }
+        #expect(draw.pathBox == draw.path.boundingBox)
     }
 }
 

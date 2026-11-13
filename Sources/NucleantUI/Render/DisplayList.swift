@@ -123,7 +123,13 @@ public struct TransformedClip: Equatable, Sendable {
 /// made that way, so it depends on the shape and its size alone; without
 /// `origin`, the path is in the list's coordinates.
 public struct ShapeDraw: Equatable, Sendable {
-    public var path: Path
+    public var path: Path {
+        didSet { pathBox = path.boundingBox }
+    }
+    /// `path.boundingBox`, worked out with the path: what the command can
+    /// paint is asked of it several times a pass (`paintBounds`), and the
+    /// box is a walk over every element — a measure of every text in it.
+    private(set) var pathBox: Rect?
     public var bounds: Rect
     public var fill: ShapeStyle?
     public var stroke: ShapeStyle?
@@ -149,7 +155,30 @@ public struct ShapeDraw: Equatable, Sendable {
         transformedClips: [TransformedClip] = [],
         origin: Point? = nil
     ) {
+        self.init(
+            path: path, pathBox: path.boundingBox, bounds: bounds, fill: fill, stroke: stroke,
+            strokeStyle: strokeStyle, transform: transform, clip: clip, clipCornerRadius: clipCornerRadius,
+            transformedClips: transformedClips, origin: origin
+        )
+    }
+
+    /// The same, with the path's box already worked out — kept with a path
+    /// that is drawn again.
+    init(
+        path: Path,
+        pathBox: Rect?,
+        bounds: Rect,
+        fill: ShapeStyle?,
+        stroke: ShapeStyle?,
+        strokeStyle: StrokeStyle,
+        transform: Transform,
+        clip: Rect?,
+        clipCornerRadius: Double,
+        transformedClips: [TransformedClip],
+        origin: Point?
+    ) {
         self.path = path
+        self.pathBox = pathBox
         self.bounds = bounds
         self.fill = fill
         self.stroke = stroke

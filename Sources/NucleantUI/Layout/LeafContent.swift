@@ -125,8 +125,10 @@ struct ShapeContent<S: Shape>: NodeContent {
         guard rect.width > 0, rect.height > 0 else { return }
         guard fill != nil || stroke != nil else { return }
         let own = Rect(origin: .zero, size: rect.size)
+        let (path, pathBox) = path(in: own, node: node)
         list.append(.shape(ShapeDraw(
-            path: path(in: own, node: node),
+            path: path,
+            pathBox: pathBox,
             bounds: own,
             fill: fill.map { context.resolve(animatedFill?.current(of: $0) ?? $0) },
             stroke: stroke.map { context.resolve(animatedStroke?.current(of: $0) ?? $0) },
@@ -139,29 +141,34 @@ struct ShapeContent<S: Shape>: NodeContent {
         )))
     }
 
-    /// The shape's path in `rect`, its own: the one made last, kept on the
-    /// node, when it was made at the same size; made at each frame's value
-    /// while the shape's data is on its way.
-    private func path(in rect: Rect, node: ViewNode) -> Path {
-        if let drawn { return drawn().path(in: rect) }
-        if let kept = node.layoutCache as? ShapePathCache, kept.size == rect.size {
-            return kept.path
+    /// The shape's path in `rect`, its own, and the path's box: the ones
+    /// made last, kept on the node, when they were made at the same size;
+    /// made at each frame's value while the shape's data is on its way.
+    private func path(in rect: Rect, node: ViewNode) -> (Path, Rect?) {
+        if let drawn {
+            let path = drawn().path(in: rect)
+            return (path, path.boundingBox)
         }
-        let path = shape.path(in: rect)
-        node.layoutCache = ShapePathCache(size: rect.size, path: path)
-        return path
+        if let kept = node.layoutCache as? ShapePathCache, kept.size == rect.size {
+            return (kept.path, kept.box)
+        }
+        let kept = ShapePathCache(size: rect.size, path: shape.path(in: rect))
+        node.layoutCache = kept
+        return (kept.path, kept.box)
     }
 }
 
-/// A shape node's last path, and the size it was made at.
+/// A shape node's last path, the size it was made at, and its box.
 @MainActor
 final class ShapePathCache {
     let size: Size
     let path: Path
+    let box: Rect?
 
     init(size: Size, path: Path) {
         self.size = size
         self.path = path
+        self.box = path.boundingBox
     }
 }
 

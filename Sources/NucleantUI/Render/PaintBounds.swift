@@ -104,7 +104,7 @@ extension DrawCommand {
             // draw past the rect it was given. A stroke reaches half its
             // width outside the path, and a miter join up to the miter
             // limit (ThorVG's default is 4) times that.
-            var rect = draw.path.boundingBox.map { $0.union(draw.bounds) } ?? draw.bounds
+            var rect = draw.pathBox.map { $0.union(draw.bounds) } ?? draw.bounds
             if strokes {
                 let reach = draw.strokeStyle.lineWidth * (draw.strokeStyle.lineJoin == .miter ? 2 : 0.5)
                 rect = rect.expanded(by: reach)
