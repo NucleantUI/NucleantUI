@@ -489,6 +489,11 @@ private struct NavigationStackLayout: Layout {
 @View
 private struct NavigationBar {
     static let height: Double = 44
+    /// The back button's square, iOS 26's 36 points.
+    static let backSize: Double = 36
+    /// The chevron's 24-point box drawn at 20: a stroke about 17 points
+    /// tall, near the chevron in iOS 26's back button.
+    static let chevronSize: Double = 20
 
     let screen: NavigationScreenID
     let fallbackTitle: String?
@@ -502,10 +507,18 @@ private struct NavigationBar {
         if storage.barVisibility(for: screen) != .hidden {
             HStack(spacing: 12) {
                 if showsBack {
-                    Text("‹ Back")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.blue)
-                        .padding(horizontal: 10, vertical: 6)
+                    // A chevron alone, no title, as iOS 26 draws it, and in
+                    // the primary label color, not the accent: black in
+                    // light, white in dark.
+                    SvgView(Icons.shared.back)
+                        .renderingMode(.template)
+                        .resizable()
+                        .frame(width: Self.chevronSize, height: Self.chevronSize)
+                        .foregroundStyle(.primary)
+                        // The whole 36-point square takes the tap, not only
+                        // the chevron's thin stroke.
+                        .frame(width: Self.backSize, height: Self.backSize)
+                        .contentShape(Rectangle())
                         .onTapGesture { router.pop() }
                 }
 
