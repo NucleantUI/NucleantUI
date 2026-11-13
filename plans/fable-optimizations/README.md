@@ -4,6 +4,8 @@ A read-through of `Sources/NucleantUI` answering the two questions in
 [plan.md](plan.md): where a generic type is erased too early, and where the
 math or the structure costs more than it has to.
 
+What is done so far, finding by finding: [progress.md](progress.md).
+
 ## How to read this
 
 - Every finding comes from reading the code. **Nothing here was measured.**
