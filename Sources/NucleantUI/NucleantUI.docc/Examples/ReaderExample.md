@@ -17,6 +17,7 @@ What it shows:
 - The reading screen titled with the chapter by `.navigationTitle`, where a tap hides the bar with `.toolbarVisibility`.
 - Screens pushed by value through `.navigationDestination(for:)`.
 - The place recorded by `.onChange(of:initial:)`, and the time in each chapter counted by a `.task(id:)` that restarts on every turn.
+- Type set like a book's: paragraphs `.lineSpacing` apart, a setting in the library; labels in tracked capitals with `.textCase(.uppercase)` and `.tracking`; titles that tighten (`.allowsTightening`) or shrink (`.minimumScaleFactor`) rather than lose their end; blurbs cut on their second line, and a place in a book cut in the middle with `.truncationMode(.middle)`; chapters already read struck through, and the next chapter an underlined link.
 
 ## Run it
 

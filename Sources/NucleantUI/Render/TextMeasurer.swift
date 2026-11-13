@@ -6,9 +6,12 @@
 //  agree. Widths come from summing per-glyph advances
 //  (`tvg_text_get_glyph_metrics`) rather than from a paint's AABB: the AABB is
 //  only valid once a canvas has updated the paint, and layout runs before
-//  anything is on a canvas.
+//  anything is on a canvas. A character the face has no glyph for is
+//  measured in the face it falls back to (`FontFallback`), which is the face
+//  it draws in.
 //
 
+import NucleantSkia
 import NucleantThorVG
 
 @MainActor
@@ -18,7 +21,12 @@ enum TextMeasurer {
     private struct FaceKey: Hashable {
         let family: String?
         let size: Double
+        let bold: Bool
         let italic: Bool
+        /// Points added to every advance: kerning or tracking. A face with
+        /// spacing has its own table, so every width summed from it —
+        /// breaking lines, cutting one — has the spacing in it.
+        let spacing: Double
     }
 
     /// Everything measured for one face, filled in as it is asked for.
@@ -43,9 +51,15 @@ enum TextMeasurer {
     private static var faces: [Face] = []
     private static var faceIndices: [FaceKey: Int] = [:]
 
-    private static func face(for font: Font) -> Int {
+    static func face(for font: Font, spacing: Double = 0) -> Int {
         if PerfTrace.isEnabled { PerfTrace.textMeasures += 1 }
-        let key = FaceKey(family: FontRegistry.resolve(font), size: font.size, italic: font.isItalic)
+        let key = FaceKey(
+            family: FontRegistry.resolve(font),
+            size: font.size,
+            bold: font.weight.isBoldFace,
+            italic: font.isItalic,
+            spacing: spacing
+        )
         if let index = faceIndices[key] { return index }
         faces.append(Face(key: key))
         faceIndices[key] = faces.count - 1
@@ -73,7 +87,7 @@ enum TextMeasurer {
         lineMetrics(face: face(for: font))
     }
 
-    private static func lineMetrics(face: Int) -> (ascent: Double, descent: Double, lineHeight: Double) {
+    static func lineMetrics(face: Int) -> (ascent: Double, descent: Double, lineHeight: Double) {
         if let cached = faces[face].lineMetrics { return cached }
 
         let size = faces[face].key.size
@@ -94,7 +108,7 @@ enum TextMeasurer {
 
     /// The advance width of one character, in points.
     @inline(__always)
-    private static func advance(_ character: Character, face: Int) -> Double {
+    static func advance(_ character: Character, face: Int) -> Double {
         // `"\r\n"` is one character whose `asciiValue` is that of `"\n"`;
         // it goes the long way, as anything else that isn't one ASCII byte.
         if let code = character.asciiValue, code != 0x0A || character.utf8.count == 1 {
@@ -111,6 +125,14 @@ enum TextMeasurer {
     }
 
     private static func measureAdvance(_ character: Character, face: Int) -> Double {
+        let key = faces[face].key
+        // A character the face has no glyph for draws in the face the
+        // platform falls back to for it, and is as wide as it is there.
+        if let fallback = FontFallback.shared.font(
+            for: character, family: key.family, size: key.size, bold: key.bold, italic: key.italic
+        ) {
+            return Double(fallback.measureText(String(character))) + key.spacing
+        }
         // Fallback ratio for a face ThorVG can't measure — roughly the average
         // advance of a proportional Latin face at a given em size.
         var width = faces[face].key.size * 0.5
@@ -123,7 +145,7 @@ enum TextMeasurer {
                 width = Double(metrics.advance)
             }
         }
-        return width
+        return width + faces[face].key.spacing
     }
 
     /// The summed advances of `characters`, starting from `start`, added in
@@ -137,7 +159,7 @@ enum TextMeasurer {
     /// character at a time from the start of the character held back. A
     /// character the ASCII table doesn't have yet goes through `advance`,
     /// which measures and files it.
-    private static func width<S: StringProtocol>(of characters: S, face: Int, from start: Double = 0) -> Double {
+    static func width<S: StringProtocol>(of characters: S, face: Int, from start: Double = 0) -> Double {
         let ascii = faces[face].ascii
         var width = start
         let utf8 = characters.utf8
@@ -170,7 +192,7 @@ enum TextMeasurer {
     /// `string` split at its line feeds, as `components(separatedBy:)`
     /// splits it — without the trip through Foundation for the usual string
     /// that has none.
-    private static func paragraphs(of string: String) -> [String] {
+    static func paragraphs(of string: String) -> [String] {
         string.utf8.contains(0x0A) ? string.components(separatedBy: "\n") : [string]
     }
 
@@ -180,18 +202,20 @@ enum TextMeasurer {
     }
 
     /// Break `string` into lines that fit `maxWidth`, at word boundaries where
-    /// possible. `maxWidth == nil` means one line, however long.
+    /// possible. `maxWidth == nil` or infinite means a line a paragraph,
+    /// however long; 0 means as narrow as the text goes.
     static func wrap(_ string: String, font: Font, maxWidth: Double?, lineLimit: Int?) -> [String] {
         let paragraphs = Self.paragraphs(of: string)
-        guard let maxWidth, maxWidth > 0 else {
+        guard let maxWidth, maxWidth < .infinity else {
             return limited(paragraphs, to: lineLimit)
         }
+        let room = max(maxWidth, 0)
 
         let face = Self.face(for: font)
         var lines: [String] = []
 
         for paragraph in paragraphs {
-            breakLines(paragraph, face: face, maxWidth: maxWidth) { line in
+            breakLines(paragraph, face: face, maxWidth: room) { line in
                 lines.append(String(paragraph[line]))
             }
         }
@@ -200,14 +224,27 @@ enum TextMeasurer {
 
     /// The lines `paragraph` breaks into at `maxWidth`, handed to `line` in
     /// order as ranges of it — word by word, a line's words joined by the
-    /// single spaces between them; a line that is still empty takes a word
-    /// without the space before it.
+    /// single spaces between them.
+    ///
+    /// The paragraph's first line keeps the spaces it starts with: they are
+    /// its indent. When the first word doesn't fit after them, the indent
+    /// is a line of its own. A line begun by a break takes its first word
+    /// without the spaces before it, which are where the line before ended.
+    ///
+    /// Inside a word, a line may also end after a hyphen, a slash or a dash
+    /// (`breaksAfter`), so a word that doesn't fit the rest of a line puts
+    /// as much of itself there as fits up to one of those, and the rest
+    /// starts the next line. What is too wide for a line of its own — a
+    /// URL, a path, an identifier — goes the same way, and where there's no
+    /// such place it is broken between characters: as many as fit, and
+    /// never none, so a character wider than the line still gets one. The
+    /// last piece of a word starts the line the words after it go on.
     ///
     /// Each line is a range rather than a string built a word at a time, so
     /// breaking costs one walk of the characters and no allocation. The sums
     /// are taken in the same order as summing the advances of the joined
     /// string, so a line breaks exactly where it would.
-    private static func breakLines(
+    static func breakLines(
         _ paragraph: String,
         face: Int,
         maxWidth: Double,
@@ -217,87 +254,159 @@ enum TextMeasurer {
         var lineStart = paragraph.startIndex
         var lineEnd = paragraph.startIndex
         var currentWidth = 0.0
+        // Until the paragraph's first word, the line is its indent.
+        var inIndent = true
 
         for word in paragraph.split(separator: " ", omittingEmptySubsequences: false) {
-            let isEmpty = lineStart == lineEnd
-            let pieceWidth = isEmpty ? width(of: word, face: face) : width(of: word, face: face, from: space)
-            if !isEmpty && currentWidth + pieceWidth > maxWidth {
-                line(lineStart..<lineEnd)
-                lineStart = word.startIndex
-                lineEnd = word.endIndex
-                currentWidth = width(of: word, face: face)
-            } else {
-                if isEmpty { lineStart = word.startIndex }
+            if inIndent {
+                if word.startIndex == paragraph.startIndex {
+                    // The paragraph's first piece, with no space before it.
+                    guard !word.isEmpty else { continue }
+                    inIndent = false
+                    startLine(word, of: word, face: face, maxWidth: maxWidth, &lineStart, &lineEnd, &currentWidth, line)
+                    continue
+                }
+                if word.isEmpty {
+                    // Another space of the indent, kept however wide.
+                    lineEnd = word.endIndex
+                    currentWidth += space
+                    continue
+                }
+                // The first word goes after the indent as after a word.
+                inIndent = false
+            } else if lineStart == lineEnd {
+                // A run of spaces at a break leaves the line empty, so the
+                // next word starts it again.
+                startLine(word, of: word, face: face, maxWidth: maxWidth, &lineStart, &lineEnd, &currentWidth, line)
+                continue
+            }
+            let pieceWidth = width(of: word, face: face, from: space)
+            if currentWidth + pieceWidth <= maxWidth {
                 lineEnd = word.endIndex
                 currentWidth += pieceWidth
+            } else {
+                endLine(within: word, face: face, maxWidth: maxWidth, space: space, &lineStart, &lineEnd, &currentWidth, line)
             }
         }
         line(lineStart..<lineEnd)
     }
 
+    /// The line, with no room left for all of `word` after a space, ended
+    /// as late in `word` as fits where it may break, or before it when no
+    /// such place fits; what is left of `word` starts the next line.
+    private static func endLine(
+        within word: Substring,
+        face: Int,
+        maxWidth: Double,
+        space: Double,
+        _ lineStart: inout String.Index,
+        _ lineEnd: inout String.Index,
+        _ currentWidth: inout Double,
+        _ line: (Range<String.Index>) -> Void
+    ) {
+        // Most words have nowhere to break, which their bytes show without
+        // walking their characters: no hyphen, no slash, and nothing from
+        // U+2000–U+2FFF, where the dashes are.
+        guard word.utf8.contains(where: { $0 == 0x2D || $0 == 0x2F || $0 == 0xE2 }) else {
+            line(lineStart..<lineEnd)
+            startLine(word, of: word, face: face, maxWidth: maxWidth, &lineStart, &lineEnd, &currentWidth, line)
+            return
+        }
+        var sum = space
+        var cut: String.Index?
+        var index = word.startIndex
+        while index != word.endIndex {
+            let character = word[index]
+            sum += advance(character, face: face)
+            if currentWidth + sum > maxWidth { break }
+            let next = word.index(after: index)
+            if index != word.startIndex, next != word.endIndex, breaksAfter(character, before: word[next]) {
+                cut = next
+            }
+            index = next
+        }
+        if let cut {
+            line(lineStart..<cut)
+            startLine(word[cut...], of: word, face: face, maxWidth: maxWidth, &lineStart, &lineEnd, &currentWidth, line)
+        } else {
+            line(lineStart..<lineEnd)
+            startLine(word, of: word, face: face, maxWidth: maxWidth, &lineStart, &lineEnd, &currentWidth, line)
+        }
+    }
+
+    /// `rest`, the end of `word`, starting a line: on it whole when it
+    /// fits, and otherwise over as many lines as it takes, each ending at
+    /// the last place before the character that overflows it where the
+    /// word may break, or right before that character when there's none.
+    private static func startLine(
+        _ rest: Substring,
+        of word: Substring,
+        face: Int,
+        maxWidth: Double,
+        _ lineStart: inout String.Index,
+        _ lineEnd: inout String.Index,
+        _ currentWidth: inout Double,
+        _ line: (Range<String.Index>) -> Void
+    ) {
+        lineStart = rest.startIndex
+        lineEnd = rest.endIndex
+        currentWidth = width(of: rest, face: face)
+        guard currentWidth > maxWidth else { return }
+
+        var sum = 0.0
+        var cut: String.Index?
+        var index = rest.startIndex
+        while index != rest.endIndex {
+            let character = rest[index]
+            let step = advance(character, face: face)
+            if index != lineStart, sum + step > maxWidth, let at = cut {
+                line(lineStart..<at)
+                lineStart = at
+                sum = width(of: rest[at..<index], face: face)
+                cut = nil
+            }
+            if index != lineStart, sum + step > maxWidth {
+                line(lineStart..<index)
+                lineStart = index
+                sum = 0
+            }
+            sum += step
+            let next = rest.index(after: index)
+            if index != word.startIndex, next != rest.endIndex, breaksAfter(character, before: rest[next]) {
+                cut = next
+            }
+            index = next
+        }
+        currentWidth = sum
+    }
+
+    /// Whether a line may end between `character` and `next` inside a word,
+    /// as Unicode line breaking allows: after a hyphen, a slash, or a dash —
+    /// though not when it is the word's first character, which is what
+    /// `breakLines` checks. Not before a digit after a hyphen or slash, which
+    /// read as one with it ("-3", "1/2"), and not before closing punctuation,
+    /// quotation marks, an ellipsis, or another hyphen, slash or dash.
+    static func breaksAfter(_ character: Character, before next: Character) -> Bool {
+        switch character {
+        case "-", "/":
+            if next.unicodeScalars.first?.properties.numericType == .decimal { return false }
+        case "\u{2010}", "\u{2012}", "\u{2013}", "\u{2014}":
+            break
+        default:
+            return false
+        }
+        switch next {
+        case ")", "]", "}", "!", "?", ",", ".", ":", ";", "\"", "'", "\u{2026}",
+             "-", "/", "\u{2010}", "\u{2012}", "\u{2013}", "\u{2014}":
+            return false
+        default:
+            return true
+        }
+    }
+
     private static func limited(_ lines: [String], to lineLimit: Int?) -> [String] {
         guard let lineLimit, lineLimit > 0, lines.count > lineLimit else { return lines }
         return Array(lines.prefix(lineLimit))
-    }
-
-    /// Measured boxes, keyed by everything that decides one. Text sizing is
-    /// the leaf of every layout pass and by far its most expensive step, so it
-    /// is worth remembering across passes as well as within one — the same
-    /// label re-measured after a state change has not changed shape.
-    private struct SizeKey: Hashable {
-        let string: String
-        let font: Font
-        let proposal: ProposedSize
-        let lineLimit: Int?
-    }
-
-    private static var sizes: [SizeKey: Size] = [:]
-
-    /// The box `string` occupies under `proposal`.
-    static func size(of string: String, font: Font, proposal: ProposedSize, lineLimit: Int?) -> Size {
-        let key = SizeKey(string: string, font: font, proposal: proposal, lineLimit: lineLimit)
-        if let cached = sizes[key] { return cached }
-        let measured = measure(key)
-        // A miss only: a long-running app showing ever-new strings (a
-        // clock, a counter) would otherwise keep every one it ever showed.
-        if sizes.count >= 4096 { sizes.removeAll(keepingCapacity: true) }
-        sizes[key] = measured
-        return measured
-    }
-
-    /// The lines `wrap` would give, measured where they stand in the string
-    /// rather than built: how many there are, and the widest.
-    private static func measure(_ key: SizeKey) -> Size {
-        let (string, font, proposal, lineLimit) = (key.string, key.font, key.proposal, key.lineLimit)
-        let face = Self.face(for: font)
-        guard !string.isEmpty else {
-            return Size(width: 0, height: lineMetrics(face: face).lineHeight)
-        }
-        let limit = lineLimit.flatMap { $0 > 0 ? $0 : nil } ?? .max
-        var widest = 0.0
-        var count = 0
-
-        let paragraphs = Self.paragraphs(of: string)
-        if let maxWidth = proposal.width, maxWidth > 0 {
-            for paragraph in paragraphs where count < limit {
-                breakLines(paragraph, face: face, maxWidth: maxWidth) { line in
-                    guard count < limit else { return }
-                    widest = max(widest, width(of: paragraph[line], face: face))
-                    count += 1
-                }
-            }
-        } else {
-            for paragraph in paragraphs.prefix(limit) {
-                widest = max(widest, width(of: paragraph, face: face))
-                count += 1
-            }
-        }
-
-        let lineHeight = lineMetrics(face: face).lineHeight
-        return Size(
-            width: proposal.width.map { min(widest, $0) } ?? widest,
-            height: lineHeight * Double(count)
-        )
     }
 }
 

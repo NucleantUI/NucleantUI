@@ -171,8 +171,24 @@ RoundedRectangle(cornerRadius: 12)
 ```
 
 ``Text`` takes `.font`, `.bold()`, `.italic()`, `.foregroundColor`,
-`.lineLimit` and `.multilineTextAlignment`. The default faces, Roboto and
-Roboto Mono, ship with the library, so text looks the same on every platform.
+`.kerning`, `.tracking`, `.baselineOffset`, `.underline` and
+`.strikethrough`; the modifier nearest the text wins. A view hands its texts
+`.lineLimit`, `.multilineTextAlignment`, `.lineSpacing`, `.truncationMode`,
+`.allowsTightening`, `.minimumScaleFactor` and `.textCase`. Text wraps by
+word into as many lines as its line limit and the height it is offered hold,
+and cuts the last line it shows with an ellipsis. The default faces, Roboto
+and Roboto Mono, ship with the library, so text looks the same on every
+platform.
+
+```swift
+Text(book.blurb)
+    .lineLimit(2)
+    .truncationMode(.tail)
+
+Text("Chapter \(number)")
+    .tracking(1.6)
+    .textCase(.uppercase)
+```
 
 ``Image`` draws a ``RasterImage`` — decoded from a file with
 `RasterImage(contentsOf:)` or made from pixels — at its pixel size, or

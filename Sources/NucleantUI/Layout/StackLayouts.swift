@@ -6,8 +6,8 @@
 //  `ZStackLayout` — for use where a layout is a value: `AnyLayout`, to
 //  switch between them without the subviews losing their state, or inside
 //  another `Layout`. Written against `LayoutSubviews`, and sizing the same
-//  way the stack views do: least flexible first, content at its ideal
-//  extent when everything fits, an equal share of what's left otherwise.
+//  way the stack views do, which is SwiftUI's: least flexible first, each
+//  offered an equal share of what the ones before it left.
 //
 
 /// A horizontal stack as a `Layout`.
@@ -31,7 +31,11 @@ public struct HStackLayout: Layout, Sendable {
     }
 
     public func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let run = StackLayoutRun(axis: .horizontal, spacing: spacing, subviews: subviews, proposal: ProposedViewSize(bounds.size))
+        // Laid out again under the proposal it was sized by along its axis,
+        // as SwiftUI does, so the subviews get the shares they were measured
+        // with; across it, the bounds' height when none was proposed.
+        let placing = ProposedViewSize(width: proposal.width, height: proposal.height ?? bounds.height)
+        let run = StackLayoutRun(axis: .horizontal, spacing: spacing, subviews: subviews, proposal: placing)
         var x = bounds.minX
         for (offset, subview) in subviews.enumerated() {
             let size = run.sizes[offset]
@@ -68,7 +72,10 @@ public struct VStackLayout: Layout, Sendable {
     }
 
     public func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let run = StackLayoutRun(axis: .vertical, spacing: spacing, subviews: subviews, proposal: ProposedViewSize(bounds.size))
+        // Laid out again under the proposal it was sized by along its axis,
+        // as SwiftUI does; across it, the bounds' width when none was proposed.
+        let placing = ProposedViewSize(width: proposal.width ?? bounds.width, height: proposal.height)
+        let run = StackLayoutRun(axis: .vertical, spacing: spacing, subviews: subviews, proposal: placing)
         var y = bounds.minY
         for (offset, subview) in subviews.enumerated() {
             let size = run.sizes[offset]
@@ -148,45 +155,44 @@ private struct StackLayoutRun {
             gaps[index] = spacing ?? items[index].spacing.distance(to: items[index + 1].spacing, along: axis)
         }
         let totalSpacing = gaps.reduce(0, +)
-        var remaining = proposal[axis].map { max(0, $0 - totalSpacing) }
-        var sized = Array(repeating: false, count: count)
         let flexibility = items.map { $0.node.flexibility(along: axis) }
 
-        // Least flexible first, so each group only sees what the stricter
-        // ones left behind.
-        for group in [LayoutPriorityClass.fixed, .content, .flexible] {
-            let members = (0..<count).filter { !sized[$0] && flexibility[$0] == group }
-
-            // Content subviews get their ideal extent when all of them fit.
-            var ideals: [Int: Double] = [:]
-            if group == .content, let remaining {
-                var unbounded = proposal
-                unbounded[axis] = .infinity
-                var sum = 0.0
-                for index in members {
-                    let ideal = items[index].sizeThatFits(unbounded)[axis]
-                    ideals[index] = ideal
-                    sum += ideal
-                }
-                if !(sum <= remaining) { ideals.removeAll() }
+        if var remaining = proposal[axis].map({ max(0, $0 - totalSpacing) }) {
+            // The least flexible first — how far each stretches along the
+            // axis, from offered nothing to offered everything; among those
+            // that stretch without end, the one needing more first; ties in
+            // the subviews' own order — each offered an equal share of what
+            // the ones before it left.
+            var least = proposal
+            least[axis] = 0
+            var most = proposal
+            most[axis] = .infinity
+            let ranges = items.map { item -> (min: Double, span: Double) in
+                let min = item.sizeThatFits(least)[axis]
+                return (min, item.sizeThatFits(most)[axis] - min)
             }
-
-            var unsized = members.count
-            for index in members {
-                var offered = proposal
-                if let ideal = ideals[index] {
-                    offered[axis] = ideal
-                } else if let remaining {
-                    offered[axis] = remaining / Double(unsized)
+            var order = Array(0..<count)
+            for next in order.indices.dropFirst() {
+                var position = next
+                while position > 0 {
+                    let (a, b) = (ranges[order[position]], ranges[order[position - 1]])
+                    let precedes = a.span == b.span ? a.span == .infinity && a.min > b.min : a.span < b.span
+                    guard precedes else { break }
+                    order.swapAt(position, position - 1)
+                    position -= 1
                 }
+            }
+            for (position, index) in order.enumerated() {
+                var offered = proposal
+                offered[axis] = remaining / Double(count - position)
                 let size = items[index].sizeThatFits(offered)
                 sizes[index] = size
                 proposals[index] = offered
-                sized[index] = true
-                unsized -= 1
-                if let left = remaining {
-                    remaining = max(0, left - size[axis])
-                }
+                remaining = max(0, remaining - size[axis])
+            }
+        } else {
+            for index in 0..<count {
+                sizes[index] = items[index].sizeThatFits(proposal)
             }
         }
 

@@ -4,7 +4,7 @@
 //
 //  The library: books of chapters, where each one was left, which are
 //  finished, how long each chapter has been read for, and the reading text
-//  size. `Library` is the `@Observable` model, changed only through its
+//  size and line spacing. `Library` is the `@Observable` model, changed only through its
 //  methods; a `Book` and its `Chapter`s are the records inside it. The screens are pushed by value, as a
 //  `BookRoute` or a `ReadingRoute`.
 //
@@ -65,6 +65,35 @@ enum ReadingStatus: Equatable {
     case finished
 }
 
+/// How far apart the lines of the reading text are.
+enum LineSpacing: CaseIterable, Equatable {
+    case compact, normal, relaxed
+
+    var name: String {
+        switch self {
+        case .compact: "Compact"
+        case .normal:  "Normal"
+        case .relaxed: "Relaxed"
+        }
+    }
+
+    /// The points between one line and the next, for text `textSize`
+    /// points tall: in proportion, so a larger size keeps the same look.
+    func points(at textSize: Double) -> Double {
+        switch self {
+        case .compact: 0
+        case .normal:  textSize * 0.3
+        case .relaxed: textSize * 0.7
+        }
+    }
+
+    /// The setting after this one, back to the first after the last.
+    var next: LineSpacing {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
+}
+
 /// Pushes a book's page.
 struct BookRoute: Hashable {
     let book: Book.ID
@@ -94,6 +123,9 @@ final class Library {
     /// The reading text, in points.
     private(set) var textSize: Double = 19
     static let textSizes: ClosedRange<Double> = 15...29
+
+    /// The space between the reading text's lines.
+    private(set) var lineSpacing = LineSpacing.normal
 
     init(books: [Book] = Book.shelf) {
         self.books = books
@@ -155,5 +187,10 @@ final class Library {
 
     func shrinkText() {
         textSize = max(textSize - 2, Self.textSizes.lowerBound)
+    }
+
+    /// On to the next line spacing: compact, normal, relaxed, and round.
+    func changeLineSpacing() {
+        lineSpacing = lineSpacing.next
     }
 }

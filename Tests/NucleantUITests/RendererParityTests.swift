@@ -70,7 +70,11 @@ struct RendererParityTests {
         _ string: String,
         frame: Rect,
         size: Double = 17,
-        alignment: TextAlignment = .leading
+        alignment: TextAlignment = .leading,
+        letterSpacing: Double = 0,
+        lineSpacing: Double = 0,
+        underline: Text.LineStyle? = nil,
+        strikethrough: Text.LineStyle? = nil
     ) -> DisplayList {
         var list = DisplayList()
         list.append(.text(TextDraw(
@@ -79,17 +83,41 @@ struct RendererParityTests {
             font: .system(size: size),
             color: .init(red: 0, green: 0, blue: 0),
             alignment: alignment,
-            wraps: false
+            wraps: false,
+            letterSpacing: letterSpacing,
+            lineSpacing: lineSpacing,
+            underline: underline,
+            strikethrough: strikethrough
         )))
         return list
     }
 
     /// A label laid out the way `TextContent` does: its frame is the size
     /// the measurer gave it.
-    private func label(_ string: String, at origin: Point, size: Double = 17, alignment: TextAlignment = .leading, width: Double? = nil) -> DisplayList {
+    private func label(
+        _ string: String,
+        at origin: Point,
+        size: Double = 17,
+        alignment: TextAlignment = .leading,
+        width: Double? = nil,
+        letterSpacing: Double = 0,
+        lineSpacing: Double = 0,
+        underline: Text.LineStyle? = nil,
+        strikethrough: Text.LineStyle? = nil
+    ) -> DisplayList {
         let font = Font.system(size: size)
-        let measured = TextMeasurer.size(of: string, font: font, proposal: ProposedSize(width: nil, height: nil), lineLimit: nil)
-        return text(string, frame: Rect(x: origin.x, y: origin.y, width: width ?? measured.width, height: measured.height), size: size, alignment: alignment)
+        let input = TextLayoutInput(string: string, font: font, letterSpacing: letterSpacing, paragraph: TextParagraphStyle(lineSpacing: lineSpacing))
+        let measured = TextMeasurer.layout(input, proposal: .unspecified).size
+        return text(
+            string,
+            frame: Rect(x: origin.x, y: origin.y, width: width ?? measured.width, height: measured.height),
+            size: size,
+            alignment: alignment,
+            letterSpacing: letterSpacing,
+            lineSpacing: lineSpacing,
+            underline: underline,
+            strikethrough: strikethrough
+        )
     }
 
     private func expectSamePlace(_ list: DisplayList, scale: Double = 1, tolerance: Int = 1, sourceLocation: SourceLocation = #_sourceLocation) {
@@ -127,5 +155,25 @@ struct RendererParityTests {
 
     @Test func smallLabel() {
         expectSamePlace(label("82%", at: Point(x: 10, y: 10), size: 12))
+    }
+
+    @Test func trackedLabel() {
+        expectSamePlace(label("TRACKS", at: Point(x: 10, y: 10), size: 15, letterSpacing: 3))
+    }
+
+    @Test func centeredTrackedLabel() {
+        expectSamePlace(label("Reset", at: Point(x: 0, y: 10), alignment: .center, width: 200, letterSpacing: 2))
+    }
+
+    @Test func underlinedLabel() {
+        expectSamePlace(label("Hide mixer", at: Point(x: 10, y: 10), underline: .single))
+    }
+
+    @Test func struckLabel() {
+        expectSamePlace(label("Done", at: Point(x: 10, y: 10), strikethrough: Text.LineStyle(pattern: .dash)))
+    }
+
+    @Test func spacedLines() {
+        expectSamePlace(label("first\nsecond", at: Point(x: 10, y: 2), size: 13, lineSpacing: 8))
     }
 }

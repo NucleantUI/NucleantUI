@@ -7,12 +7,14 @@
 
 /// `Text`.
 struct TextContent: NodeContent {
-    let string: String
-    let font: Font
+    /// The string, its font and the paragraph settings: everything its lines
+    /// depend on, and what its layouts are kept by.
+    let input: TextLayoutInput
     /// Drawn as one flat color: a gradient gives its first stop.
     let style: ShapeStyle
     let alignment: TextAlignment
-    let lineLimit: Int?
+    let underline: Text.LineStyle?
+    let strikethrough: Text.LineStyle?
     /// `style`, animated — a change of foreground color fades across.
     var animatedColor: AnimatedVector? = nil
 
@@ -20,45 +22,48 @@ struct TextContent: NodeContent {
     var animatesSize: Bool { false }
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
-        TextMeasurer.size(of: string, font: font, proposal: proposal, lineLimit: lineLimit)
+        TextMeasurer.layout(input, proposal: proposal).size
     }
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
-        guard !string.isEmpty else { return }
-        // The half-point slack absorbs the difference between summed glyph
-        // advances here and ThorVG's own layout.
-        let fitsOneLine = TextMeasurer.width(of: string, font: font) <= rect.width + 0.5
-        // Text that wraps is drawn as the lines layout measured, joined by
-        // line feeds, and not wrapped again: the box is as wide as the
-        // widest of them, and ThorVG, whose advances come out a fraction
-        // wider, would break that line once more and draw a line more than
-        // the box has room for. Wrapping at the narrower of the proposal and
-        // the box gives the lines sizing gave — every measured line fits,
-        // and no word that didn't fit then fits now — or, in a box a parent
-        // squeezed, the lines that fit it.
-        let wrapsAsMeasured = !fitsOneLine && lineLimit != 1
-        let drawn = wrapsAsMeasured
-            ? TextMeasurer.wrap(
-                string,
-                font: font,
-                maxWidth: min(proposal.width ?? .infinity, rect.width + 0.5),
-                lineLimit: lineLimit
-            ).joined(separator: "\n")
-            : string
+        guard !input.string.isEmpty else { return }
+        // The lines sizing found (the same proposal, so the same layout),
+        // drawn as they are and never broken again: ThorVG, whose advances
+        // come out a fraction wider, would break a line that just fits once
+        // more, and draw a line more than the box has room for. Only in a
+        // box a parent squeezed below what the text asked for are they made
+        // again, for the box. The half-point slack absorbs the difference
+        // between summed glyph advances here and ThorVG's own layout.
+        var layout = TextMeasurer.layout(input, proposal: proposal)
+        if layout.size.width > rect.width + 0.5 || layout.size.height > rect.height + 0.5 {
+            layout = TextMeasurer.layout(input, proposal: ProposedSize(
+                width: min(proposal.width ?? .infinity, rect.width + 0.5),
+                height: min(proposal.height ?? .infinity, rect.height + 0.5)
+            ))
+        }
+
+        // The glyphs' own box: the text's box without the room the baseline
+        // offset added, which is on the side the glyphs moved away from.
+        let offset = input.baselineOffset
+        var frame = rect
+        frame.size.height = max(0, rect.height - abs(offset))
+        if offset < 0 { frame.origin.y -= offset }
+
+        let font = layout.scale == 1 ? input.font : input.font.size(input.font.size * layout.scale)
         list.append(.text(TextDraw(
-            string: drawn,
-            frame: rect,
+            string: layout.lines.joined(separator: "\n"),
+            frame: frame,
             font: font,
             color: context.resolve(animatedColor?.current(of: style) ?? style).flatColor,
             alignment: alignment,
-            lineLimit: lineLimit,
-            // Only a single-line label can be ellipsised, and only when it
-            // really is too wide.
-            isTruncated: lineLimit == 1 && !fitsOneLine,
-            // A string that fits one line is drawn as one line, whatever
-            // ThorVG's layout would make of the exact-fit box; one broken
-            // into lines above keeps those lines.
-            wraps: !fitsOneLine && !wrapsAsMeasured,
+            // Already broken, limited and cut: a line too long carries its
+            // ellipsis.
+            wraps: false,
+            letterSpacing: input.letterSpacing,
+            lastLineTightening: layout.lastLineTightening,
+            lineSpacing: max(input.paragraph.lineSpacing, 0),
+            underline: underline.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) },
+            strikethrough: strikethrough.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) },
             transform: context.transform,
             clip: context.clip,
             clipCornerRadius: context.clipCornerRadius,

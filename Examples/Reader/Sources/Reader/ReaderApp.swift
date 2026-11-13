@@ -48,17 +48,22 @@ struct Cover {
             Rectangle()
                 .fill(.linearGradient(colors: [book.cover, book.coverShade], startPoint: .top, endPoint: .bottom))
             VStack(spacing: 8 * scale) {
+                // A long title shrinks to stay on the cover.
                 Text(book.title)
                     .font(.system(size: 13 * scale, weight: .bold, design: .serif))
                     .foregroundColor(book.coverInk)
                     .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.6)
                 Rectangle()
                     .fill(book.coverInk.opacity(0.6))
                     .frame(width: 28 * scale, height: max(1, scale))
-                Text(book.author.uppercased())
+                Text(book.author)
                     .font(.system(size: 7 * scale, weight: .medium))
+                    .tracking(0.6 * scale)
                     .foregroundColor(book.coverInk.opacity(0.85))
                     .multilineTextAlignment(.center)
+                    .textCase(.uppercase)
             }
             .padding(10 * scale)
         }

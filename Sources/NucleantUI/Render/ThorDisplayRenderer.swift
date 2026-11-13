@@ -261,6 +261,11 @@ public final class ThorDisplayRenderer {
     // MARK: - Text
 
     private func emit(_ draw: TextDraw) {
+        if draw.letterSpacing != 0 || draw.lastLineTightening != 0 || draw.lineSpacing != 0
+            || draw.underline != nil || draw.strikethrough != nil {
+            emitLines(draw)
+            return
+        }
         guard let text = tvg_text_new() else { return }
 
         if let family = FontRegistry.resolve(draw.font) {
@@ -304,6 +309,84 @@ public final class ThorDisplayRenderer {
         _ = tvg_paint_translate(text, f(draw.frame.minX), f(draw.frame.minY))
 
         finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+    }
+
+    /// `draw`'s lines one at a time, each a line height and the line spacing
+    /// below the one before, at the advances layout measured: spaced text
+    /// a character at a time, with the underline and strikethrough drawn as
+    /// shapes under it.
+    private func emitLines(_ draw: TextDraw) {
+        let lines = draw.string.split(separator: "\n", omittingEmptySubsequences: false)
+        let metrics = TextMeasurer.lineMetrics(for: draw.font)
+        let step = metrics.lineHeight + draw.lineSpacing
+        let factor = alignFactor(draw.alignment)
+        for (index, line) in lines.enumerated() where !line.isEmpty {
+            let top = draw.frame.minY + Double(index) * step
+            let spacing = draw.letterSpacing + (index == lines.count - 1 ? draw.lastLineTightening : 0)
+            let line = String(line)
+            if spacing == 0 {
+                let width = TextMeasurer.width(of: line, font: draw.font)
+                let x = draw.frame.minX + (draw.frame.width - width) * factor
+                emitRun(line, x: x, top: top, width: width, lineHeight: metrics.lineHeight, draw)
+                decorate(draw, from: x, to: x + width, baseline: top + metrics.ascent)
+            } else {
+                let advances = line.map { TextMeasurer.width(of: String($0), font: draw.font) + spacing }
+                let start = draw.frame.minX + (draw.frame.width - advances.reduce(0, +)) * factor
+                var pen = start
+                for (character, advance) in zip(line, advances) {
+                    emitRun(String(character), x: pen, top: top, width: advance, lineHeight: metrics.lineHeight, draw)
+                    pen += advance
+                }
+                decorate(draw, from: start, to: pen - spacing, baseline: top + metrics.ascent)
+            }
+        }
+    }
+
+    /// One run of `draw`'s text on one line, its top-left corner at (`x`,
+    /// `top`), in a box a little wider than the run so it is never wrapped
+    /// or cut.
+    private func emitRun(_ string: String, x: Double, top: Double, width: Double, lineHeight: Double, _ draw: TextDraw) {
+        guard let text = tvg_text_new() else { return }
+        if let family = FontRegistry.resolve(draw.font) {
+            _ = family.withCString { tvg_text_set_font(text, $0) }
+        } else {
+            _ = tvg_text_set_font(text, nil)
+        }
+        _ = tvg_text_set_size(text, f(draw.font.size))
+        _ = string.withCString { tvg_text_set_text(text, $0) }
+        let (r, g, b, a) = draw.color.rgba8
+        _ = tvg_text_set_color(text, r, g, b)
+        _ = tvg_paint_set_opacity(text, a)
+        if draw.font.isItalic {
+            _ = tvg_text_set_italic(text, 0.2)
+        }
+        _ = tvg_text_layout(text, f(max(width, 0) + 1), f(lineHeight))
+        _ = tvg_text_wrap_mode(text, TVG_TEXT_WRAP_NONE)
+        _ = tvg_text_align(text, 0, 0)
+        _ = tvg_paint_translate(text, f(x), f(top))
+        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+    }
+
+    /// One line's underline and strikethrough, from `start` to `end` along
+    /// its baseline, each a shape of its dashes in its own color or the
+    /// text's.
+    private func decorate(_ draw: TextDraw, from start: Double, to end: Double, baseline: Double) {
+        guard draw.underline != nil || draw.strikethrough != nil, end > start else { return }
+        let metrics = TextMeasurer.decorationMetrics(for: draw.font)
+        for (style, offset) in [(draw.underline, metrics.underline), (draw.strikethrough, metrics.strikethrough)] {
+            guard let style, let shape = tvg_shape_new() else { continue }
+            let top = baseline + offset - metrics.thickness / 2
+            for dash in TextMeasurer.decorationDashes(length: end - start, thickness: metrics.thickness, pattern: style.pattern) {
+                _ = tvg_shape_append_rect(
+                    shape,
+                    f(start + dash.start), f(top), f(dash.end - dash.start), f(metrics.thickness),
+                    0, 0, true
+                )
+            }
+            let (r, g, b, a) = (style.color ?? draw.color).rgba8
+            _ = tvg_shape_set_fill_color(shape, r, g, b, a)
+            finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        }
     }
 
     private func alignFactor(_ alignment: TextAlignment) -> Double {

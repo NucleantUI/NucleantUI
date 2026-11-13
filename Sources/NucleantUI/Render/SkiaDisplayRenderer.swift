@@ -2,11 +2,10 @@
 //  SkiaDisplayRenderer.swift
 //  NucleantUI
 //
-//  The Skia sibling of `ThorDisplayRenderer`: turns a `DisplayList` into
-//  Skia draw calls on a node's `SkCanvas`. With `SKIA_MODE` (Package.swift's
-//  `skiaMode`) it is the one that draws the views — the window canvas,
-//  `.drawingGroup()`, the per-view painter and the `.shader` layers — in
-//  place of the ThorVG one.
+//  Turns a `DisplayList` into Skia draw calls on a node's `SkCanvas`. It
+//  draws the views in every build — the window canvas, `.drawingGroup()`,
+//  the per-view painter, the `.shader` layers and all text. Skia is always
+//  the renderer; see "Renderer" in Package.swift.
 //
 //  Skia is immediate: a draw call records into the surface, and nothing is
 //  held between passes the way ThorVG's paints are. A render therefore
@@ -363,7 +362,7 @@ public final class SkiaDisplayRenderer {
         // Ellipsis only when layout found the string too wide — a box
         // measured to exactly fit its text loses nothing.
         if draw.isTruncated, let first = lines.first {
-            lines = [ellipsized(first, toFit: draw.frame.width, font: font)]
+            lines = [ellipsized(first, toFit: draw.frame.width, font: font, family: family, style: draw.font)]
         }
 
         let paint = textPaint
@@ -373,16 +372,103 @@ public final class SkiaDisplayRenderer {
         canvas.save()
         begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         // The first baseline an ascent below the box's top, the rest a line
-        // height apart — the metrics layout sized the box with.
+        // height and the line spacing apart — the metrics layout sized the
+        // box with.
         let metrics = TextMeasurer.lineMetrics(for: draw.font)
+        let step = metrics.lineHeight + draw.lineSpacing
         let factor = alignFactor(draw.alignment)
         for (index, line) in lines.enumerated() where !line.isEmpty {
-            let width = Double(font.measureText(line))
-            let x = draw.frame.minX + (draw.frame.width - width) * factor
-            let y = draw.frame.minY + metrics.ascent + Double(index) * metrics.lineHeight
-            canvas.drawString(line, x: Float(x), y: Float(y), font: font, paint: paint)
+            let y = draw.frame.minY + metrics.ascent + Double(index) * step
+            let spacing = draw.letterSpacing + (index == lines.count - 1 ? draw.lastLineTightening : 0)
+            let runs = self.runs(of: line, in: font, family: family, style: draw.font)
+            if spacing == 0 {
+                let widths = runs.map { Double($0.font.measureText($0.text)) }
+                let width = widths.reduce(0, +)
+                let x = draw.frame.minX + (draw.frame.width - width) * factor
+                var pen = x
+                for (run, advance) in zip(runs, widths) {
+                    canvas.drawString(run.text, x: Float(pen), y: Float(y), font: run.font, paint: paint)
+                    pen += advance
+                }
+                decorate(draw, from: x, to: x + width, baseline: y, on: canvas)
+            } else {
+                let spread = spaced(runs, by: spacing)
+                let x = draw.frame.minX + (draw.frame.width - spread.advance) * factor
+                for piece in spread.pieces {
+                    canvas.drawGlyphs(piece.glyphs, positions: piece.positions, origin: SIMD2(Float(x), Float(y)), font: piece.font, paint: paint)
+                }
+                decorate(draw, from: x, to: x + spread.advance - spacing, baseline: y, on: canvas)
+            }
         }
         canvas.restore()
+    }
+
+    /// `line` in runs of one font each: `font`, or — for a character its
+    /// face has no glyph for — the font of the face the platform falls back
+    /// to for it, as the measurer measured it.
+    private func runs(of line: String, in font: SkFont, family: String?, style: Font) -> [(text: String, font: SkFont)] {
+        let fallback = FontFallback.shared
+        if line.utf8.allSatisfy({ $0 < 0x80 }), fallback.coversASCII(family: family) { return [(line, font)] }
+        var runs: [(text: String, font: SkFont)] = []
+        for character in line {
+            let face = fallback.font(
+                for: character, family: family, size: style.size, bold: style.weight.isBoldFace, italic: style.isItalic
+            ) ?? font
+            if let last = runs.last, last.font === face {
+                runs[runs.count - 1].text.append(character)
+            } else {
+                runs.append((String(character), face))
+            }
+        }
+        return runs
+    }
+
+    /// The runs' glyphs placed a character at a time with `spacing` after
+    /// each — a piece of glyphs for each run, in its font — and the advance
+    /// of the whole, the last spacing included, as layout measured it.
+    private func spaced(
+        _ runs: [(text: String, font: SkFont)], by spacing: Double
+    ) -> (pieces: [(font: SkFont, glyphs: [UInt16], positions: [SIMD2<Float>])], advance: Double) {
+        var pieces: [(font: SkFont, glyphs: [UInt16], positions: [SIMD2<Float>])] = []
+        var pen = 0.0
+        for run in runs {
+            var glyphs: [UInt16] = []
+            var positions: [SIMD2<Float>] = []
+            for character in run.text {
+                let ids = run.font.textToGlyphs(String(character))
+                for (id, width) in zip(ids, run.font.getWidths(ids)) {
+                    glyphs.append(id)
+                    positions.append(SIMD2(Float(pen), 0))
+                    pen += Double(width)
+                }
+                pen += spacing
+            }
+            pieces.append((run.font, glyphs, positions))
+        }
+        return (pieces, pen)
+    }
+
+    /// One line's underline and strikethrough, from `start` to `end` along
+    /// its baseline, each in its own color or the text's.
+    private func decorate(_ draw: TextDraw, from start: Double, to end: Double, baseline: Double, on canvas: SkCanvas) {
+        guard draw.underline != nil || draw.strikethrough != nil, end > start else { return }
+        let metrics = TextMeasurer.decorationMetrics(for: draw.font)
+        let paint = textPaint
+        for (style, offset) in [(draw.underline, metrics.underline), (draw.strikethrough, metrics.strikethrough)] {
+            guard let style else { continue }
+            let (r, g, b, a) = (style.color ?? draw.color).rgba8
+            paint.setColor(SIMD4(r, g, b, a))
+            let top = baseline + offset - metrics.thickness / 2
+            for dash in TextMeasurer.decorationDashes(length: end - start, thickness: metrics.thickness, pattern: style.pattern) {
+                canvas.drawRect(
+                    x: Float(start + dash.start), y: Float(top),
+                    w: Float(dash.end - dash.start), h: Float(metrics.thickness),
+                    paint: paint
+                )
+            }
+        }
+        let (r, g, b, a) = draw.color.rgba8
+        paint.setColor(SIMD4(r, g, b, a))
     }
 
     private func font(family: String?, size: Double, slanted: Bool) -> SkFont {
@@ -416,14 +502,17 @@ public final class SkiaDisplayRenderer {
     }
 
     /// `line` cut short with a trailing "…" until it fits `width`.
-    private func ellipsized(_ line: String, toFit width: Double, font: SkFont) -> String {
-        guard Double(font.measureText(line)) > width else { return line }
+    private func ellipsized(_ line: String, toFit width: Double, font: SkFont, family: String?, style: Font) -> String {
+        func measure(_ text: String) -> Double {
+            runs(of: text, in: font, family: family, style: style).reduce(0) { $0 + Double($1.font.measureText($1.text)) }
+        }
+        guard measure(line) > width else { return line }
         var characters = Array(line)
         while !characters.isEmpty {
             characters.removeLast()
             while characters.last == " " { characters.removeLast() }
             let candidate = String(characters) + "…"
-            if Double(font.measureText(candidate)) <= width { return candidate }
+            if measure(candidate) <= width { return candidate }
         }
         return "…"
     }
