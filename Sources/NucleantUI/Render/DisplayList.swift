@@ -3,8 +3,8 @@
 //  NucleantUI
 //
 //  The flat, absolute-coordinate output of one layout pass. Everything above
-//  this line is view/layout code that never names ThorVG; everything below it
-//  (`ThorDisplayRenderer`) only ever sees this.
+//  this line is view/layout code that never names a renderer; everything
+//  below it (`SkiaDisplayRenderer`) only ever sees this.
 //
 
 /// A resolved path in absolute window coordinates.
@@ -113,32 +113,123 @@ public struct TransformedClip: Equatable, Sendable {
     }
 }
 
-/// One paint operation. `bounds` is the shape's own rect — gradients resolve
-/// their `UnitPoint`s against it, so it travels with the command rather than
-/// being recomputed from the path.
-///
-/// With `origin` set, `path` and `bounds` are in the shape's own space and
-/// `origin` is where that space's corner lands in the list — under
-/// `transform`, as everything else in the command is. A shape view's path is
-/// made that way, so it depends on the shape and its size alone; without
-/// `origin`, the path is in the list's coordinates.
-public struct ShapeDraw: Equatable, Sendable {
-    public var path: Path {
-        didSet { pathBox = path.boundingBox }
-    }
-    /// `path.boundingBox`, worked out with the path: what the command can
-    /// paint is asked of it several times a pass (`paintBounds`), and the
-    /// box is a walk over every element — a measure of every text in it.
-    private(set) var pathBox: Rect?
-    public var bounds: Rect
-    public var fill: _ResolvedPaint?
-    public var stroke: _ResolvedPaint?
-    public var strokeStyle: StrokeStyle
+/// The clip and transform a command is drawn under — what the commands a
+/// container places all share. A list keeps one for each run of commands
+/// under the same state, and each command says which one it is drawn under.
+public struct DrawState: Equatable, Sendable {
     public var transform: Transform
     public var clip: Rect?
     public var clipCornerRadius: Double
     /// Clips turned with the view they cut, on top of `clip`.
     public var transformedClips: [TransformedClip]
+
+    public init(
+        transform: Transform = .identity,
+        clip: Rect? = nil,
+        clipCornerRadius: Double = 0,
+        transformedClips: [TransformedClip] = []
+    ) {
+        self.transform = transform
+        self.clip = clip
+        self.clipCornerRadius = clipCornerRadius
+        self.transformedClips = transformedClips
+    }
+
+    /// Where a command whose own box is `box` can put pixels, in the list's
+    /// coordinates: the box under the transform, inside the clip. `nil`
+    /// when that is nothing.
+    func paintBounds(of box: Rect) -> Rect? {
+        // Anti-aliasing touches the pixel outside the edge.
+        var result = box.applying(transform).expanded(by: 1)
+        if let clip {
+            result = result.intersection(clip)
+        }
+        guard result.width > 0, result.height > 0 else { return nil }
+        return result
+    }
+
+    /// The state for the same commands drawn `(dx, dy)` further along. A
+    /// transform is moved *after* it — a rotated card must not be re-rotated
+    /// about the old anchor — which is the conjugated transform.
+    func translated(dx: Double, dy: Double) -> DrawState {
+        func moved(_ transform: Transform) -> Transform {
+            guard !transform.isIdentity else { return transform }
+            return Transform.translation(x: dx, y: dy)
+                .concatenating(transform)
+                .concatenating(Transform.translation(x: -dx, y: -dy))
+        }
+        var copy = self
+        copy.transform = moved(transform)
+        copy.clip = clip?.offsetBy(dx: dx, dy: dy)
+        if !transformedClips.isEmpty {
+            copy.transformedClips = transformedClips.map {
+                TransformedClip(rect: $0.rect.offsetBy(dx: dx, dy: dy), cornerRadius: $0.cornerRadius, transform: moved($0.transform))
+            }
+        }
+        return copy
+    }
+
+    /// This state with `transform` — a move and a scale, no flip — applied
+    /// after its own. The geometry of the commands stays as it is; their
+    /// transform, and the clips on screen, take it on.
+    func transformed(by transform: Transform) -> DrawState {
+        let radiusScale = min(transform.e11, transform.e22)
+        var copy = self
+        copy.transform = transform.concatenating(self.transform)
+        copy.clip = clip?.applying(transform)
+        copy.clipCornerRadius *= radiusScale
+        if !transformedClips.isEmpty {
+            copy.transformedClips = transformedClips.map {
+                TransformedClip(rect: $0.rect, cornerRadius: $0.cornerRadius, transform: transform.concatenating($0.transform))
+            }
+        }
+        return copy
+    }
+
+    /// The same state cut to `rect` as well as to its own clip. A rounded
+    /// clip that holds `rect` entirely is replaced by it — the rounding lies
+    /// outside; one that does not is the caller's problem to avoid
+    /// (`roundedClipCrosses(_:)`).
+    func clipped(to rect: Rect) -> DrawState {
+        var copy = self
+        if let clip, !(clipCornerRadius > 0 && clip.insetBy(clipCornerRadius).contains(rect)) {
+            copy.clip = clip.intersection(rect)
+        } else {
+            copy.clip = rect
+            copy.clipCornerRadius = 0
+        }
+        return copy
+    }
+
+    /// Whether a rounded clip's rounding reaches into `rect`, where a cut
+    /// to `rect` could not draw it.
+    func roundedClipCrosses(_ rect: Rect) -> Bool {
+        guard clipCornerRadius > 0, let clip else { return false }
+        return !clip.insetBy(clipCornerRadius).contains(rect)
+    }
+}
+
+/// One paint operation. `bounds` is the shape's own rect — gradients resolve
+/// their `UnitPoint`s against it, so it travels with the command rather than
+/// being recomputed from the path.
+///
+/// With `origin` set, `path` and `bounds` are in the shape's own space and
+/// `origin` is where that space's corner lands in the list — under the
+/// state's transform, as everything else in the command is. A shape view's
+/// path is made that way, so it depends on the shape and its size alone;
+/// without `origin`, the path is in the list's coordinates.
+public struct ShapeDraw: Equatable, Sendable {
+    public var path: Path {
+        didSet { pathBox = path.boundingBox }
+    }
+    /// `path.boundingBox`, worked out with the path: the box is a walk over
+    /// every element — a measure of every text in it — and a path drawn
+    /// again keeps it.
+    private(set) var pathBox: Rect?
+    public var bounds: Rect
+    public var fill: _ResolvedPaint?
+    public var stroke: _ResolvedPaint?
+    public var strokeStyle: StrokeStyle
     /// Where the path's own space starts in the list, for a path made in
     /// it; `nil` for a path in the list's coordinates.
     public var origin: Point?
@@ -149,16 +240,11 @@ public struct ShapeDraw: Equatable, Sendable {
         fill: _ResolvedPaint? = nil,
         stroke: _ResolvedPaint? = nil,
         strokeStyle: StrokeStyle = StrokeStyle(),
-        transform: Transform = .identity,
-        clip: Rect? = nil,
-        clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = [],
         origin: Point? = nil
     ) {
         self.init(
             path: path, pathBox: path.boundingBox, bounds: bounds, fill: fill, stroke: stroke,
-            strokeStyle: strokeStyle, transform: transform, clip: clip, clipCornerRadius: clipCornerRadius,
-            transformedClips: transformedClips, origin: origin
+            strokeStyle: strokeStyle, origin: origin
         )
     }
 
@@ -171,10 +257,6 @@ public struct ShapeDraw: Equatable, Sendable {
         fill: _ResolvedPaint?,
         stroke: _ResolvedPaint?,
         strokeStyle: StrokeStyle,
-        transform: Transform,
-        clip: Rect?,
-        clipCornerRadius: Double,
-        transformedClips: [TransformedClip],
         origin: Point?
     ) {
         self.path = path
@@ -183,10 +265,6 @@ public struct ShapeDraw: Equatable, Sendable {
         self.fill = fill
         self.stroke = stroke
         self.strokeStyle = strokeStyle
-        self.transform = transform
-        self.clip = clip
-        self.clipCornerRadius = clipCornerRadius
-        self.transformedClips = transformedClips
         self.origin = origin
     }
 }
@@ -231,11 +309,6 @@ public struct TextDraw: Equatable, Sendable {
     public var underline: Text.LineStyle?
     /// A line through each line's middle; `nil` for none.
     public var strikethrough: Text.LineStyle?
-    public var transform: Transform
-    public var clip: Rect?
-    public var clipCornerRadius: Double
-    /// Clips turned with the view they cut, on top of `clip`.
-    public var transformedClips: [TransformedClip]
 
     public init(
         string: String,
@@ -250,11 +323,7 @@ public struct TextDraw: Equatable, Sendable {
         lastLineTightening: Double = 0,
         lineSpacing: Double = 0,
         underline: Text.LineStyle? = nil,
-        strikethrough: Text.LineStyle? = nil,
-        transform: Transform = .identity,
-        clip: Rect? = nil,
-        clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = []
+        strikethrough: Text.LineStyle? = nil
     ) {
         self.init(
             lines: string.split(separator: "\n", omittingEmptySubsequences: false).map(String.init),
@@ -269,11 +338,7 @@ public struct TextDraw: Equatable, Sendable {
             lastLineTightening: lastLineTightening,
             lineSpacing: lineSpacing,
             underline: underline,
-            strikethrough: strikethrough,
-            transform: transform,
-            clip: clip,
-            clipCornerRadius: clipCornerRadius,
-            transformedClips: transformedClips
+            strikethrough: strikethrough
         )
     }
 
@@ -291,11 +356,7 @@ public struct TextDraw: Equatable, Sendable {
         lastLineTightening: Double = 0,
         lineSpacing: Double = 0,
         underline: Text.LineStyle? = nil,
-        strikethrough: Text.LineStyle? = nil,
-        transform: Transform = .identity,
-        clip: Rect? = nil,
-        clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = []
+        strikethrough: Text.LineStyle? = nil
     ) {
         self.lines = lines
         self.frame = frame
@@ -310,10 +371,6 @@ public struct TextDraw: Equatable, Sendable {
         self.lineSpacing = lineSpacing
         self.underline = underline
         self.strikethrough = strikethrough
-        self.transform = transform
-        self.clip = clip
-        self.clipCornerRadius = clipCornerRadius
-        self.transformedClips = transformedClips
     }
 }
 
@@ -324,28 +381,11 @@ public struct ImageDraw: Equatable, Sendable {
     /// The inherited opacity — a bitmap has no colours to fade at layout
     /// time, so it carries the factor for the renderer to apply.
     public var opacity: Double
-    public var transform: Transform
-    public var clip: Rect?
-    public var clipCornerRadius: Double
-    /// Clips turned with the view they cut, on top of `clip`.
-    public var transformedClips: [TransformedClip]
 
-    public init(
-        image: RasterImage,
-        frame: Rect,
-        opacity: Double = 1,
-        transform: Transform = .identity,
-        clip: Rect? = nil,
-        clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = []
-    ) {
+    public init(image: RasterImage, frame: Rect, opacity: Double = 1) {
         self.image = image
         self.frame = frame
         self.opacity = opacity
-        self.transform = transform
-        self.clip = clip
-        self.clipCornerRadius = clipCornerRadius
-        self.transformedClips = transformedClips
     }
 }
 
@@ -360,30 +400,12 @@ public struct SvgDraw: Equatable, Sendable {
     /// The inherited opacity, applied to the drawing as a whole — the
     /// document's colors are its own, not resolved at layout time.
     public var opacity: Double
-    public var transform: Transform
-    public var clip: Rect?
-    public var clipCornerRadius: Double
-    /// Clips turned with the view they cut, on top of `clip`.
-    public var transformedClips: [TransformedClip]
 
-    public init(
-        image: SvgImage,
-        frame: Rect,
-        tint: _ResolvedPaint? = nil,
-        opacity: Double = 1,
-        transform: Transform = .identity,
-        clip: Rect? = nil,
-        clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = []
-    ) {
+    public init(image: SvgImage, frame: Rect, tint: _ResolvedPaint? = nil, opacity: Double = 1) {
         self.image = image
         self.frame = frame
         self.tint = tint
         self.opacity = opacity
-        self.transform = transform
-        self.clip = clip
-        self.clipCornerRadius = clipCornerRadius
-        self.transformedClips = transformedClips
     }
 }
 
@@ -406,30 +428,12 @@ public struct CanvasDraw: Equatable, Sendable {
     public var frame: Rect
     /// The inherited opacity, applied to the canvas as a whole.
     public var opacity: Double
-    public var transform: Transform
-    public var clip: Rect?
-    public var clipCornerRadius: Double
-    /// Clips turned with the view they cut, on top of `clip`.
-    public var transformedClips: [TransformedClip]
     let generation: Int
     let drawing: CanvasDrawing
 
-    init(
-        frame: Rect,
-        opacity: Double = 1,
-        transform: Transform = .identity,
-        clip: Rect? = nil,
-        clipCornerRadius: Double = 0,
-        transformedClips: [TransformedClip] = [],
-        generation: Int,
-        drawing: CanvasDrawing
-    ) {
+    init(frame: Rect, opacity: Double = 1, generation: Int, drawing: CanvasDrawing) {
         self.frame = frame
         self.opacity = opacity
-        self.transform = transform
-        self.clip = clip
-        self.clipCornerRadius = clipCornerRadius
-        self.transformedClips = transformedClips
         self.generation = generation
         self.drawing = drawing
     }
@@ -438,13 +442,11 @@ public struct CanvasDraw: Equatable, Sendable {
         lhs.generation == rhs.generation
             && lhs.frame == rhs.frame
             && lhs.opacity == rhs.opacity
-            && lhs.transform == rhs.transform
-            && lhs.clip == rhs.clip
-            && lhs.clipCornerRadius == rhs.clipCornerRadius
-            && lhs.transformedClips == rhs.transformedClips
     }
 }
 
+/// What is drawn. Where, under which clip and transform, is the list's to
+/// say: `DisplayList.state(at:)`.
 public enum DrawCommand: Equatable, Sendable {
     case shape(ShapeDraw)
     case text(TextDraw)
@@ -453,97 +455,171 @@ public enum DrawCommand: Equatable, Sendable {
     case canvas(CanvasDraw)
 }
 
-/// The commands produced by one layout pass, in paint order.
+extension DrawCommand {
+    /// The same command drawn `(dx, dy)` further along: its geometry moved.
+    /// The state it is drawn under moves with the list
+    /// (`DrawState.translated(dx:dy:)`).
+    func translated(dx: Double, dy: Double) -> DrawCommand {
+        guard dx != 0 || dy != 0 else { return self }
+        switch self {
+        case .shape(var draw):
+            // A path in its own space moves with its origin, and is left as
+            // it is — the same path, wherever it lands.
+            if let origin = draw.origin {
+                draw.origin = origin + Point(x: dx, y: dy)
+            } else {
+                draw.path = draw.path.offsetBy(dx: dx, dy: dy)
+                draw.bounds = draw.bounds.offsetBy(dx: dx, dy: dy)
+            }
+            return .shape(draw)
+        case .text(var draw):
+            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
+            return .text(draw)
+        case .image(var draw):
+            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
+            return .image(draw)
+        case .svg(var draw):
+            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
+            return .svg(draw)
+        case .canvas(var draw):
+            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
+            return .canvas(draw)
+        }
+    }
+}
+
+/// The commands produced by one layout pass, in paint order, each under one
+/// of the list's states.
 ///
 /// `Equatable` so a `.shader` layer can tell whether the view under it drew
 /// anything different since its canvas was last rasterized — comparing two
-/// lists is far cheaper than a ThorVG pass that comes out identical.
+/// lists is far cheaper than a render that comes out identical.
 public struct DisplayList: Equatable, Sendable {
+    /// What is drawn, in paint order.
     public private(set) var commands: [DrawCommand] = []
+    /// The clips and transforms the commands are drawn under, one for each
+    /// run of commands that shares one: a new one starts at a command whose
+    /// state differs from the one before it. The same commands under the
+    /// same states make the same list, however it was put together.
+    public private(set) var states: [DrawState] = []
+    /// For each command, the index in `states` of the one it is drawn under.
+    private(set) var stateIndices: [Int32] = []
+    /// For each command, where it can put pixels, in the list's coordinates
+    /// — after its transform, inside its clip; `nil` when it paints nothing.
+    /// Worked out once, as the command is appended: culling, cutting a
+    /// boundary into runs and damage all ask it, every pass. Not part of
+    /// what the list is: it follows from the rest.
+    private var bounds: [Rect?] = []
 
     public init() {}
 
-    public mutating func append(_ command: DrawCommand) {
+    public var isEmpty: Bool { commands.isEmpty }
+
+    /// The state `commands[index]` is drawn under.
+    public func state(at index: Int) -> DrawState {
+        states[Int(stateIndices[index])]
+    }
+
+    /// The index in `states` of the one `commands[index]` is drawn under.
+    func stateIndex(at index: Int) -> Int {
+        Int(stateIndices[index])
+    }
+
+    /// Where `commands[index]` can put pixels, in the list's coordinates —
+    /// after its transform, inside its clip. `nil` when it paints nothing.
+    func paintBounds(at index: Int) -> Rect? {
+        bounds[index]
+    }
+
+    public mutating func append(_ command: DrawCommand, under state: DrawState = DrawState()) {
+        append(command, under: state, bounds: command.paintBox.flatMap(state.paintBounds(of:)))
+    }
+
+    /// `other`'s command at `index`, under its state there and with its
+    /// bounds: a command moved from one list to another as it is.
+    mutating func append(_ index: Int, of other: DisplayList) {
+        append(other.commands[index], under: other.state(at: index), bounds: other.bounds[index])
+    }
+
+    private mutating func append(_ command: DrawCommand, under state: DrawState, bounds: Rect?) {
+        if states.last != state {
+            states.append(state)
+        }
+        stateIndices.append(Int32(states.count - 1))
         commands.append(command)
+        self.bounds.append(bounds)
     }
 
     public mutating func append(contentsOf other: DisplayList) {
+        guard !other.commands.isEmpty else { return }
+        // Its first run goes on with this list's last, when they share a
+        // state — the list it would have been, built in one.
+        let joins = states.last == other.states[0]
+        let offset = Int32(states.count) - (joins ? 1 : 0)
+        states.append(contentsOf: other.states[(joins ? 1 : 0)...])
+        if offset == 0 {
+            stateIndices.append(contentsOf: other.stateIndices)
+        } else {
+            stateIndices.append(contentsOf: other.stateIndices.lazy.map { $0 + offset })
+        }
         commands.append(contentsOf: other.commands)
+        bounds.append(contentsOf: other.bounds)
     }
 
-    public var isEmpty: Bool { commands.isEmpty }
+    /// Whether `commands[index]` draws what `other.commands[otherIndex]`
+    /// does, under the same state — wherever in their lists the two stand.
+    func draws(_ index: Int, as otherIndex: Int, in other: DisplayList) -> Bool {
+        states[Int(stateIndices[index])] == other.states[Int(other.stateIndices[otherIndex])]
+            && commands[index] == other.commands[otherIndex]
+    }
+
+    public static func == (lhs: DisplayList, rhs: DisplayList) -> Bool {
+        lhs.stateIndices == rhs.stateIndices && lhs.states == rhs.states && lhs.commands == rhs.commands
+    }
 
     /// The same list drawn `(dx, dy)` further along — how a view's absolute
     /// commands become local to its own render node, so that the node's
     /// content compares equal across passes that only *moved* the view.
+    /// Each state is moved once, for every command under it.
     func translated(dx: Double, dy: Double) -> DisplayList {
         guard dx != 0 || dy != 0 else { return self }
-        var copy = DisplayList()
-        copy.commands.reserveCapacity(commands.count)
-        for command in commands {
-            copy.commands.append(command.translated(dx: dx, dy: dy))
-        }
+        var copy = self
+        copy.states = states.map { $0.translated(dx: dx, dy: dy) }
+        copy.commands = commands.map { $0.translated(dx: dx, dy: dy) }
+        copy.bounds = bounds.map { $0?.offsetBy(dx: dx, dy: dy) }
         return copy
     }
 
     /// The same list with `transform` applied after each command's own:
     /// how a `.shader` layer takes a scaled view's commands back to its
     /// frame's size. A move and a scale without a flip only — what keeps a
-    /// clip, a rect on screen, a rect.
+    /// clip, a rect on screen, a rect. The commands stay as they are; only
+    /// the states change.
     func transformed(by transform: Transform) -> DisplayList {
         guard !transform.isIdentity else { return self }
-        var copy = DisplayList()
-        copy.commands.reserveCapacity(commands.count)
-        for command in commands {
-            copy.commands.append(command.transformed(by: transform))
+        var copy = self
+        copy.states = states.map { $0.transformed(by: transform) }
+        for index in commands.indices {
+            copy.bounds[index] = commands[index].paintBox.flatMap(copy.state(at: index).paintBounds(of:))
         }
         return copy
     }
+
+    /// The box every command in the list can paint in, or `nil` for a list
+    /// that paints nothing.
+    var paintBounds: Rect? {
+        var result: Rect?
+        for case let rect? in bounds {
+            result = result.map { $0.union(rect) } ?? rect
+        }
+        return result
+    }
 }
 
-extension DrawCommand {
-
-    /// This command with `transform` — a move and a scale, no flip —
-    /// applied after its own. The geometry stays as it is; the command's
-    /// transform, and the clips on screen, take it on.
-    func transformed(by transform: Transform) -> DrawCommand {
-        let radiusScale = min(transform.e11, transform.e22)
-        func after(_ own: Transform) -> Transform { transform.concatenating(own) }
-        func after(_ clips: [TransformedClip]) -> [TransformedClip] {
-            clips.map { TransformedClip(rect: $0.rect, cornerRadius: $0.cornerRadius, transform: after($0.transform)) }
-        }
-        switch self {
-        case .shape(var draw):
-            draw.transform = after(draw.transform)
-            draw.clip = draw.clip?.applying(transform)
-            draw.clipCornerRadius *= radiusScale
-            draw.transformedClips = after(draw.transformedClips)
-            return .shape(draw)
-        case .text(var draw):
-            draw.transform = after(draw.transform)
-            draw.clip = draw.clip?.applying(transform)
-            draw.clipCornerRadius *= radiusScale
-            draw.transformedClips = after(draw.transformedClips)
-            return .text(draw)
-        case .image(var draw):
-            draw.transform = after(draw.transform)
-            draw.clip = draw.clip?.applying(transform)
-            draw.clipCornerRadius *= radiusScale
-            draw.transformedClips = after(draw.transformedClips)
-            return .image(draw)
-        case .svg(var draw):
-            draw.transform = after(draw.transform)
-            draw.clip = draw.clip?.applying(transform)
-            draw.clipCornerRadius *= radiusScale
-            draw.transformedClips = after(draw.transformedClips)
-            return .svg(draw)
-        case .canvas(var draw):
-            draw.transform = after(draw.transform)
-            draw.clip = draw.clip?.applying(transform)
-            draw.clipCornerRadius *= radiusScale
-            draw.transformedClips = after(draw.transformedClips)
-            return .canvas(draw)
-        }
+extension DrawContext {
+    /// The clip and transform a command placed here is drawn under.
+    var drawState: DrawState {
+        DrawState(transform: transform, clip: clip, clipCornerRadius: clipCornerRadius, transformedClips: transformedClips)
     }
 }
 

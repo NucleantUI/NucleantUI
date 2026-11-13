@@ -208,13 +208,13 @@ public final class SkiaDisplayRenderer {
     /// view's clip — and dropped when a command's differ: one save, one clip,
     /// one transform for the run, where each command set and dropped its own.
     private func emit(_ list: DisplayList, on canvas: SkCanvas) {
-        var open: DrawState?
-        for command in list.commands {
-            let state = command.drawState
+        var open = -1
+        for (index, command) in list.commands.enumerated() {
+            let state = list.stateIndex(at: index)
             if state != open {
-                if open != nil { canvas.restore() }
+                if open >= 0 { canvas.restore() }
                 canvas.save()
-                begin(on: canvas, transform: state.transform, clip: state.clip, cornerRadius: state.cornerRadius, transformedClips: state.transformedClips)
+                begin(on: canvas, list.states[state])
                 open = state
             }
             switch command {
@@ -230,7 +230,7 @@ public final class SkiaDisplayRenderer {
                 emit(draw, on: canvas)
             }
         }
-        if open != nil { canvas.restore() }
+        if open >= 0 { canvas.restore() }
     }
 
     // MARK: - Canvas views
@@ -689,20 +689,20 @@ public final class SkiaDisplayRenderer {
     /// Clip first, in the canvas's space, then the command's own transform —
     /// the clip does not move with what it clips. A transformed clip is cut
     /// under its own transform. The caller saves and restores around it.
-    private func begin(on canvas: SkCanvas, transform: Transform, clip: Rect?, cornerRadius: Double, transformedClips: [TransformedClip]) {
-        if let clip {
-            clipRect(clip, cornerRadius: cornerRadius, on: canvas)
+    private func begin(on canvas: SkCanvas, _ state: DrawState) {
+        if let clip = state.clip {
+            clipRect(clip, cornerRadius: state.clipCornerRadius, on: canvas)
         }
-        if !transformedClips.isEmpty {
+        if !state.transformedClips.isEmpty {
             let base = canvas.getTotalMatrix()
-            for turned in transformedClips {
+            for turned in state.transformedClips {
                 canvas.concat(matrix(turned.transform))
                 clipRect(turned.rect, cornerRadius: turned.cornerRadius, on: canvas)
                 canvas.setMatrix(base)
             }
         }
-        if !transform.isIdentity {
-            canvas.concat(matrix(transform))
+        if !state.transform.isIdentity {
+            canvas.concat(matrix(state.transform))
         }
     }
 
@@ -739,32 +739,6 @@ public final class SkiaDisplayRenderer {
         case .miter: return .miter
         case .round: return .round
         case .bevel: return .bevel
-        }
-    }
-}
-
-/// The clip and transform a command is drawn under — what a run of
-/// commands shares.
-private struct DrawState: Equatable {
-    var transform: Transform
-    var clip: Rect?
-    var cornerRadius: Double
-    var transformedClips: [TransformedClip]
-}
-
-extension DrawCommand {
-    fileprivate var drawState: DrawState {
-        switch self {
-        case .shape(let draw):
-            return DrawState(transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
-        case .text(let draw):
-            return DrawState(transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
-        case .image(let draw):
-            return DrawState(transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
-        case .svg(let draw):
-            return DrawState(transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
-        case .canvas(let draw):
-            return DrawState(transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         }
     }
 }

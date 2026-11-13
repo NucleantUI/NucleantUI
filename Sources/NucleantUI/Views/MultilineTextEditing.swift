@@ -825,10 +825,8 @@ struct TextAreaContent: NodeContent {
                     list.append(.shape(ShapeDraw(
                         path: path,
                         bounds: viewport,
-                        fill: context.resolve(selectionColor),
-                        transform: context.transform,
-                        clip: clip
-                    )))
+                        fill: context.resolve(selectionColor)
+                    )), under: DrawState(transform: context.transform, clip: clip))
                 }
             }
 
@@ -847,10 +845,8 @@ struct TextAreaContent: NodeContent {
                         font: font,
                         color: resolvedColor,
                         lineLimit: 1,
-                        wraps: false,
-                        transform: context.transform,
-                        clip: clip
-                    )))
+                        wraps: false
+                    )), under: DrawState(transform: context.transform, clip: clip))
                 }
                 runStart = runEnd + 1
             }
@@ -865,10 +861,8 @@ struct TextAreaContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: viewport,
-                fill: context.resolve(color),
-                transform: context.transform,
-                clip: clip.insetBy(-1)
-            )))
+                fill: context.resolve(color)
+            )), under: DrawState(transform: context.transform, clip: clip.insetBy(-1)))
         }
     }
 }

@@ -50,6 +50,13 @@ struct ShapeBesideText {
 @Suite
 struct ShapeDrawingTests {
 
+    /// Where `draw` paints in a list of its own, under no clip or transform.
+    private func paintBounds(of draw: ShapeDraw) -> Rect? {
+        var list = DisplayList()
+        list.append(.shape(draw))
+        return list.paintBounds(at: 0)
+    }
+
     private func shapes<V: View>(_ view: V) -> [ShapeDraw] {
         OffscreenRender(environment: EnvironmentValues())
             .list(of: view, size: Size(width: 100, height: 100))
@@ -64,7 +71,7 @@ struct ShapeDrawingTests {
         #expect(draw.bounds == Rect(x: 0, y: 0, width: 20, height: 10), "its own rect, at the origin")
         #expect(draw.path == Circle().path(in: draw.bounds))
         #expect(draw.origin == Point(x: 40, y: 45), "centred in the 100 × 100 square")
-        #expect(DrawCommand.shape(draw).paintBounds == Rect(x: 39, y: 44, width: 22, height: 12),
+        #expect(paintBounds(of: draw) == Rect(x: 39, y: 44, width: 22, height: 12),
                 "where it paints, out at its place: its rect and a pixel round it")
     }
 
@@ -96,7 +103,7 @@ struct ShapeDrawingTests {
         path.addLine(to: Point(x: 12, y: -4))
         var draw = ShapeDraw(path: path, bounds: Rect(x: 0, y: 0, width: 4, height: 4), fill: .color(.red))
         #expect(draw.pathBox == path.boundingBox)
-        #expect(DrawCommand.shape(draw).paintBounds == Rect(x: -1, y: -5, width: 14, height: 10),
+        #expect(paintBounds(of: draw) == Rect(x: -1, y: -5, width: 14, height: 10),
                 "the path's box and the bounds together, and a pixel round them")
         draw.path.addLine(to: Point(x: 20, y: 20))
         #expect(draw.pathBox == Rect(x: 2, y: -4, width: 18, height: 24), "a change of the path is a change of its box")

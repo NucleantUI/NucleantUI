@@ -161,22 +161,24 @@ struct CompositeFrameMath {
         let shape = ShapeDraw(
             path: Path { $0.addRect(Rect(x: 0, y: 0, width: 10, height: 10)) },
             bounds: Rect(x: 0, y: 0, width: 10, height: 10),
-            fill: .color(.red),
+            fill: .color(.red)
+        )
+        let state = DrawState(
             transform: .translation(x: 20, y: 0),
             clip: Rect(x: 20, y: 0, width: 5, height: 5),
             clipCornerRadius: 4
         )
-        let list = DisplayList(commands: [.shape(shape)])
+        var list = DisplayList()
+        list.append(.shape(shape), under: state)
         let back = Transform.around(Point(x: 100, y: 100), .scale(x: 0.5, y: 0.5))
         let transformed = list.transformed(by: back)
-        guard case .shape(let draw) = transformed.commands.first else {
-            Issue.record("not a shape")
-            return
-        }
-        #expect(draw.path == shape.path, "the geometry stays")
-        #expect(draw.transform == back.concatenating(shape.transform))
-        #expect(draw.clip == Rect(x: 60, y: 50, width: 2.5, height: 2.5))
-        #expect(draw.clipCornerRadius == 2)
+        #expect(transformed.commands == list.commands, "the geometry stays")
+        let moved = transformed.state(at: 0)
+        #expect(moved.transform == back.concatenating(state.transform))
+        #expect(moved.clip == Rect(x: 60, y: 50, width: 2.5, height: 2.5))
+        #expect(moved.clipCornerRadius == 2)
+        #expect(transformed.paintBounds(at: 0) == Rect(x: 60, y: 50, width: 2.5, height: 2.5),
+                "where it paints, worked out again under the new state")
         #expect(list.transformed(by: .identity) == list)
     }
 }

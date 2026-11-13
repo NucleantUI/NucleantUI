@@ -285,12 +285,8 @@ struct MatchedTransitionSourceContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: Path { $0.addRect(rect, cornerRadius: style.cornerRadius) },
                 bounds: rect,
-                fill: inner.resolve(.color(background)),
-                transform: inner.transform,
-                clip: inner.clip,
-                clipCornerRadius: inner.clipCornerRadius,
-                transformedClips: inner.transformedClips
-            )))
+                fill: inner.resolve(.color(background))
+            )), under: inner.drawState)
         }
         // Clipped only when rounded, as a source with square corners is
         // left as it draws.

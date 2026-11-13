@@ -114,8 +114,12 @@ public final class ThorDisplayRenderer {
         }
     }
 
+    /// The clip and transform of the command being drawn.
+    private var state = DrawState()
+
     private func emit(_ list: DisplayList) {
-        for command in list.commands {
+        for (index, command) in list.commands.enumerated() {
+            state = list.state(at: index)
             switch command {
             case .shape(let draw):
                 emit(draw)
@@ -161,8 +165,8 @@ public final class ThorDisplayRenderer {
         }
 
         // A path in its own space, carried out to where it lands.
-        let transform = draw.origin.map { draw.transform.concatenating(.translation(x: $0.x, y: $0.y)) } ?? draw.transform
-        finish(paint: shape, transform: transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        let transform = draw.origin.map { state.transform.concatenating(.translation(x: $0.x, y: $0.y)) } ?? state.transform
+        finish(paint: shape, transform: transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     private func appendPath(_ path: Path, to shape: Tvg_Paint) {
@@ -308,7 +312,7 @@ public final class ThorDisplayRenderer {
         _ = tvg_text_align(text, Float(alignFactor(draw.alignment)), 0)
         _ = tvg_paint_translate(text, f(draw.frame.minX), f(draw.frame.minY))
 
-        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: text, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     /// `draw`'s lines one at a time, each a line height and the line spacing
@@ -364,7 +368,7 @@ public final class ThorDisplayRenderer {
         _ = tvg_text_wrap_mode(text, TVG_TEXT_WRAP_NONE)
         _ = tvg_text_align(text, 0, 0)
         _ = tvg_paint_translate(text, f(x), f(top))
-        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: text, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     /// One line's underline and strikethrough, from `start` to `end` along
@@ -385,7 +389,7 @@ public final class ThorDisplayRenderer {
             }
             let (r, g, b, a) = (style.color ?? draw.color).rgba8
             _ = tvg_shape_set_fill_color(shape, r, g, b, a)
-            finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+            finish(paint: shape, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
         }
     }
 
@@ -417,7 +421,7 @@ public final class ThorDisplayRenderer {
         if draw.opacity < 1 {
             _ = tvg_paint_set_opacity(picture, UInt8(max(0, min(1, draw.opacity)) * 255))
         }
-        finish(paint: picture, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: picture, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     // MARK: - SVG
@@ -443,7 +447,7 @@ public final class ThorDisplayRenderer {
         if draw.opacity < 1 {
             _ = tvg_paint_set_opacity(paint, UInt8(max(0, min(1, draw.opacity)) * 255))
         }
-        finish(paint: paint, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: paint, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     /// `image` parsed by ThorVG's own SVG loader, once.

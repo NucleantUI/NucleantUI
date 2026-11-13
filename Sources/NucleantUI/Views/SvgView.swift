@@ -94,11 +94,7 @@ struct SvgContent: NodeContent {
             image: image,
             frame: rect,
             tint: tint,
-            opacity: context.opacity,
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            opacity: context.opacity
+        )), under: context.drawState)
     }
 }

@@ -178,57 +178,59 @@ final class RenderBoundaries<N: NucleantContainerNode> {
     /// own — the window canvas composites under everything.
     func endRootFrame(_ list: inout DisplayList) {
         guard let frame = frames.popLast(), !frame.markers.isEmpty else { return }
-        let split = splitRuns(list.commands, at: frame.markers)
+        let split = splitRuns(list, at: frame.markers)
         guard !split.detached.isEmpty else { return }
         for run in split.detached {
             _ = useImage(
                 key: RenderNodeKey(path: [], identity: Self.rootIdentity, id: run.index),
                 clip: nil,
-                commands: run.commands,
+                content: run.list,
                 order: frame.markers[run.index - 1].runOrder
             )
         }
-        list = DisplayList(commands: split.primary)
+        list = split.primary
     }
 
     private static var rootIdentity: ViewIdentity { ViewIdentity(type: ObjectIdentifier(RenderBoundaries.self), viewID: .unknown) }
 
-    /// Cut `commands` into runs at the markers, and sort what comes after
+    /// Cut `list` into runs at the markers, and sort what comes after
     /// the first marker into the primary image — which composites under
     /// every nested node — and images of their own, per run, for what must
     /// not: a command that lands over a node placed before it, and then
     /// any command that lands over one of those, since it was drawn after
     /// it and has to stay on top of it.
     private func splitRuns(
-        _ commands: [DrawCommand],
+        _ list: DisplayList,
         at markers: [Marker]
-    ) -> (primary: [DrawCommand], detached: [(index: Int, commands: [DrawCommand])]) {
-        var primary: [DrawCommand] = []
-        var detached: [(index: Int, commands: [DrawCommand])] = []
+    ) -> (primary: DisplayList, detached: [(index: Int, list: DisplayList)]) {
+        // Nothing nested: all of it is the primary image's, as it is.
+        guard !markers.isEmpty else { return (list, []) }
+        var primary = DisplayList()
+        var detached: [(index: Int, list: DisplayList)] = []
         // The nodes placed before the run being cut.
         var covered: [Rect] = []
         // Everything moved out of the primary so far, whichever run: a
         // later command over any of it was drawn after it.
         var movedBounds: [Rect] = []
+        let count = list.commands.count
         var start = 0
         for run in 0...markers.count {
-            let end = run < markers.count ? min(max(markers[run].index, start), commands.count) : commands.count
+            let end = run < markers.count ? min(max(markers[run].index, start), count) : count
             defer { start = end }
             if run > 0 { covered.append(markers[run - 1].rect) }
             guard end > start else { continue }
-            let slice = commands[start..<end]
             if run == 0 {
-                primary.append(contentsOf: slice)
+                for index in start..<end { primary.append(index, of: list) }
                 continue
             }
-            var moved: [DrawCommand] = []
-            for command in slice {
-                guard let bounds = command.paintBounds else { continue }
+            var moved = DisplayList()
+            for index in start..<end {
+                guard let bounds = list.paintBounds(at: index) else { continue }
                 if Self.overlaps(bounds, any: covered) || Self.overlaps(bounds, any: movedBounds) {
-                    moved.append(command)
+                    moved.append(index, of: list)
                     movedBounds.append(bounds)
                 } else {
-                    primary.append(command)
+                    primary.append(index, of: list)
                 }
             }
             if !moved.isEmpty {
@@ -257,33 +259,29 @@ final class RenderBoundaries<N: NucleantContainerNode> {
         }
         for marker in frame.markers { cover(marker.rect) }
         guard !content.isEmpty else { return extent }
-        let split = splitRuns(content.commands, at: frame.markers)
-        cover(useImage(key: key, clip: clip, commands: split.primary, order: frame.primaryOrder))
+        let split = splitRuns(content, at: frame.markers)
+        cover(useImage(key: key, clip: clip, content: split.primary, order: frame.primaryOrder))
         for run in split.detached {
             cover(useImage(
                 key: RenderNodeKey(path: key.path, identity: key.identity, id: run.index),
                 clip: clip,
-                commands: run.commands,
+                content: run.list,
                 order: frame.markers[run.index - 1].runOrder
             ))
         }
         return extent
     }
 
-    /// The image node for `key` holding `commands` (absolute coordinates),
+    /// The image node for `key` holding `content` (absolute coordinates),
     /// composited where they paint and cut to `clip`. The image is the
-    /// commands' paint bounds inside the window, rounded to the granule;
+    /// content's paint bounds inside the window, rounded to the granule;
     /// the content is kept in the image's own coordinates, so a view that
     /// only moved by whole pixels compares equal and is not painted again.
     /// Returns the visible rect, in points, or `nil` when nothing is shown.
-    private func useImage(key: RenderNodeKey, clip: Rect?, commands: [DrawCommand], order: Int) -> Rect? {
-        guard !commands.isEmpty else { return nil }
+    private func useImage(key: RenderNodeKey, clip: Rect?, content: DisplayList, order: Int) -> Rect? {
+        guard !content.isEmpty else { return nil }
         let scale = nodes.scale
-        var bounds: Rect?
-        for command in commands {
-            guard let b = command.paintBounds else { continue }
-            bounds = bounds.map { $0.union(b) } ?? b
-        }
+        let bounds = content.paintBounds
         let window = Rect(origin: .zero, size: nodes.windowSize)
         guard let visibleBounds = bounds?.intersection(window), visibleBounds.width > 0, visibleBounds.height > 0 else {
             return nil
@@ -323,7 +321,7 @@ final class RenderBoundaries<N: NucleantContainerNode> {
         // compares equal to what its image holds.
         painter.schedule(
             entry,
-            content: DisplayList(commands: commands).translated(dx: -px / scale, dy: -py / scale),
+            content: content.translated(dx: -px / scale, dy: -py / scale),
             origin: SIMD2(px, py)
         )
         if LayoutTrace.isEnabled {

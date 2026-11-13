@@ -76,12 +76,8 @@ struct TextContent: NodeContent {
             lastLineTightening: layout.lastLineTightening,
             lineSpacing: max(input.paragraph.lineSpacing, 0),
             underline: underline.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) },
-            strikethrough: strikethrough.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) },
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            strikethrough: strikethrough.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) }
+        )), under: context.drawState)
     }
 }
 
@@ -133,12 +129,8 @@ struct ShapeContent<S: Shape>: NodeContent {
             fill: fill.map { context.resolve(animatedFill?.current(of: $0) ?? $0) },
             stroke: stroke.map { context.resolve(animatedStroke?.current(of: $0) ?? $0) },
             strokeStyle: strokeStyle,
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips,
             origin: rect.origin
-        )))
+        )), under: context.drawState)
     }
 
     /// The shape's path in `rect`, its own, and the path's box: the ones

@@ -65,11 +65,7 @@ struct DividerContent: NodeContent {
         list.append(.shape(ShapeDraw(
             path: path,
             bounds: rect,
-            fill: context.resolve(color),
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            fill: context.resolve(color)
+        )), under: context.drawState)
     }
 }

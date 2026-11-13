@@ -87,12 +87,10 @@ extension Rect {
 }
 
 extension DrawCommand {
-    /// Where this command can put pixels, in the list's coordinates — after
-    /// its transform, inside its clip. `nil` when it paints nothing.
-    var paintBounds: Rect? {
-        let box: Rect
-        let transform: Transform
-        let clip: Rect?
+    /// The box this command can put pixels in, in the list's coordinates
+    /// before its state's transform and clip (`DrawState.paintBounds(of:)`
+    /// takes it the rest of the way). `nil` when it paints nothing.
+    var paintBox: Rect? {
         switch self {
         case .shape(let draw):
             // `Color.clear` is a shape with nothing visible — the renderer
@@ -113,82 +111,17 @@ extension DrawCommand {
             if let origin = draw.origin {
                 rect.origin += origin
             }
-            box = rect
-            transform = draw.transform
-            clip = draw.clip
+            return rect
         case .text(let draw):
             // Glyphs overshoot the layout box a little — descenders, an
             // italic shear — so give them room in proportion to the size.
-            box = draw.frame.expanded(by: draw.font.size * 0.5)
-            transform = draw.transform
-            clip = draw.clip
+            return draw.frame.expanded(by: draw.font.size * 0.5)
         case .image(let draw):
-            box = draw.frame
-            transform = draw.transform
-            clip = draw.clip
+            return draw.frame
         case .svg(let draw):
-            box = draw.frame
-            transform = draw.transform
-            clip = draw.clip
+            return draw.frame
         case .canvas(let draw):
-            box = draw.frame
-            transform = draw.transform
-            clip = draw.clip
-        }
-        // Anti-aliasing touches the pixel outside the edge.
-        var result = box.applying(transform).expanded(by: 1)
-        if let clip {
-            result = result.intersection(clip)
-        }
-        guard result.width > 0, result.height > 0 else { return nil }
-        return result
-    }
-}
-
-extension DisplayList {
-    init(commands: [DrawCommand]) {
-        self.init()
-        for command in commands { append(command) }
-    }
-
-    /// The box every command in the list can paint in, or `nil` for a list
-    /// that paints nothing.
-    var paintBounds: Rect? {
-        var result: Rect?
-        for command in commands {
-            guard let bounds = command.paintBounds else { continue }
-            result = result.map { $0.union(bounds) } ?? bounds
-        }
-        return result
-    }
-}
-
-extension DrawCommand {
-    /// The same command cut to `rect` as well as to its own clip. A rounded
-    /// clip that holds `rect` entirely is replaced by it — the rounding lies
-    /// outside; one that does not is the caller's problem to avoid.
-    func clipped(to rect: Rect) -> DrawCommand {
-        func narrowed(_ clip: Rect?, _ radius: Double) -> (Rect, Double) {
-            guard let clip else { return (rect, 0) }
-            if radius > 0, clip.insetBy(radius).contains(rect) { return (rect, 0) }
-            return (clip.intersection(rect), radius)
-        }
-        switch self {
-        case .shape(var draw):
-            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
-            return .shape(draw)
-        case .text(var draw):
-            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
-            return .text(draw)
-        case .image(var draw):
-            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
-            return .image(draw)
-        case .svg(var draw):
-            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
-            return .svg(draw)
-        case .canvas(var draw):
-            (draw.clip, draw.clipCornerRadius) = narrowed(draw.clip, draw.clipCornerRadius)
-            return .canvas(draw)
+            return draw.frame
         }
     }
 }

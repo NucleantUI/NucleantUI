@@ -32,7 +32,7 @@ final class DragSession {
 
     private enum Preview {
         /// The dragged view exactly as it was last drawn, clip removed.
-        case snapshot([DrawCommand])
+        case snapshot(DisplayList)
         /// A view of the caller's, built for the drag, centred on the pointer.
         case view(ViewNode, size: Size, environment: EnvironmentValues)
     }
@@ -75,7 +75,7 @@ final class DragSession {
             context.freezesMotion = true
             var list = DisplayList()
             source.node.place(in: source.frame, proposal: source.value.proposal, context: context, into: &list)
-            preview = .snapshot(list.commands)
+            preview = .snapshot(list)
         }
     }
 
@@ -123,11 +123,10 @@ final class DragSession {
         faded.flattensRenderNodes = true
         faded.freezesMotion = true
         switch preview {
-        case .snapshot(let commands):
-            let dx = location.x - origin.x
-            let dy = location.y - origin.y
-            for command in commands {
-                list.append(command.translated(dx: dx, dy: dy).faded(under: faded))
+        case .snapshot(let snapshot):
+            let moved = snapshot.translated(dx: location.x - origin.x, dy: location.y - origin.y)
+            for index in moved.commands.indices {
+                list.append(moved.commands[index].faded(under: faded), under: moved.state(at: index))
             }
         case .view(let node, let size, _):
             let rect = Rect(
@@ -142,63 +141,6 @@ final class DragSession {
 }
 
 extension DrawCommand {
-
-    /// The same command drawn `(dx, dy)` further along. A command with a
-    /// transform is moved *after* it — a rotated card must not be re-rotated
-    /// about the old anchor — which is the conjugated transform.
-    func translated(dx: Double, dy: Double) -> DrawCommand {
-        guard dx != 0 || dy != 0 else { return self }
-        func moved(_ transform: Transform) -> Transform {
-            guard !transform.isIdentity else { return transform }
-            return Transform.translation(x: dx, y: dy)
-                .concatenating(transform)
-                .concatenating(Transform.translation(x: -dx, y: -dy))
-        }
-        func moved(_ clips: [TransformedClip]) -> [TransformedClip] {
-            clips.map {
-                TransformedClip(rect: $0.rect.offsetBy(dx: dx, dy: dy), cornerRadius: $0.cornerRadius, transform: moved($0.transform))
-            }
-        }
-        switch self {
-        case .shape(var draw):
-            // A path in its own space moves with its origin, and is left as
-            // it is — the same path, wherever it lands.
-            if let origin = draw.origin {
-                draw.origin = origin + Point(x: dx, y: dy)
-            } else {
-                draw.path = draw.path.offsetBy(dx: dx, dy: dy)
-                draw.bounds = draw.bounds.offsetBy(dx: dx, dy: dy)
-            }
-            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
-            draw.transform = moved(draw.transform)
-            draw.transformedClips = moved(draw.transformedClips)
-            return .shape(draw)
-        case .text(var draw):
-            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
-            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
-            draw.transform = moved(draw.transform)
-            draw.transformedClips = moved(draw.transformedClips)
-            return .text(draw)
-        case .image(var draw):
-            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
-            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
-            draw.transform = moved(draw.transform)
-            draw.transformedClips = moved(draw.transformedClips)
-            return .image(draw)
-        case .svg(var draw):
-            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
-            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
-            draw.transform = moved(draw.transform)
-            draw.transformedClips = moved(draw.transformedClips)
-            return .svg(draw)
-        case .canvas(var draw):
-            draw.frame = draw.frame.offsetBy(dx: dx, dy: dy)
-            draw.clip = draw.clip?.offsetBy(dx: dx, dy: dy)
-            draw.transform = moved(draw.transform)
-            draw.transformedClips = moved(draw.transformedClips)
-            return .canvas(draw)
-        }
-    }
 
     /// The same command under `context`'s opacity. Its colors were resolved
     /// when it was first drawn, so the scheme in `context` changes nothing.

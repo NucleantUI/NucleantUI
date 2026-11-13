@@ -350,12 +350,8 @@ struct PopoverPlacementContent: NodeContent {
                 $0.closeSubpath()
             },
             bounds: bounds,
-            fill: context.resolve(arrowFill),
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            fill: context.resolve(arrowFill)
+        )), under: context.drawState)
         list.append(.shape(ShapeDraw(
             path: Path {
                 $0.move(to: baseA)
@@ -364,12 +360,8 @@ struct PopoverPlacementContent: NodeContent {
             },
             bounds: bounds,
             stroke: context.resolve(arrowStroke),
-            strokeStyle: StrokeStyle(lineWidth: 1, lineJoin: .round),
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            strokeStyle: StrokeStyle(lineWidth: 1, lineJoin: .round)
+        )), under: context.drawState)
     }
 }
 

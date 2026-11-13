@@ -25,10 +25,20 @@ import NucleantSkia
         context: DrawContext = DrawContext(),
         _ renderer: @escaping (inout GraphicsContext, Size) -> Void
     ) -> (DrawCommand, CanvasContent) {
+        let (list, content) = placed(in: rect, context: context, renderer)
+        return (list.commands[0], content)
+    }
+
+    /// The list a canvas placed at `rect` under `context` fills.
+    private func placed(
+        in rect: Rect,
+        context: DrawContext,
+        _ renderer: @escaping (inout GraphicsContext, Size) -> Void
+    ) -> (DisplayList, CanvasContent) {
         let content = CanvasContent(path: [0], environment: EnvironmentValues(), renderer: renderer)
         var list = DisplayList()
         content.place(node: ContentNode(content: content), in: rect, proposal: ProposedSize(rect.size), context: context, into: &list)
-        return (list.commands[0], content)
+        return (list, content)
     }
 
     /// Draw a canvas placed at `rect` onto the surface.
@@ -37,9 +47,7 @@ import NucleantSkia
         context: DrawContext = DrawContext(),
         _ renderer: @escaping (inout GraphicsContext, Size) -> Void
     ) {
-        var list = DisplayList()
-        list.append(command(in: rect, context: context, renderer).0)
-        SkiaDisplayRenderer(surface: surface).render(list)
+        SkiaDisplayRenderer(surface: surface).render(placed(in: rect, context: context, renderer).0)
     }
 
     private let red = SIMD4<UInt8>(255, 0, 0, 255)

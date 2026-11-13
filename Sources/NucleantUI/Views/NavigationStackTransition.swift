@@ -293,12 +293,8 @@ struct NavigationScreenTransitionContent: NodeContent {
         list.append(.shape(ShapeDraw(
             path: Path { $0.addRect(frame, cornerRadius: radius) },
             bounds: frame,
-            fill: clipped.resolve(background),
-            transform: clipped.transform,
-            clip: clipped.clip,
-            clipCornerRadius: clipped.clipCornerRadius,
-            transformedClips: clipped.transformedClips
-        )))
+            fill: clipped.resolve(background)
+        )), under: clipped.drawState)
 
         let scale = rect.width > 0 && rect.height > 0
             ? max(frame.width / rect.width, frame.height / rect.height)
@@ -319,12 +315,8 @@ struct NavigationScreenTransitionContent: NodeContent {
         list.append(.shape(ShapeDraw(
             path: Path { $0.addRect(rect) },
             bounds: rect,
-            fill: shade.resolve(.color(.black)),
-            transform: shade.transform,
-            clip: shade.clip,
-            clipCornerRadius: shade.clipCornerRadius,
-            transformedClips: shade.transformedClips
-        )))
+            fill: shade.resolve(.color(.black))
+        )), under: shade.drawState)
     }
 }
 

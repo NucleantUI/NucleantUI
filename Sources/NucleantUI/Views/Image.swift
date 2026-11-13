@@ -60,12 +60,8 @@ struct ImageContent: NodeContent {
         list.append(.image(ImageDraw(
             image: image,
             frame: rect,
-            opacity: context.opacity,
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            opacity: context.opacity
+        )), under: context.drawState)
     }
 }
 
