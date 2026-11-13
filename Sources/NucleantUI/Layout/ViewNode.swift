@@ -49,7 +49,13 @@ final class ViewNode {
     /// Set on a container's slot node whose child was removed, while its
     /// transition plays the exit: it is drawn, but neither laid out nor hit.
     var removal: NodeRemoval? {
-        didSet { isLeaving = removal != nil }
+        didSet {
+            let leaving = removal != nil
+            guard leaving != isLeaving else { return }
+            isLeaving = leaving
+            // Out of its parent's layout, or back in it.
+            parent?.layoutChildrenChanged()
+        }
     }
 
     /// Whether `removal` is set — what the walks over children ask, kept as
@@ -100,6 +106,14 @@ final class ViewNode {
     private var horizontalFlexibility: LayoutPriorityClass?
     private var verticalFlexibility: LayoutPriorityClass?
 
+    /// `layoutChildren`, worked out once and kept until it changes.
+    private var flattenedChildren: [ViewNode]?
+
+    /// A stack's last run and the order it offers its children space in —
+    /// see `StackContent`. Dropped with the measurements, and when the
+    /// children it was worked out for change.
+    var stackCache: StackRunCache?
+
     init(content: any NodeContent, children: [ViewNode] = []) {
         self.content = content
         self.children = children
@@ -114,6 +128,8 @@ final class ViewNode {
     /// grafts a freshly built subtree onto the tree that is still standing.
     func replaceChild(at index: Int, with replacement: ViewNode) {
         guard children.indices.contains(index) else { return }
+        // Dropped first, so the array is no longer shared when it is written.
+        layoutChildrenChanged()
         children[index] = replacement
         replacement.parent = self
         replacement.indexInParent = index
@@ -130,6 +146,7 @@ final class ViewNode {
             current.measurements.removeAll()
             current.horizontalFlexibility = nil
             current.verticalFlexibility = nil
+            current.stackCache = nil
             // Preferences reduced from the old subtree, and a custom
             // layout's cache built from it, are stale the same way.
             current.preferenceCache.removeAll(keepingCapacity: true)
@@ -142,28 +159,47 @@ final class ViewNode {
     /// `TupleView`, `ForEach`) dissolve into their own children, so a stack
     /// treats a group's contents as its own siblings — SwiftUI's rule.
     ///
-    /// Asked by every layout pass of every container, so the usual case —
-    /// nothing to dissolve, nothing leaving — hands back `children` as it is.
+    /// Asked by every layout pass of every container, several times, so it
+    /// is worked out once and kept until it changes (`layoutChildrenChanged`);
+    /// the usual case — nothing to dissolve, nothing leaving — is `children`
+    /// as it is.
     var layoutChildren: [ViewNode] {
+        if let flattenedChildren { return flattenedChildren }
         var isFlat = true
         for child in children where child.isLeaving || child.content.isTransparent {
             isFlat = false
             break
         }
-        if isFlat { return children }
-        var flattened: [ViewNode] = []
-        flattened.reserveCapacity(children.count)
-        appendLayoutChildren(to: &flattened)
-        return flattened
+        let result: [ViewNode]
+        if isFlat {
+            result = children
+        } else {
+            var flattened: [ViewNode] = []
+            flattened.reserveCapacity(children.count)
+            for child in children where !child.isLeaving {
+                if child.content.isTransparent {
+                    flattened.append(contentsOf: child.layoutChildren)
+                } else {
+                    flattened.append(child)
+                }
+            }
+            result = flattened
+        }
+        flattenedChildren = result
+        return result
     }
 
-    private func appendLayoutChildren(to flattened: inout [ViewNode]) {
-        for child in children where !child.isLeaving {
-            if child.content.isTransparent {
-                child.appendLayoutChildren(to: &flattened)
-            } else {
-                flattened.append(child)
-            }
+    /// What `layoutChildren` answers here may have changed: a child was
+    /// replaced, came or went from layout, or did so inside a transparent
+    /// child — whose layout children are this node's too, and so on up
+    /// through the transparent nodes above.
+    private func layoutChildrenChanged() {
+        var node: ViewNode? = self
+        while let current = node {
+            current.flattenedChildren = nil
+            current.stackCache = nil
+            guard current.content.isTransparent else { return }
+            node = current.parent
         }
     }
 
