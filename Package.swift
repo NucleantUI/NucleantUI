@@ -183,7 +183,14 @@ let package = Package(
             // The default faces (Roboto, Roboto Mono) travel with the library,
             // so text looks the same on every platform and never depends on
             // what fonts the OS happens to ship — see FontRegistry.
-            resources: [.copy("Resources/Fonts")],
+            // The icons NucleantUI's own controls draw are compiled into it
+            // (`PackageResources`), so no platform has a file to find — see
+            // Icons. Only the ones used are copied in, one rule each.
+            resources: [
+                .copy("Resources/Fonts"),
+                .embedInCode("Resources/Icons/arrow_back_ios_new.svg"),
+                .copy("Resources/Icons/MaterialIcons-LICENSE.txt"),
+            ],
             swiftSettings: skiaModeSettings
         ),
         // Audio file loading and playback. Stands on its own — no NucleantUI
