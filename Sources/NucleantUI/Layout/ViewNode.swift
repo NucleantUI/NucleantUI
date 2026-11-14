@@ -212,6 +212,50 @@ class ViewNode {
     /// rather than laying them out itself — see `NodeContent.isTransparent`.
     var isTransparent: Bool { traits.contains(.transparent) }
 
+    /// Whether this node, swapped in for `old`, gives every size `old` was
+    /// asked for and is as flexible, as the same kind of node — so that
+    /// nothing above, whose sizes were worked out from `old`'s, measures
+    /// differently. The sizes it is asked here are ones the next pass would
+    /// ask anyway. Only as good as `old`'s answers are complete: one that
+    /// dropped an answer to make room says no.
+    ///
+    /// Asked outside a pass, so only of subtrees whose kinds place purely,
+    /// which measure purely too: no custom `Layout` running code of the
+    /// app's, no lazy container building rows.
+    func measuresLike(_ old: ViewNode) -> Bool {
+        guard !subtreeTraits.contains(.placesImpurely), !old.subtreeTraits.contains(.placesImpurely),
+              old.measurements.isComplete,
+              traits == old.traits, !isTransparent,
+              gridCellTraits == old.gridCellTraits,
+              lazyTag == old.lazyTag, sectionTag == old.sectionTag,
+              layoutValues == nil, old.layoutValues == nil,
+              flexibility(along: .horizontal) == old.flexibility(along: .horizontal),
+              flexibility(along: .vertical) == old.flexibility(along: .vertical)
+        else { return false }
+        var same = true
+        old.measurements.forEach { proposal, size in
+            if same, sizeThatFits(proposal) != size { same = false }
+        }
+        return same
+    }
+
+    /// After a child below was swapped for one that measures like it
+    /// (`measuresLike(_:)`): every size cached here and above still holds,
+    /// but what was reduced from the old subtree's preferences does not. A
+    /// custom layout above keeps a cache of its subviews, which is told
+    /// they changed the usual way.
+    func invalidatePreferencesUpwards() {
+        var node: ViewNode? = self
+        while let current = node {
+            if current.traits.contains(.layoutCacheOwner) {
+                current.invalidateMeasurementsUpwards()
+                return
+            }
+            current.preferenceCache.removeAll(keepingCapacity: true)
+            node = current.parent
+        }
+    }
+
     /// Discard measurements that the swap above may have falsified.
     ///
     /// The new subtree starts with an empty cache of its own, but every
@@ -389,6 +433,9 @@ struct MeasurementCache {
     private var count = 0
     private var next = 0
     private var older: [ProposedSize: Size]?
+    /// False once an answer was dropped to make room: then what it holds
+    /// is not every question it was asked.
+    private(set) var isComplete = true
 
     func size(for proposal: ProposedSize) -> Size? {
         if count > 0, proposals.0 == proposal { return sizes.0 }
@@ -416,7 +463,10 @@ struct MeasurementCache {
             default: evicted = (proposals.3, sizes.3)
             }
             if older == nil { older = [:] }
-            if older!.count >= 16 { older!.removeAll(keepingCapacity: true) }
+            if older!.count >= 16 {
+                older!.removeAll(keepingCapacity: true)
+                isComplete = false
+            }
             older![evicted.0] = evicted.1
         }
         switch slot {
@@ -431,6 +481,16 @@ struct MeasurementCache {
         count = 0
         next = 0
         older?.removeAll(keepingCapacity: true)
+        isComplete = true
+    }
+
+    /// Every answer it holds, with the proposal that asked.
+    func forEach(_ body: (ProposedSize, Size) -> Void) {
+        if count > 0 { body(proposals.0, sizes.0) }
+        if count > 1 { body(proposals.1, sizes.1) }
+        if count > 2 { body(proposals.2, sizes.2) }
+        if count > 3 { body(proposals.3, sizes.3) }
+        older?.forEach { body($0.key, $0.value) }
     }
 }
 

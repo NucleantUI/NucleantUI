@@ -447,8 +447,14 @@ public final class ViewHost {
             parent.replaceChild(at: slot, with: replacement)
             records.replaceNode(old, with: replacement, above: path)
             // Every ancestor cached a size computed from the subtree just
-            // replaced.
-            parent.invalidateMeasurementsUpwards()
+            // replaced — sizes that still hold when the new one measures as
+            // the old one did: a label changed to one as wide, a toggle
+            // flipped, a color changed.
+            if replacement.measuresLike(old) {
+                parent.invalidatePreferencesUpwards()
+            } else {
+                parent.invalidateMeasurementsUpwards()
+            }
             rebuilt.append(path)
         }
         return true
