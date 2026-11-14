@@ -951,6 +951,10 @@ public final class ViewHost {
     /// Whether a view here has the keys.
     var hasFocusedView: Bool { focusedTarget() != nil }
 
+    /// The text the view that has the keys takes — `.none` when nothing
+    /// does, or what does takes none.
+    var focusedTextInput: TextInputKind { focusedTarget()?.textInput ?? .none }
+
     /// Take the keys from the view that has them: the window's input
     /// delegate took a press.
     func clearFocus() {

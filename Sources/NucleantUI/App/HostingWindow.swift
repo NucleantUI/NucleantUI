@@ -204,6 +204,10 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         return match == .darkAqua ? .dark : .light
         #elseif os(iOS)
         return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
+        #elseif os(Android)
+        // `Configuration.uiMode`, which the Activity sends before the app
+        // starts and on every change — see AndroidSurfaceHost.
+        return AndroidSurfaceHost.isNightMode ? .dark : .light
         #elseif os(Linux)
         // The desktop's own setting, through the XDG portal — see
         // DesktopAppearance. A desktop with no preference gets light, the same
@@ -228,10 +232,22 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     private func applyColorScheme(_ scheme: ColorScheme) {
         guard host.environment.colorScheme != scheme || renderEngine.map({ $0.clearColor.a == 0 }) == true else { return }
         host.environment.colorScheme = scheme
-        let background = BackgroundStyle().colors.color(for: scheme)
-        renderEngine?.clearColor = (background.red, background.green, background.blue, 1)
+        paintClearColor()
         host.invalidate()
         markNeedsRedraw()
+    }
+
+    /// The engine's clear color, for the scheme the window shows — the
+    /// window's background wherever no view paints one.
+    ///
+    /// Also for an engine built after the scheme was applied, which starts
+    /// with a clear color of its own: on Android every surface gets a new
+    /// one, the first included, so without this the window shows the
+    /// engine's near-black under light-scheme content.
+    @MainActor
+    private func paintClearColor() {
+        let background = BackgroundStyle().colors.color(for: host.environment.colorScheme)
+        renderEngine?.clearColor = (background.red, background.green, background.blue, 1)
     }
 
     #if os(macOS)
@@ -615,6 +631,14 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         // points the layout works in.
         displayScale = AndroidSurfaceHost.displayScale
         applyColorScheme(Self.systemColorScheme())
+        // Dark mode switched while the app runs: the Activity handles the
+        // configuration change itself (`uiMode` is in its configChanges) and
+        // tells the host.
+        AndroidSurfaceHost.onAppearanceChanged = { [weak self] in
+            MainActor.assumeIsolated {
+                self?.applyColorScheme(Self.systemColorScheme())
+            }
+        }
 
         platformWindow.present()
     }
@@ -633,6 +657,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
                 nucleantLogError("NucleantUI: surface recreated with no engine — canvas not attached\n")
                 return
             }
+            paintClearColor()
             attachCanvas(engine: engine, width: win_rect.z, height: win_rect.w)
         }
     }
@@ -775,6 +800,9 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         if host.update() {
             markNeedsRedraw()
         }
+        #if os(Android)
+        syncSoftKeyboard()
+        #endif
         // Shaders are animated by definition: advance their clocks and
         // re-arm them every frame. This is the one thing on screen that is
         // never idle, and it is opt-in — a tree with no `Shader` view in it
@@ -791,6 +819,25 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         else { return }
         renderEngine.drawFrame(dt)
     }
+
+    #if os(Android)
+    /// Ask for the soft keyboard the view with the keys needs — none, when
+    /// it takes no text. Every frame, so focus moved by a tap, by Tab or by a
+    /// focused view leaving the tree all count; the Activity reads it right
+    /// after the frame.
+    @MainActor
+    private func syncSoftKeyboard() {
+        let kind: AndroidSurfaceHost.TextInputKind
+        switch host.focusedTextInput {
+        case .none: kind = .none
+        case .singleLine: kind = .singleLine
+        case .multiLine: kind = .multiLine
+        }
+        if platformWindow?.textInputKind != kind {
+            platformWindow?.textInputKind = kind
+        }
+    }
+    #endif
 
     /// Content resized to `w × h` **points**.
     public func on_size(w: Double, h: Double) {

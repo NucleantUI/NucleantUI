@@ -699,7 +699,9 @@ extension TextAreaLines: BuiltinView {
                 editCommands: editCommands,
                 onEditCommand: onEditCommand,
                 isTabStop: true,
-                insertsTab: mode == .editor
+                insertsTab: mode == .editor,
+                // A vertical-axis field still submits on Return.
+                textInput: mode == .editor ? .multiLine : .singleLine
             )
         ))
     }
