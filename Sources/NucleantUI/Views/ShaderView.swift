@@ -496,7 +496,7 @@ extension Shader: BuiltinView {
         // Read once per build: compiling is the function's business, and
         // the slot compares the words it is handed every pass.
         ContentNode(content: ShaderModuleContent(
-            path: context.path,
+            slot: context.position.renderSlot,
             words: function.spirv,
             input: function.input,
             isAnimated: function.isAnimated,

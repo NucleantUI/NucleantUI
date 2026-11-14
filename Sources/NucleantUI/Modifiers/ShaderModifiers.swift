@@ -130,7 +130,8 @@ extension View {
 /// and hands that to the layer's canvas instead of the window's. The child's
 /// frames are still written, so hit testing is untouched.
 struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
-    let path: [Int]
+    /// What the shader's slot is filed under: its view's.
+    let slot: RenderSlot
     /// The module that runs over the view, and its input. `nil` when
     /// disabled — the child then draws straight into the window.
     let module: (words: [UInt32], input: Input, isAnimated: Bool)?
@@ -172,7 +173,7 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
             // The view is one canvas node and nothing else: its image is
             // already the view's pixels, and the shader samples it as it is.
             host.useModule(
-                path: path,
+                slot: slot,
                 words: module.words,
                 input: module.input,
                 isAnimated: module.isAnimated,
@@ -191,7 +192,7 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
                 canvas.composite(host: host)
             }
             host.useModule(
-                path: path,
+                slot: slot,
                 words: module.words,
                 input: module.input,
                 isAnimated: module.isAnimated,
@@ -267,7 +268,7 @@ struct ShaderFunctionModifier: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> ShaderEffectContent<ShaderArguments> {
         ShaderEffectContent(
-            path: context.path,
+            slot: context.position.renderSlot,
             module: isEnabled ? (function.spirv, function.input, function.isAnimated) : nil,
             draw: draw,
             textures: ShaderTextures(textures),
@@ -296,7 +297,7 @@ struct ShaderModuleModifier<Input: ShaderInput>: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> ShaderEffectContent<Input> {
         ShaderEffectContent(
-            path: context.path,
+            slot: context.position.renderSlot,
             module: isEnabled ? (words, input, isAnimated) : nil,
             draw: draw,
             textures: ShaderTextures(textures),

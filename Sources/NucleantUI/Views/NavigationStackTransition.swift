@@ -187,8 +187,8 @@ final class NavigationStackTransition {
 /// The node over each of a stack's screens: draws it as the move under way
 /// has it — or as it is, with no move or no part in it.
 struct NavigationScreenTransitionContent: NodeContent {
-    /// The node's path: where a shader move keeps its module.
-    let path: [Int]
+    /// What a shader move keeps its module under: the modifier's slot.
+    let slot: RenderSlot
     let screen: NavigationScreenID
     let transition: NavigationStackTransition
     let storage: NavigationStackStorage
@@ -248,7 +248,7 @@ struct NavigationScreenTransitionContent: NodeContent {
                 content: true
             )
             ShaderEffectContent(
-                path: path,
+                slot: slot,
                 module: (reading.spirv, reading.input, reading.isAnimated),
                 draw: ShaderDraw(vertices: 6, instances: 1),
                 textures: ShaderTextures(),
@@ -344,7 +344,7 @@ struct NavigationScreenTransitionModifier: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> NavigationScreenTransitionContent {
         NavigationScreenTransitionContent(
-            path: context.path,
+            slot: context.position.renderSlot,
             screen: screen,
             transition: transition,
             storage: storage,

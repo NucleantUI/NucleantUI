@@ -34,7 +34,11 @@ import Dispatch
 /// comes back, or another view in its place, gets nodes of its own.
 /// Compared as the object it is, in one step: a table holding a node under
 /// it holds it, so no other slot takes its place meanwhile.
-final class RenderSlot: Hashable {
+///
+/// Sendable as a token: what an observation handler files to serve on the
+/// main actor. Its one stored property is set when it is made, and read on
+/// the main actor.
+final class RenderSlot: Hashable, @unchecked Sendable {
     /// Where the view stands, for trace output; `nil` for a node no view
     /// owns, and once the position is gone.
     private weak var position: ViewPosition?
@@ -48,6 +52,13 @@ final class RenderSlot: Hashable {
         guard let position else { return "-" }
         return position.hasLeft ? "(left)" : "\(position.path)"
     }
+
+    /// The path of the view while it stands — to dirty it.
+    var standingPath: [Int]? {
+        guard let position, !position.hasLeft else { return nil }
+        return position.path
+    }
+
 
     static func == (a: RenderSlot, b: RenderSlot) -> Bool { a === b }
 
