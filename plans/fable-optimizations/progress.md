@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `7326fb9`.
+Last updated after `226d865`.
 
 ## Small fixes that are certain
 
@@ -127,7 +127,7 @@ Last updated after `7326fb9`.
 
 - [~] **7.1** Every hit test walks every node
   - [x] step 1: skip subtrees without the wanted trait — `d24813b`
-  - [ ] step 2: one walk per pointer down
+  - [x] step 2: one walk per pointer down — `226d865`
   - [ ] step 3: skip a boundary by its paint bounds (with 4.1)
 - [x] **7.2** Finding a node by path — `d350522`; the focus-binding walk
   is skipped through the trait bit since `d24813b`.
