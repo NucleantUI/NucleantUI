@@ -66,6 +66,32 @@ public final class SkiaDisplayRenderer {
     private let tintPaint = SkPaint()
     private let path = SkPath()
 
+    /// What a laid-out line draws: its glyphs, placed — a run per font, a
+    /// fallback face's beside the family's — and its advance. Built the
+    /// first time the line is drawn, then drawn in one call wherever it
+    /// stands; nothing is shaped or measured again.
+    private struct LineBlob {
+        let blob: SkTextBlob?
+        let advance: Double
+        var lastUsed: Int
+    }
+
+    private struct LineKey: Hashable {
+        let line: String
+        let family: String?
+        let size: Double
+        let bold: Bool
+        let italic: Bool
+        let spacing: Double
+    }
+
+    private var lineBlobs: [LineKey: LineBlob] = [:]
+    /// Renders so far — when each line was last drawn.
+    private var renders = 0
+    /// How many lines the last sweep kept: the next sweeps once there are
+    /// well more than that.
+    private var linesKept = 0
+
 
     /// Images drawn by the last render, by the `RasterImage` they were made
     /// from. The source is held with its image, so its identifier stays its
@@ -148,6 +174,7 @@ public final class SkiaDisplayRenderer {
         canvas.restoreToCount(1)
         canvas.resetMatrix()
         canvas.clear(SIMD4<Float>(0, 0, 0, 0))
+        renders += 1
         imagesDrawn.removeAll(keepingCapacity: true)
         gradientsUsed.removeAll(keepingCapacity: true)
         dashesUsed.removeAll(keepingCapacity: true)
@@ -157,6 +184,12 @@ public final class SkiaDisplayRenderer {
     /// Drop the images, shaders and dash effects this render did not use —
     /// usually none.
     private func end() {
+        // Lines not drawn for a while: a painter that draws one image now
+        // and another the next keeps both's.
+        if lineBlobs.count > 2 * linesKept + 256 {
+            lineBlobs = lineBlobs.filter { $0.value.lastUsed >= renders - 120 }
+            linesKept = lineBlobs.count
+        }
         if images.count > imagesDrawn.count {
             for key in Array(images.keys) where !imagesDrawn.contains(key) {
                 images[key] = nil
@@ -459,26 +492,62 @@ public final class SkiaDisplayRenderer {
         for (index, line) in lines.enumerated() where !line.isEmpty {
             let y = draw.frame.minY + metrics.ascent + Double(index) * step
             let spacing = draw.letterSpacing + (index == lines.count - 1 ? draw.lastLineTightening : 0)
-            let runs = self.runs(of: line, in: font, family: family, style: draw.font)
+            let placed = lineBlob(line, font: font, family: family, style: draw.font, spacing: spacing)
+            let x = draw.frame.minX + (draw.frame.width - placed.advance) * factor
+            if let blob = placed.blob {
+                canvas.drawTextBlob(blob, pos: SIMD2(Float(x), Float(y)), paint: paint)
+            }
+            // The advance of a spaced line has the spacing after its last
+            // character, which nothing is drawn in.
+            decorate(draw, from: x, to: x + placed.advance - spacing, baseline: y, on: canvas)
+        }
+    }
+
+    /// The glyphs of `line` in `font` — and, for a character its face has
+    /// no glyph for, the face the platform falls back to — placed along a
+    /// baseline from 0, with `spacing` after each character; built the
+    /// first time the line is drawn.
+    private func lineBlob(_ line: String, font: SkFont, family: String?, style: Font, spacing: Double) -> LineBlob {
+        let key = LineKey(
+            line: line, family: family, size: style.size,
+            bold: style.weight.isBoldFace, italic: style.isItalic, spacing: spacing
+        )
+        if var cached = lineBlobs[key] {
+            cached.lastUsed = renders
+            lineBlobs[key] = cached
+            return cached
+        }
+        let builder = SkTextBlobBuilder()
+        var pen = 0.0
+        for run in runs(of: line, in: font, family: family, style: style) {
+            var glyphs: [UInt16] = []
+            var xs: [Float] = []
             if spacing == 0 {
-                let widths = runs.map { Double($0.font.measureText($0.text)) }
-                let width = widths.reduce(0, +)
-                let x = draw.frame.minX + (draw.frame.width - width) * factor
-                var pen = x
-                for (run, advance) in zip(runs, widths) {
-                    canvas.drawString(run.text, x: Float(pen), y: Float(y), font: run.font, paint: paint)
-                    pen += advance
+                glyphs = run.font.textToGlyphs(run.text)
+                for width in run.font.getWidths(glyphs) {
+                    xs.append(Float(pen))
+                    pen += Double(width)
                 }
-                decorate(draw, from: x, to: x + width, baseline: y, on: canvas)
             } else {
-                let spread = spaced(runs, by: spacing)
-                let x = draw.frame.minX + (draw.frame.width - spread.advance) * factor
-                for piece in spread.pieces {
-                    canvas.drawGlyphs(piece.glyphs, positions: piece.positions, origin: SIMD2(Float(x), Float(y)), font: piece.font, paint: paint)
+                // The spacing goes after each character, however many
+                // glyphs it is.
+                for character in run.text {
+                    let ids = run.font.textToGlyphs(String(character))
+                    for (id, width) in zip(ids, run.font.getWidths(ids)) {
+                        glyphs.append(id)
+                        xs.append(Float(pen))
+                        pen += Double(width)
+                    }
+                    pen += spacing
                 }
-                decorate(draw, from: x, to: x + spread.advance - spacing, baseline: y, on: canvas)
+            }
+            if !glyphs.isEmpty {
+                builder.addRun(glyphs, font: run.font, xpos: xs, y: 0)
             }
         }
+        let made = LineBlob(blob: builder.make(), advance: pen, lastUsed: renders)
+        lineBlobs[key] = made
+        return made
     }
 
     /// `line` in runs of one font each: `font`, or — for a character its
@@ -499,31 +568,6 @@ public final class SkiaDisplayRenderer {
             }
         }
         return runs
-    }
-
-    /// The runs' glyphs placed a character at a time with `spacing` after
-    /// each — a piece of glyphs for each run, in its font — and the advance
-    /// of the whole, the last spacing included, as layout measured it.
-    private func spaced(
-        _ runs: [(text: String, font: SkFont)], by spacing: Double
-    ) -> (pieces: [(font: SkFont, glyphs: [UInt16], positions: [SIMD2<Float>])], advance: Double) {
-        var pieces: [(font: SkFont, glyphs: [UInt16], positions: [SIMD2<Float>])] = []
-        var pen = 0.0
-        for run in runs {
-            var glyphs: [UInt16] = []
-            var positions: [SIMD2<Float>] = []
-            for character in run.text {
-                let ids = run.font.textToGlyphs(String(character))
-                for (id, width) in zip(ids, run.font.getWidths(ids)) {
-                    glyphs.append(id)
-                    positions.append(SIMD2(Float(pen), 0))
-                    pen += Double(width)
-                }
-                pen += spacing
-            }
-            pieces.append((run.font, glyphs, positions))
-        }
-        return (pieces, pen)
     }
 
     /// One line's underline and strikethrough, from `start` to `end` along
