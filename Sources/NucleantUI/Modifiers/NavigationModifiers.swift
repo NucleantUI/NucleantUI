@@ -30,10 +30,6 @@ public struct ToolbarPlacement: Hashable, Sendable {
     public static let bottomBar = ToolbarPlacement(bar: .bottomBar)
 }
 
-/// Stands in for a view type in the keys `.toolbar` and
-/// `.navigationBarBackButtonHidden` take their leave by.
-private enum ToolbarMarker {}
-private enum BackButtonHiddenMarker {}
 
 extension View {
 
@@ -230,9 +226,7 @@ struct ToolbarModifier: PrimitiveModifier {
             storage.setToolbar(entries, environment: context.environment, at: path, for: screen)
             // Gone from the tree (an `if` turned false), its items go
             // from the bar.
-            context.effects.onDisappear(
-                StateKey(path: path, propertyIndex: -1, viewType: ObjectIdentifier(ToolbarMarker.self))
-            ) {
+            context.effects.onDisappear(at: context.position) {
                 storage.removeToolbar(at: path, for: screen)
             }
         }
@@ -252,9 +246,7 @@ struct BackButtonHiddenModifier: PrimitiveModifier, Equatable {
             let storage = router.storage
             let path = context.path
             storage.setBackButtonHidden(hidesBackButton, at: path, for: screen)
-            context.effects.onDisappear(
-                StateKey(path: path, propertyIndex: -1, viewType: ObjectIdentifier(BackButtonHiddenMarker.self))
-            ) {
+            context.effects.onDisappear(at: context.position) {
                 storage.removeBackButtonHidden(at: path, for: screen)
             }
         }

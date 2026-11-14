@@ -41,12 +41,9 @@ extension View {
     }
 }
 
-/// Stands in for a view type in the key, as `OnAppearMarker` does.
-private enum OnChangeMarker {}
-
 /// `.onChange(of:initial:_:)`. Built again whenever its parent is: each
-/// build compares its value with the one last seen here, and the action is
-/// that build's.
+/// build compares its value with the one last seen here — kept on its
+/// position — and the action is that build's.
 struct OnChangeModifier<V: Equatable>: PrimitiveModifier {
     let value: V
     let initial: Bool
@@ -54,7 +51,7 @@ struct OnChangeModifier<V: Equatable>: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
         context.effects.onChange(
-            StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(OnChangeMarker.self)),
+            at: context.position,
             of: value,
             initial: initial,
             action

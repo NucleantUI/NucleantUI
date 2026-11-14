@@ -16,8 +16,10 @@
 //  against. See `RebuildRecords`.
 //
 //  It also holds what belongs to the view standing there for as long as it
-//  is the same view: its state. A rebuild of the same view keeps it;
-//  another view taking the position, or the view leaving, drops it.
+//  is the same view: its state, and what its effects keep between builds —
+//  an `onAppear`'s mark, an `onChange`'s last value. A rebuild of the same
+//  view keeps them; another view taking the position, or the view leaving,
+//  drops them.
 //
 
 /// One place in the view tree, kept in place across rebuilds.
@@ -42,9 +44,38 @@ final class ViewPosition {
     /// The `@State`, `@Namespace` and `@FocusState` slots of the view
     /// standing here, by the index of the property that declared each.
     /// They stay as long as the view does: another view taking the
-    /// position drops them (`releaseState`), and they go with the position
+    /// position drops them (`release`), and they go with the position
     /// when the view leaves.
     private var stateSlots: [(index: Int, slot: StateSlot)] = []
+
+    // What the effects of the view standing here keep from one build to the
+    // next. A modifier is a view of its own, at a position of its own, so a
+    // position holds at most one effect; these go as the state does.
+
+    /// Whether the `onAppear` standing here has run, so it runs once per
+    /// appearance rather than once per build.
+    var hasAppeared = false
+
+    /// The `onDisappear` action standing here — the latest build's, so it
+    /// runs with what that build captured.
+    var disappearing: (() -> Void)?
+
+    /// The value the `onChange` standing here last saw, to compare the next
+    /// build's against.
+    var observed: AnyBox?
+
+    /// What the `onGeometryChange` standing here worked out when it was
+    /// last placed. Its own object, made the first time it is asked for:
+    /// placement writes it, through the node built here, and the node
+    /// cannot hold the position that holds it.
+    var placed: PlacedValue {
+        if let placedIfMade { return placedIfMade }
+        let made = PlacedValue()
+        placedIfMade = made
+        return made
+    }
+
+    private var placedIfMade: PlacedValue?
 
     // The children, by slot, in no particular order: the slots in `keys`,
     // the positions in `children`, retained by hand. Raw buffers so that
@@ -209,19 +240,35 @@ final class ViewPosition {
         return made
     }
 
-    /// Drop the state of the view that stood here: another takes the
-    /// position.
-    func releaseState() {
+    /// Drop what the view that stood here kept — its state, what its
+    /// effects kept — for another takes the position; and hand back its
+    /// `onDisappear` action, to run.
+    func release() -> (() -> Void)? {
         stateSlots.removeAll()
         stateOwner = nil
+        defer {
+            hasAppeared = false
+            disappearing = nil
+            observed = nil
+            placedIfMade = nil
+        }
+        return disappearing
     }
 
-    /// Every record here and below, with its path — this position's being
-    /// `base`.
-    func collect(base: [Int], into result: inout [([Int], RebuildRecords.Entry)]) {
-        if let record { result.append((base, record)) }
+    /// What leaves with this position, here and below: each record, with
+    /// its path — this position's being `base` — and each `onDisappear`
+    /// action, in the order of the tree.
+    func collect(base: [Int], into departed: inout RebuildRecords.Departed) {
+        if let record { departed.entries.append((base, record)) }
+        if let disappearing { departed.disappearing.append(disappearing) }
         forEachChild { child in
-            child.collect(base: base + [child.key], into: &result)
+            child.collect(base: base + [child.key], into: &departed)
         }
     }
+}
+
+/// The value an `onGeometryChange` worked out when it was last placed —
+/// shared by the view's position and the node it built.
+final class PlacedValue {
+    var value: AnyBox?
 }

@@ -186,94 +186,81 @@ public struct BuildContext {
 }
 
 /// Deferred work a build pass produced — `onAppear`, `onDisappear` and
-/// `onChange` bodies.
+/// `onChange` bodies. What each effect keeps between builds — whether it
+/// ran, the value it last saw — is on the position of the view that
+/// attached it (`ViewPosition`), and goes with it.
 @MainActor
 final class EffectQueue {
-    /// Identities that have already run their `onAppear`, so it fires once per
-    /// appearance rather than once per rebuild.
-    private var appeared = EffectTable<Void>()
     private var pending: [() -> Void] = []
-
-    /// The `onDisappear` action of every view standing — the latest build's,
-    /// so it runs with what that build captured.
-    private var disappearing = EffectTable<() -> Void>()
-
-    /// The value each `.onChange` standing last saw, to compare the next
-    /// build's against.
-    private var observed = EffectTable<AnyBox>()
 
     /// Every `.onPreferenceChange` standing — checked after each pass that
     /// built, and forgotten with the views that attached them.
     let preferenceObservers = PreferenceObservers()
-
-    /// The value each `.onGeometryChange` with a new-value action worked
-    /// out when it was last placed.
-    private var geometryValues = EffectTable<AnyBox>()
-
-    /// The same, for each `.onGeometryChange` with an old-and-new action.
-    private var geometryTransitions = EffectTable<AnyBox>()
 
     /// Whether placement built views this pass — a `GeometryReader`'s
     /// content — so that a pass that only laid out still gets the work that
     /// follows a build.
     private var builtDuringLayout = false
 
-    func onAppear(_ key: StateKey, _ action: @escaping () -> Void) {
-        guard appeared[key] == nil else { return }
-        appeared.set((), for: key)
+    /// Queue `action` unless the view at `position` has appeared already:
+    /// once per appearance, not once per build.
+    func onAppear(at position: ViewPosition, _ action: @escaping () -> Void) {
+        guard !position.hasAppeared else { return }
+        position.hasAppeared = true
         pending.append(action)
     }
 
-    func onDisappear(_ key: StateKey, _ action: @escaping () -> Void) {
-        disappearing.set(action, for: key)
+    /// Keep `action` to run when the view at `position` leaves.
+    func onDisappear(at position: ViewPosition, _ action: @escaping () -> Void) {
+        position.disappearing = action
     }
 
-    /// Queue `action` with the value last seen here and `value`, if they
-    /// differ — or with `value` twice, the first time, when `initial`. The
-    /// action is this build's, so it sees what this build captured.
+    /// Queue `action` with the value last seen at `position` and `value`, if
+    /// they differ — or with `value` twice, the first time, when `initial`.
+    /// The action is this build's, so it sees what this build captured.
     func onChange<V: Equatable>(
-        _ key: StateKey,
+        at position: ViewPosition,
         of value: V,
         initial: Bool,
         _ action: @escaping (V, V) -> Void
     ) {
-        guard let previous = observed[key]?.value(as: V.self) else {
-            observed.set(Box(value), for: key)
+        guard let previous = position.observed?.value(as: V.self) else {
+            position.observed = Box(value)
             if initial { pending.append { action(value, value) } }
             return
         }
         guard previous != value else { return }
-        observed.set(Box(value), for: key)
+        position.observed = Box(value)
         pending.append { action(previous, value) }
     }
 
     /// Queue `action` with `value` if it differs from the value worked out
-    /// at the last placement — or if there was none. Called from placement,
-    /// which comes before the queued actions run.
+    /// at the last placement, `placed` — or if there was none. Called from
+    /// placement, which comes before the queued actions run.
     func onGeometryChange<V: Equatable>(
-        _ key: StateKey,
+        _ placed: PlacedValue,
         to value: V,
         _ action: @escaping @MainActor (V) -> Void
     ) {
-        if let previous = geometryValues[key]?.value(as: V.self), previous == value { return }
-        geometryValues.set(Box(value), for: key)
+        if let previous = placed.value?.value(as: V.self), previous == value { return }
+        placed.value = Box(value)
         pending.append { action(value) }
     }
 
     /// Queue `action` with the value worked out at the last placement and
     /// `value`, if they differ — or with `value` twice, the first time.
     func onGeometryTransition<V: Equatable>(
-        _ key: StateKey,
+        _ placed: PlacedValue,
         to value: V,
         _ action: @escaping @MainActor (V, V) -> Void
     ) {
-        guard let previous = geometryTransitions[key]?.value(as: V.self) else {
-            geometryTransitions.set(Box(value), for: key)
+        guard let previous = placed.value?.value(as: V.self) else {
+            placed.value = Box(value)
             pending.append { action(value, value) }
             return
         }
         guard previous != value else { return }
-        geometryTransitions.set(Box(value), for: key)
+        placed.value = Box(value)
         pending.append { action(previous, value) }
     }
 
@@ -293,80 +280,13 @@ final class EffectQueue {
         return pending
     }
 
-    /// Forget the views at `paths`, so one that comes back appears again —
-    /// and run their `onDisappear` actions with this pass's effects. One
-    /// removal per path from each table, however many entries the others
-    /// hold.
-    func forget(paths: Set<[Int]>) {
+    /// Forget the views at `paths`, which left or were replaced — the
+    /// preference observers they attached — and run `disappearing`, their
+    /// `onDisappear` actions, with this pass's effects. What else their
+    /// effects kept went with their positions.
+    func forget(paths: Set<[Int]>, disappearing: [() -> Void]) {
         preferenceObservers.forget(paths: paths)
-        appeared.removeAll(at: paths)
-        observed.removeAll(at: paths)
-        geometryValues.removeAll(at: paths)
-        geometryTransitions.removeAll(at: paths)
-        pending.append(contentsOf: disappearing.removeAll(at: paths))
-    }
-}
-
-/// Values by `StateKey`, filed under the key's path first, so that the
-/// views at a set of paths are forgotten with one removal per path rather
-/// than a pass over every entry. A path holds one view, and so — for one
-/// kind of effect — usually one key; any other key with the same path is
-/// kept beside it.
-private struct EffectTable<Value> {
-    private struct Filed {
-        var key: StateKey
-        var value: Value
-        var more: [(key: StateKey, value: Value)] = []
-    }
-
-    private var byPath: [[Int]: Filed] = [:]
-
-    subscript(key: StateKey) -> Value? {
-        guard let filed = byPath[key.path] else { return nil }
-        if filed.key == key { return filed.value }
-        for entry in filed.more where entry.key == key { return entry.value }
-        return nil
-    }
-
-    mutating func set(_ value: Value, for key: StateKey) {
-        guard var filed = byPath.removeValue(forKey: key.path) else {
-            byPath[key.path] = Filed(key: key, value: value)
-            return
-        }
-        if filed.key == key {
-            filed.value = value
-        } else if let index = filed.more.firstIndex(where: { $0.key == key }) {
-            filed.more[index].value = value
-        } else {
-            filed.more.append((key, value))
-        }
-        byPath[key.path] = filed
-    }
-
-    /// Take out every value filed under any of `paths`: a removal per path,
-    /// or — for more paths than the table holds, a whole screen leaving —
-    /// one pass over what it holds.
-    @discardableResult
-    mutating func removeAll(at paths: Set<[Int]>) -> [Value] {
-        guard !byPath.isEmpty else { return [] }
-        var removed: [Value] = []
-        func take(_ filed: Filed) {
-            removed.append(filed.value)
-            for entry in filed.more { removed.append(entry.value) }
-        }
-        if paths.count <= byPath.count {
-            for path in paths {
-                if let filed = byPath.removeValue(forKey: path) { take(filed) }
-            }
-        } else {
-            var gone: [[Int]] = []
-            for (path, filed) in byPath where paths.contains(path) {
-                take(filed)
-                gone.append(path)
-            }
-            for path in gone { byPath[path] = nil }
-        }
-        return removed
+        pending.append(contentsOf: disappearing)
     }
 }
 
@@ -878,13 +798,23 @@ final class RebuildRecords {
         return leftover
     }
 
+    /// What a rebuild did not put back.
+    struct Departed {
+        /// Every view that left, with its path.
+        var entries: [([Int], Entry)] = []
+        /// The `onDisappear` actions that left with them, to run.
+        var disappearing: [() -> Void] = []
+
+        var isEmpty: Bool { entries.isEmpty && disappearing.isEmpty }
+    }
+
     /// Finish the rebuild: every child of a position built in it that was
     /// neither built nor kept belonged to a view no longer in the tree. Cut
     /// out, and returned with their paths so the caller can release what
     /// they held.
-    func endRebuild() -> [([Int], Entry)] {
+    func endRebuild() -> Departed {
         defer { rebuilt.removeAll(keepingCapacity: true) }
-        var departed: [([Int], Entry)] = []
+        var departed = Departed()
         for position in rebuilt {
             cutLeftChildren(of: position, into: &departed)
         }
@@ -897,7 +827,7 @@ final class RebuildRecords {
     /// A child with no entry of its own — where a container builds the
     /// bodies of its transitions — is looked through: what stands below it
     /// belongs to `position`. It goes once nothing does.
-    private func cutLeftChildren(of position: ViewPosition, into departed: inout [([Int], Entry)]) {
+    private func cutLeftChildren(of position: ViewPosition, into departed: inout Departed) {
         var left: [ViewPosition] = []
         position.forEachChild { child in
             if child.record == nil {

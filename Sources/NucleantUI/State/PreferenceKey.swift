@@ -107,8 +107,8 @@ final class PreferenceObservation {
 }
 
 /// Every `.onPreferenceChange` standing, by the path of the view that
-/// attached it. Owned by the `EffectQueue`, whose `forget(paths:)` is what
-/// drops the ones that leave the tree.
+/// attached it. Owned by the `EffectQueue`, whose
+/// `forget(paths:disappearing:)` is what drops the ones that leave the tree.
 @MainActor
 final class PreferenceObservers {
     private var observations: [[Int]: PreferenceObservation] = [:]

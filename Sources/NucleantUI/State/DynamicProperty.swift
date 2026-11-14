@@ -73,28 +73,3 @@ public struct DynamicPropertyBinder {
     /// macro can emit a `bind` for every wrapper without knowing which are.
     public func bind<P>(_ property: inout P, index: Int) {}
 }
-
-/// What an effect a view attached is filed under — its `onAppear` mark, an
-/// `onChange`'s last value, its `onDisappear` action: the structural
-/// position of the view, plus which effect it is.
-///
-/// Structural — not object — identity, because views are values. The same
-/// position in the same shape of tree is the same view across rebuilds, which
-/// is exactly SwiftUI's rule.
-public struct StateKey: Hashable, Sendable {
-    /// The structural path of the view that attached the effect.
-    let path: [Int]
-    let propertyIndex: Int
-    /// The kind of effect, as a marker type. Only ever compared, never
-    /// printed, so the identity of the type is enough.
-    let viewType: ObjectIdentifier
-    /// The call site (`ViewID.unknown` when there is none).
-    let viewID: ViewID
-
-    init(path: [Int], propertyIndex: Int, viewType: ObjectIdentifier, viewID: ViewID = .unknown) {
-        self.path = path
-        self.propertyIndex = propertyIndex
-        self.viewType = viewType
-        self.viewID = viewID
-    }
-}

@@ -43,12 +43,6 @@ extension View {
     }
 }
 
-/// Stands in for a view type in the `onAppear` key — the modifier has no
-/// view of its own, and the key only needs to be distinct from every real one.
-private enum OnAppearMarker {}
-
-/// The same, for `onDisappear`.
-private enum OnDisappearMarker {}
 
 // MARK: - The modifiers
 //
@@ -101,10 +95,7 @@ struct OnAppearModifier: PrimitiveModifier {
     let action: @MainActor () -> Void
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
-        context.effects.onAppear(
-            StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(OnAppearMarker.self)),
-            action
-        )
+        context.effects.onAppear(at: context.position, action)
         return environmentContent(context)
     }
 
@@ -117,10 +108,7 @@ struct OnDisappearModifier: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
         if let action {
-            context.effects.onDisappear(
-                StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(OnDisappearMarker.self)),
-                action
-            )
+            context.effects.onDisappear(at: context.position, action)
         }
         return environmentContent(context)
     }

@@ -159,13 +159,13 @@ struct GeometryReaderContent<Content: View>: NodeContent {
     private func releaseDeparted(_ context: BuildContext) {
         let departed = context.records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed {
+        for (path, entry) in departed.entries {
             for storage in entry.reads {
                 storage.readers.remove(path)
             }
         }
-        let paths = Set(departed.map { $0.0 })
-        context.effects.forget(paths: paths)
+        let paths = Set(departed.entries.map { $0.0 })
+        context.effects.forget(paths: paths, disappearing: departed.disappearing)
         context.animations.forget(paths: paths)
     }
 }

@@ -8,6 +8,8 @@
 //  built or kept; and once it is over, what a rebuilt position no longer
 //  holds is cut out with everything below it — looked through a place no
 //  view is built at itself — while a kept subtree is left as it stands.
+//  A view's state, and what its effects keep, go with its position, and
+//  are dropped for another view.
 //
 
 import Testing
@@ -151,7 +153,7 @@ struct ViewPositionTests {
 
         // `[2]` was neither built nor kept: it has left.
         let departed = records.endRebuild()
-        #expect(departed.map(\.0) == [[2]])
+        #expect(departed.entries.map(\.0) == [[2]])
         #expect(records.entry(for: [2]) == nil)
         #expect(records.entry(for: [0, 1]) != nil)
     }
@@ -172,14 +174,14 @@ struct ViewPositionTests {
         file(records, at: [])
         file(records, at: [0])
         file(records, at: [bodies, 3])
-        #expect(records.endRebuild().map(\.0) == [[bodies, 3, 0]])
+        #expect(records.endRebuild().entries.map(\.0) == [[bodies, 3, 0]])
         #expect(records.entry(for: [bodies, 3]) != nil)
 
         // Not built: gone, and the place it stood in with it.
         records.beginRebuild()
         file(records, at: [])
         file(records, at: [0])
-        #expect(records.endRebuild().map(\.0) == [[bodies, 3]])
+        #expect(records.endRebuild().entries.map(\.0) == [[bodies, 3]])
         #expect(records.cursor(at: []).position.child(bodies) == nil)
     }
 
@@ -211,7 +213,7 @@ struct ViewPositionTests {
         #expect(slot(0, of: view, 3) !== count)
         #expect(slot(0, of: view, 4).peek() == 3)
 
-        position.releaseState()
+        #expect(position.release() == nil)
         #expect(slot(0, of: view, 6).peek() == 6)
     }
 
@@ -243,6 +245,53 @@ struct ViewPositionTests {
         #expect(state == nil)
     }
 
+    // MARK: - Effects
+
+    @Test func whatEffectsKeptIsDroppedForAnotherView() {
+        let position = ViewPosition(parent: nil, key: 0)
+        var ran = 0
+        position.hasAppeared = true
+        position.observed = Box(1)
+        position.disappearing = { ran += 1 }
+        let placed = position.placed
+        #expect(position.placed === placed, "made once, then found")
+
+        // Another view takes the position: the one that stood there leaves.
+        position.release()?()
+        #expect(ran == 1)
+        #expect(!position.hasAppeared)
+        #expect(position.observed == nil)
+        #expect(position.disappearing == nil)
+        #expect(position.placed !== placed)
+        #expect(position.release() == nil)
+    }
+
+    @Test func onDisappearActionsLeaveWithTheirPositions() {
+        let records = RebuildRecords()
+        var ran: [[Int]] = []
+        records.beginRebuild()
+        for path in [[], [0], [0, 1], [0, 1, 2], [3]] { file(records, at: path) }
+        for path in [[0], [0, 1, 2], [3]] {
+            records.cursor(at: path).position.disappearing = { ran.append(path) }
+        }
+        #expect(records.endRebuild().isEmpty)
+
+        // `[0]` leaves with everything below it; `[3]` is kept.
+        records.beginRebuild()
+        file(records, at: [])
+        records.reuse(records.candidate(at: [3], cursor: records.cursor(at: [3]))!, under: EnvironmentValues())
+        let departed = records.endRebuild()
+        #expect(departed.entries.map(\.0) == [[0], [0, 1], [0, 1, 2]])
+        for action in departed.disappearing { action() }
+        #expect(ran == [[0], [0, 1, 2]], "in the order of the tree")
+
+        // Kept, it still has its own.
+        records.beginRebuild()
+        file(records, at: [])
+        for action in records.endRebuild().disappearing { action() }
+        #expect(ran == [[0], [0, 1, 2], [3]])
+    }
+
     // MARK: - Built views
 
     @MainActor
@@ -260,7 +309,7 @@ struct ViewPositionTests {
                 records: records
             )
             let node = buildNode(view, &context)
-            return (node, records.endRebuild())
+            return (node, records.endRebuild().entries)
         }
 
         func slot(for index: Int) -> Int {

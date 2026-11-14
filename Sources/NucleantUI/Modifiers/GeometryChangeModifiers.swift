@@ -100,7 +100,8 @@ extension View {
 /// asks the transform each time it is placed, and hands the effects the
 /// answer.
 struct GeometryChangeContent<T: Equatable>: NodeContent {
-    let key: StateKey
+    /// What it worked out last time, kept on its view's position.
+    let placed: PlacedValue
     let effects: EffectQueue
     let transform: (GeometryProxy) -> T
     let action: @MainActor (T) -> Void
@@ -109,8 +110,8 @@ struct GeometryChangeContent<T: Equatable>: NodeContent {
         // Drawn where it stood — on its way out, or in a drag's snapshot —
         // is not a new place.
         if !context.freezesMotion {
-            let placed = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces)
-            effects.onGeometryChange(key, to: transform(GeometryProxy(geometry: placed, log: nil)), action)
+            let geometry = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces)
+            effects.onGeometryChange(placed, to: transform(GeometryProxy(geometry: geometry, log: nil)), action)
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
     }
@@ -119,23 +120,19 @@ struct GeometryChangeContent<T: Equatable>: NodeContent {
 /// `.onGeometryChange(for:of:action:)` with an action of the old and the
 /// new value.
 struct GeometryTransitionContent<T: Equatable>: NodeContent {
-    let key: StateKey
+    let placed: PlacedValue
     let effects: EffectQueue
     let transform: (GeometryProxy) -> T
     let action: @MainActor (T, T) -> Void
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         if !context.freezesMotion {
-            let placed = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces)
-            effects.onGeometryTransition(key, to: transform(GeometryProxy(geometry: placed, log: nil)), action)
+            let geometry = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces)
+            effects.onGeometryTransition(placed, to: transform(GeometryProxy(geometry: geometry, log: nil)), action)
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
     }
 }
-
-/// Stand in for a view type in the keys, as `OnChangeMarker` does.
-private enum GeometryChangeMarker {}
-private enum GeometryTransitionMarker {}
 
 /// `.onGeometryChange(for:of:action:)` with an action of the new value.
 /// Built again whenever its parent is, for the latest closures.
@@ -145,7 +142,7 @@ struct GeometryChangeModifier<T: Equatable>: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> GeometryChangeContent<T> {
         GeometryChangeContent(
-            key: StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(GeometryChangeMarker.self)),
+            placed: context.position.placed,
             effects: context.effects,
             transform: transform,
             action: action
@@ -163,7 +160,7 @@ struct GeometryTransitionModifier<T: Equatable>: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> GeometryTransitionContent<T> {
         GeometryTransitionContent(
-            key: StateKey(path: context.path, propertyIndex: -1, viewType: ObjectIdentifier(GeometryTransitionMarker.self)),
+            placed: context.position.placed,
             effects: context.effects,
             transform: transform,
             action: action
