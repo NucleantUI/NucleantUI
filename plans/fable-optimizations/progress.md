@@ -149,9 +149,12 @@ Last updated after `96041c7`.
 - [x] **5.1** State set once per run of commands — `d9ceb03`
 - [x] **5.2** A rect, rounded rect or ellipse drawn in one call — `d6af0fd`
 - [x] **5.3** Gradient shaders and dash effects kept — `d9ceb03`
-- [ ] **5.4** A text blob per laid-out line. Goes with moving
-  `TextMeasurer` and `FontRegistry` to Skia (CLAUDE.md).
-- [ ] **5.5** Letter spacing in one call. With 5.4.
+- [x] **5.4** A text blob per laid-out line — `cfc7fea`, after `d38f238`
+  moved measuring to Skia (`SkiaFonts`, shared with the renderer). The
+  blobs are kept by the renderer, by line, face and spacing, not with the
+  layout entry: `TextDraw` is a value compared by its fields.
+- [x] **5.5** Letter spacing — `cfc7fea`: a spaced line is the same blob,
+  built once.
 - [ ] **5.6** A font resolved to a small integer once.
 - [ ] **5.7** The raster surface initializer. Not a performance item; goes
   when the pixel tests move to a software Vulkan driver.
