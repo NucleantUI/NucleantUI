@@ -72,7 +72,7 @@ final class SkiaFonts {
     private func typeface(for family: String?) -> SkTypeface? {
         if let family {
             if let loaded = typefaces[family] { return loaded }
-            if let path = FontRegistry.path(ofResolved: family), let made = SkFontMgr.makeFromFile(path) {
+            if let made = FontRegistry.typeface(ofResolved: family) {
                 typefaces[family] = made
                 return made
             }

@@ -19,6 +19,7 @@
 //  while a parent scene's transform reaches both.
 //
 
+import Foundation
 import NucleantThorVG
 
 @MainActor
@@ -272,7 +273,7 @@ public final class ThorDisplayRenderer {
         }
         guard let text = tvg_text_new() else { return }
 
-        if let family = FontRegistry.resolve(draw.font) {
+        if let family = FontRegistry.resolve(draw.font), ThorFaces.shared.load(family) {
             _ = family.withCString { tvg_text_set_font(text, $0) }
         } else {
             // No face resolved — ThorVG picks its own fallback rather than
@@ -351,7 +352,7 @@ public final class ThorDisplayRenderer {
     /// or cut.
     private func emitRun(_ string: String, x: Double, top: Double, width: Double, lineHeight: Double, _ draw: TextDraw) {
         guard let text = tvg_text_new() else { return }
-        if let family = FontRegistry.resolve(draw.font) {
+        if let family = FontRegistry.resolve(draw.font), ThorFaces.shared.load(family) {
             _ = family.withCString { tvg_text_set_font(text, $0) }
         } else {
             _ = tvg_text_set_font(text, nil)
@@ -579,5 +580,40 @@ public final class ThorDisplayRenderer {
         case .round: return TVG_STROKE_JOIN_ROUND
         case .bevel: return TVG_STROKE_JOIN_BEVEL
         }
+    }
+}
+
+/// The faces this renderer's text paints name, loaded into ThorVG from the
+/// files `FontRegistry` resolved — by the name it resolved, so a paint finds
+/// its face by that name.
+@MainActor
+private final class ThorFaces {
+    static let shared = ThorFaces()
+
+    private var loaded: Set<String> = []
+    private var failed: Set<String> = []
+
+    /// Load `family` into ThorVG if it isn't already; whether it is there.
+    func load(_ family: String) -> Bool {
+        if loaded.contains(family) { return true }
+        if failed.contains(family) { return false }
+        guard let path = FontRegistry.path(ofResolved: family),
+              let data = FileManager.default.contents(atPath: path) else {
+            failed.insert(family)
+            return false
+        }
+        // copy: true — ThorVG keeps the bytes, and `data` dies with this call.
+        let result = tvg_font_load_from_data(
+            name: family,
+            data: [UInt8](data),
+            mimetype: (path as NSString).pathExtension.lowercased(),
+            copy: true
+        )
+        guard result == TVG_RESULT_SUCCESS else {
+            failed.insert(family)
+            return false
+        }
+        loaded.insert(family)
+        return true
     }
 }
