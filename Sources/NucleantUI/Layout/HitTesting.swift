@@ -128,8 +128,6 @@ extension ViewNode {
     /// asked.
     func hitTest<Value>(_ point: Point, lookingFor wanted: NodeTraits = [], select: (ViewNode) -> Value?) -> Hit<Value>? {
         if !wanted.isEmpty, subtreeTraits.isDisjoint(with: wanted) { return nil }
-        // Nothing in this subtree was placed where the point is.
-        guard hitExtent.contains(point) else { return nil }
         // Off screen, whatever the frames left over from an earlier pass say
         // — or on its way out, drawn but no longer there.
         guard !traits.contains(.parked), removal == nil else { return nil }
@@ -176,7 +174,6 @@ extension ViewNode {
     private func collectPointerDownHits(_ point: Point, into hits: inout PointerDownHits) {
         let missing = hits.missing
         if missing.isEmpty || subtreeTraits.isDisjoint(with: missing) { return }
-        guard hitExtent.contains(point) else { return }
         // What stops `hitTest(_:lookingFor:select:)` stops every kind.
         guard !traits.contains(.parked), removal == nil else { return }
         guard !traits.contains(.blocksHitTesting) else { return }

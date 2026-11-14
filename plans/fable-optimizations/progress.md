@@ -23,8 +23,10 @@ Last updated after `4deee21`.
 - [x] **1.1** One type per modifier, compared by its values — `d1e038c`
 - [x] **1.2** `ContentNode<C>` holds its content by type — `d24813b`
 - [x] **1.3** Traits read once per node, unioned over the subtree — `d24813b`
-- [ ] **1.4** Finding the builtin behind a view (`_makeNode`). Last in the
-  plan's order: it changes the public `View` protocol.
+- [ ] **1.4** Finding the builtin behind a view (`_makeNode`). Not done:
+  it changes the public `View` protocol and 71 builtins (some conditional)
+  to save two table lookups per view built — well under 0.1 ms a pass.
+  Yours to decide.
 - [x] **1.5** `ShapeContent<S>` holds the shape — `d6af0fd`
 - [x] **1.6** `AnyView` as one storage object, equivalent as what it holds — `9914771`
 - [x] **1.7** `OpaqueValue`/`OpaqueReference` as one `Box<T>` — `9914771`
@@ -176,15 +178,14 @@ Last updated after `4deee21`.
 
 ## [Phase 7](phase-7-input.md): hit testing and focus lookups
 
-- [x] **7.1** Every hit test walks every node
+- [~] **7.1** Every hit test walks every node
   - [x] step 1: skip subtrees without the wanted trait — `d24813b`
   - [x] step 2: one walk per pointer down — `226d865`
-  - [x] step 3: skip a subtree placed away from the point — `28806dd`. Not by
-    paint bounds — a view that paints nothing can still be hit — but by
-    where its subtree can be hit: each node keeps the box of its frames
-    under the transforms they are drawn with (`hitExtent`), noted as it is
-    placed and moved with a moved subtree; both walks pass over a subtree
-    whose box does not hold the point.
+  - [ ] step 3: skip a boundary by where it can be hit — tried in
+    `28806dd` (each node keeping the box of its subtree's frames) and
+    taken out: working the boxes out on every placement cost 13–17% of a
+    scroll pass, sampled, and more than the walks it shortened, which the
+    trait skipping of step 1 already keeps short.
 - [x] **7.2** Finding a node by path — `d350522`; the focus-binding walk
   is skipped through the trait bit since `d24813b`.
 - [x] **7.3** Covered by 3.8: the single-child loops read the cached

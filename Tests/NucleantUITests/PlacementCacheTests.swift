@@ -214,11 +214,10 @@ struct PlacementCacheTests {
 
     // MARK: - At another origin
 
-    /// A kept subtree of counted swatches, enough of them to be drawn moved
-    /// (`PlacementRecorder.movedAtLeast`), and the first of them.
+    /// A kept subtree of counted swatches, and the first of them.
     private func keptSwatch(clipsItself: Bool = false, context: DrawContext = DrawContext()) -> (root: ViewNode, swatch: ViewNode, count: Count) {
         let count = Count()
-        let swatches = (0..<PlacementRecorder.movedAtLeast).map { _ in
+        let swatches = (0..<3).map { _ in
             ContentNode(content: CountedSwatch(count: count, clipsItself: clipsItself)) as ViewNode
         }
         let root = ContentNode(content: ZStackContent(alignment: .center), children: swatches)
@@ -227,7 +226,7 @@ struct PlacementCacheTests {
         return (root, swatches[0], count)
     }
 
-    private var placedOnce: Int { PlacementRecorder.movedAtLeast }
+    private var placedOnce: Int { 3 }
 
     @Test func movedElsewhereItIsDrawnMovedAsPlacingWould() {
         let (root, swatch, count) = keptSwatch()
@@ -287,19 +286,9 @@ struct PlacementCacheTests {
         #expect(animating.count.value == placed + placedOnce, "under an animation: placed")
     }
 
-    @Test func aSmallSubtreeMovedIsPlacedAgain() {
-        let count = Count()
-        let root = stack(ContentNode(content: CountedSwatch(count: count)))
-        _ = place(root)
-        _ = place(root)
-        let placed = count.value
-        _ = place(root, in: Rect(x: 20, y: 30, width: 100, height: 100))
-        #expect(count.value == placed + 1, "one command: placed sooner than moved")
-    }
-
     @Test func whatKeepsMovingIsKeptOnTheWay() {
         let count = Count()
-        let root = ContentNode(content: ZStackContent(alignment: .center), children: (0..<PlacementRecorder.movedAtLeast).map { _ in
+        let root = ContentNode(content: ZStackContent(alignment: .center), children: (0..<3).map { _ in
             ContentNode(content: CountedSwatch(count: count)) as ViewNode
         })
         _ = place(root, in: Rect(x: 0, y: 0, width: 100, height: 100))

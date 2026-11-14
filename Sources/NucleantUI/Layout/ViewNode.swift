@@ -45,17 +45,6 @@ class ViewNode {
     /// placed under again while it exits.
     var proposal: ProposedSize = .unspecified
 
-    /// Where anything in this subtree can be hit, in window coordinates, as
-    /// of its last placement: its frame under the transform its content is
-    /// drawn with, and every child's. A point outside it hits nothing here,
-    /// so a hit test passes the subtree over (`HitTesting.swift`). Empty
-    /// until placed.
-    var hitExtent: Rect = .zero
-
-    /// The transform its content is drawn under — `contentTransform`, as of
-    /// its last placement: the one at the end of its run of single children.
-    private var placedContentTransform: Transform = .identity
-
     /// The rect layout last gave it, before any animation moved it — what
     /// the next layout is compared with. See `NodeMotion.swift`.
     var layoutRect: Rect?
@@ -413,9 +402,6 @@ class ViewNode {
     /// center — move; a transform that only moves stays as it is.
     func movePlacement(dx: Double, dy: Double) {
         frame = frame.offsetBy(dx: dx, dy: dy)
-        if hitExtent.width > 0 || hitExtent.height > 0 {
-            hitExtent = hitExtent.offsetBy(dx: dx, dy: dy)
-        }
         if let layoutRect {
             self.layoutRect = layoutRect.offsetBy(dx: dx, dy: dy)
         }
@@ -426,7 +412,6 @@ class ViewNode {
                 .concatenating(Transform.translation(x: -dx, y: -dy))
         }
         transform = moved(transform)
-        placedContentTransform = moved(placedContentTransform)
         for child in children {
             child.movePlacement(dx: dx, dy: dy)
         }
@@ -453,44 +438,6 @@ class ViewNode {
         if let store, store.hasExits {
             placeLeavingChildren(context: context, store: store, into: &list)
         }
-        noteHitExtent()
-    }
-
-    /// Work out `hitExtent` from this node's frame and its children's, just
-    /// placed — a little wider than exact, so a point on an edge that the
-    /// frame holds is held here too.
-    private func noteHitExtent() {
-        let inner = layoutChildren
-        placedContentTransform = inner.count == 1 ? inner[0].placedContentTransform : transform
-        var extent: Rect?
-        if frame.width > 0 && frame.height > 0 {
-            let drawn = placedContentTransform
-            extent = drawn.onlyMoves ? frame.offsetBy(dx: drawn.e13, dy: drawn.e23) : frame.applying(drawn)
-        }
-        for child in children {
-            if let childExtent = child.extentAsPlaced() {
-                extent = extent.map { $0.union(childExtent) } ?? childExtent
-            }
-        }
-        hitExtent = extent?.expanded(by: 0.5) ?? .zero
-    }
-
-    /// `hitExtent` as the placement just made around this node left it —
-    /// worked out here for a node that dissolves into its parent's layout
-    /// (a `Group`, a `ForEach`): its parent places its children and never
-    /// it. `nil` where nothing in it can be hit.
-    private func extentAsPlaced() -> Rect? {
-        if isTransparent {
-            var extent: Rect?
-            for child in children {
-                if let childExtent = child.extentAsPlaced() {
-                    extent = extent.map { $0.union(childExtent) } ?? childExtent
-                }
-            }
-            hitExtent = extent ?? .zero
-            return extent
-        }
-        return hitExtent.width > 0 && hitExtent.height > 0 ? hitExtent : nil
     }
 }
 

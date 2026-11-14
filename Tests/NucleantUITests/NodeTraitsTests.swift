@@ -99,10 +99,10 @@ extension HostedViews {
     }
 }
 
-// MARK: - Where a subtree can be hit
+// MARK: - Where a view is hit
 
 /// Two squares side by side that take taps, and one drawn outside the row
-/// by an offset.
+/// by an offset — hit where it is drawn.
 @View
 struct HitExtentScene {
     var body: some View {
@@ -131,19 +131,6 @@ struct HitExtentTests {
         let window = Rect(x: 0, y: 0, width: 200, height: 200)
         node.place(in: window, proposal: ProposedSize(window.size), context: DrawContext(), into: &list)
         return node
-    }
-
-    @Test func aHitTestAsksNothingPlacedAwayFromThePoint() {
-        let root = placed()
-        let point = Point(x: 75, y: 25)
-        var asked: [ViewNode] = []
-        let hit = root.hitTest(point) { node -> ViewNode? in
-            asked.append(node)
-            return node.content.hitTarget != nil ? node : nil
-        }
-        #expect(hit != nil)
-        #expect(!asked.isEmpty)
-        #expect(asked.allSatisfy { $0.hitExtent.contains(point) }, "the red square's subtree is passed over")
     }
 
     @Test func whatIsDrawnOutsideItsParentIsHitWhereItIsDrawn() {

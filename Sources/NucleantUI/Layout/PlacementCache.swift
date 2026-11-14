@@ -129,11 +129,6 @@ final class PlacementRecorder {
     /// The number the next kept list gets (`DisplayList.version`).
     private var nextKept = 0
 
-    /// How many commands a subtree draws before drawing it moved is worth
-    /// it: a smaller one is placed again sooner than its list is copied and
-    /// its nodes moved.
-    static let movedAtLeast = 24
-
     private init() {}
 
     /// Something animated asked for another frame, or state was read while
@@ -164,7 +159,7 @@ final class PlacementRecorder {
                 list.append(contentsOf: kept)
                 if PerfTrace.isEnabled { PerfTrace.placementsKept += 1 }
                 return
-            case .moved(let dx, let dy) where record.isMovable && kept.commands.count >= Self.movedAtLeast:
+            case .moved(let dx, let dy) where record.isMovable:
                 // Placed at another origin: what it drew, moved there.
                 var moved = kept.moving(dx: dx, dy: dy)
                 nextKept += 1
@@ -186,12 +181,11 @@ final class PlacementRecorder {
         let record = PlacementRecord(rect: rect, proposal: proposal, context: context, epoch: epoch)
         node.placed = record
         let range = start..<list.commands.count
-        // Placed as it was: worth keeping. Only moved: worth keeping when it
-        // is big enough to be drawn moved the next time it moves.
+        // Placed as it was, or only moved: worth keeping either way — a
+        // moved one is drawn moved the next time it moves.
         let stable: Bool
         switch likeness {
-        case .same: stable = true
-        case .moved: stable = range.count >= Self.movedAtLeast
+        case .same, .moved: stable = true
         case .different: stable = false
         }
 
