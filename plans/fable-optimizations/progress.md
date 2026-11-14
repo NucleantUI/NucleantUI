@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `46e2714`.
+Last updated after `a266d81`.
 
 ## Small fixes that are certain
 
@@ -79,7 +79,9 @@ Last updated after `46e2714`.
     its scope; a row with an equivalent element and closure is kept
     without running it, also when the data around it changed.
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1 to 5 done; 6 and 7 not started. The dirty marks are
+- Steps of 2.8: 1 to 6 done (6: `a266d81`, a modifier's last environment
+  write on its position; the same write over the same environment hands
+  down the same version); 7 not started. The dirty marks are
   still a trie of paths (`Invalidator`), made from the readers' paths.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
@@ -206,6 +208,11 @@ Last updated after `46e2714`.
   Bookmarks runs its layout switch at twice the frame rate on less CPU.
 - `0f10917` measured Bookmarks' Cards/List rebuild from samples: 1171
   before, 881 after (debug build).
+- Steps 5 and 6 of 2.8 (`10a442a` → `a266d81`), 3 launches of 5 rounds,
+  2026-11-14, load about 3–7: `bookmarks-layout` CPU per pass the same
+  (34.46 → 34.55 ms; building +5%, within the ranges; slowest pass
+  71.9 → 44.7 ms), `flashcards-card` −7% (2.91 → 2.72 ms; nodes built
+  1927 → 1811).
 
 ## Outside this repo
 
