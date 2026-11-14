@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `7934fa3`.
+Last updated after `52b150c`.
 
 ## Small fixes that are certain
 
@@ -45,10 +45,10 @@ Last updated after `7934fa3`.
   2.8). The rebuild records sit on `ViewPosition`s that stay in place;
   every rebuild takes a number. A kept subtree is one number set, and the
   views that left are found from the children of the positions rebuilt.
-  Left: what the position holds besides the record (2.6, step 4), and the
-  dirty marks, still a trie of paths: they move with state, whose writes
-  make them.
-- [~] **2.6** What a position caches — step 4 of 2.8, by the table's rows:
+  What else the position holds is 2.6. Left: the dirty marks, still a
+  trie of paths, made by state writes from their readers' paths.
+- [x] **2.6** What a position caches — step 4 of 2.8, by the table's rows
+  (the `ForEach` rows and the environment are steps 5 and 6):
   - [x] state slots — `3466a17`. By property index on the view's
     position; `StateStore` and the per-entry state keys are gone.
   - [x] effects — `37de011`. Fields of the modifier's position; the
@@ -67,14 +67,15 @@ Last updated after `7934fa3`.
     each": the managers pool their GPU objects and hand them on, so a
     position holding one would need a check on every reuse that nobody
     still holds it. The managers' pools and retiring stay as they were.
-  - [ ] readers
+  - [x] readers — `52b150c`. A state lists its readers by
+    `PositionHandle`, which does not keep the position: a state can
+    outlive its view. A view that leaves takes itself off as it is cut.
 - [~] **2.7** `ForEach` rows
   - [ ] a row's slot is the hash of its id
   - [ ] a change read in one row closure re-runs every row closure
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 under way (state,
-  effects, animated values, transition slots and render nodes done);
-  5 to 7 not started.
+- Steps of 2.8: 1 to 4 done; 5 to 7 not started. The dirty marks are
+  still a trie of paths (`Invalidator`), made from the readers' paths.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
 
