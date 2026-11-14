@@ -4,12 +4,12 @@
 //
 //  `Formatter.getObjectValue(_:for:errorDescription:)` — how a
 //  `TextField(value:formatter:)` turns its text back into a value — for
-//  Linux. Its Foundation (swift-corelibs-foundation) has the method but
+//  Linux and Android. Their Foundation (swift-corelibs-foundation) has the method but
 //  keeps it internal, so this one, visible in its place, parses through the
 //  concrete formatters' own methods: numbers and dates. Any other formatter
 //  parses nothing, leaving the field's value as it was.
 //
-#if os(Linux)
+#if os(Linux) || os(Android)
 import Foundation
 
 extension Formatter {

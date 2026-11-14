@@ -9,7 +9,7 @@
 //  columns (and an app naming it) sort the same way on every platform's API,
 //  by the best order the platform has.
 //
-#if os(Linux)
+#if os(Linux) || os(Android)
 import Foundation
 
 extension String.StandardComparator {
