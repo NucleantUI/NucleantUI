@@ -225,11 +225,12 @@ CPU per pass, mean of the launches (debug builds); in **bold** where the
 launches before and after don't overlap. Written by
 `Scripts/bench_animations.py tables` from [measurements.json](measurements.json).
 
-| Measured | Before → after | Date | Load | `bookmarks-layout` | `flashcards-card` |
-|---|---|---|---|---|---|
-| Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5 | `4adf040` → `f6c6802` | 2026-11-14 | not recorded | 73.5 → 33 ms (**−55%**) | 3.33 → 2.95 ms (**−11%**) |
-| 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept | `10a442a` → `a266d81` | 2026-11-14 | about 3–7 | 34.5 → 34.5 ms (+0%) | 2.91 → 2.72 ms (**−7%**) |
-| 2.8 step 7: no paths in the build | `a266d81` → `fc626e4` | 2026-11-14 | about 12 | 34.8 → 32.7 ms (−6%) | 2.9 → 2.88 ms (**−1%**) |
+| Measured | Before → after | Date | Load | `bookmarks-layout` | `bookmarks-scroll` | `reader-scroll` | `flashcards-card` |
+|---|---|---|---|---|---|---|---|
+| Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5 | `4adf040` → `f6c6802` | 2026-11-14 | not recorded | 73.5 → 33 ms (**−55%**) |  |  | 3.33 → 2.95 ms (**−11%**) |
+| 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept | `10a442a` → `a266d81` | 2026-11-14 | about 3–7 | 34.5 → 34.5 ms (+0%) |  |  | 2.91 → 2.72 ms (**−7%**) |
+| 2.8 step 7: no paths in the build | `a266d81` → `fc626e4` | 2026-11-14 | about 12 | 34.8 → 32.7 ms (−6%) |  |  | 2.9 → 2.88 ms (**−1%**) |
+| 4.1 step 3 (moved subtrees drawn moved), text measured and fonts read with Skia, 5.4–5.6 (text blobs, a text's face resolved once); 7.1 step 3 tried and taken out | `258f4e9` → `8f15bbc` | 2026-11-14 | 3.4–29.9 | 34.3 → 33.2 ms (**−3%**) | 13 → 13.6 ms (**+5%**) | 4.88 → 4.33 ms (**−11%**) |  |
 <!-- /measurements:summary -->
 
 <details>
@@ -252,6 +253,7 @@ launches before and after don't overlap. Written by
 | nodes built, all passes | 28,917 → 43,261 (**+50%**) | 1,964 → 1,920 (**−2%**) |
 | sizes measured, all passes | 57,913 → 106,078 (**+83%**) | 22,216 → 20,704 (**−7%**) |
 | texts measured, all passes | 7,516 → 15,128 (**+101%**) | 2,613 → 2,621 (+0%) |
+| subtrees kept, all passes | 0 → 0 | 0 → 0 |
 
 #### 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept
 
@@ -269,6 +271,7 @@ launches before and after don't overlap. Written by
 | nodes built, all passes | 42,089 → 41,867 (−1%) | 1,927 → 1,811 (**−6%**) |
 | sizes measured, all passes | 103,143 → 102,190 (−1%) | 20,738 → 20,685 (−0%) |
 | texts measured, all passes | 14,845 → 14,660 (−1%) | 2,626 → 2,621 (−0%) |
+| subtrees kept, all passes | 0 → 0 | 0 → 0 |
 
 #### 2.8 step 7: no paths in the build
 
@@ -286,6 +289,25 @@ launches before and after don't overlap. Written by
 | nodes built, all passes | 42,018 → 44,139 (+5%) | 1,822 → 1,816 (−0%) |
 | sizes measured, all passes | 102,549 → 108,516 (+6%) | 20,682 → 20,692 (+0%) |
 | texts measured, all passes | 14,694 → 15,902 (+8%) | 2,616 → 2,616 (+0%) |
+| subtrees kept, all passes | 0 → 0 | 0 → 0 |
+
+#### 4.1 step 3 (moved subtrees drawn moved), text measured and fonts read with Skia, 5.4–5.6 (text blobs, a text's face resolved once); 7.1 step 3 tried and taken out
+
+`258f4e9` → `8f15bbc`, 2026-11-14, debug builds, load 3.4–29.9; `bookmarks-layout` 3/3 launches of 5 rounds, `bookmarks-scroll` 3/3 launches of 5 rounds, `reader-scroll` 3/3 launches of 5 rounds.
+
+| | `bookmarks-layout` | `bookmarks-scroll` | `reader-scroll` |
+|---|---|---|---|
+| CPU per pass | 34.3 → 33.2 ms (**−3%**) | 13 → 13.6 ms (**+5%**) | 4.88 → 4.33 ms (**−11%**) |
+| building per pass | 12.8 → 12.5 ms (**−2%**) | 0.201 → 0.204 ms (+1%) | 0.453 → 0.458 ms (+1%) |
+| median pass | 29.8 → 28.6 ms (**−4%**) | 9.6 → 10.3 ms (**+8%**) | 1.8 → 1.23 ms (**−31%**) |
+| 95th percentile pass | 35.7 → 35.1 ms (**−2%**) | 10.6 → 11.4 ms (**+7%**) | 2.67 → 2.53 ms (−5%) |
+| slowest pass | 39.9 → 45.6 ms (+14%) | 12.3 → 13.5 ms (+10%) | 3.93 → 3.9 ms (−1%) |
+| passes for the interaction | 133 → 137 (**+3%**) | 147 → 148 (+1%) | 163 → 165 (+1%) |
+| CPU for the interaction | 4.56 → 4.56 s (−0%) | 1.91 → 2.02 s (**+6%**) | 0.797 → 0.713 s (**−10%**) |
+| nodes built, all passes | 41,960 → 42,936 (**+2%**) | 147 → 148 (+1%) | 737 → 743 (+1%) |
+| sizes measured, all passes | 102,239 → 105,282 (**+3%**) | 13,818 → 13,912 (+1%) | 5,371 → 5,405 (+1%) |
+| texts measured, all passes | 14,780 → 7,584 (**−49%**) | 5,755 → 888 (**−85%**) | 804 → 190 (**−76%**) |
+| subtrees kept, all passes | 6,300 → 7,979 (**+27%**) | 6,910 → 6,959 (+1%) | 2,447 → 2,507 (**+2%**) |
 <!-- /measurements:details -->
 
 </details>

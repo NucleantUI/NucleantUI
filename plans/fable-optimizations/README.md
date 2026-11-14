@@ -103,11 +103,12 @@ CPU per pass, mean of the launches (debug builds); in **bold** where the
 launches before and after don't overlap. Written by
 `Scripts/bench_animations.py tables` from [measurements.json](measurements.json).
 
-| Measured | Before → after | Date | Load | `bookmarks-layout` | `flashcards-card` |
-|---|---|---|---|---|---|
-| Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5 | `4adf040` → `f6c6802` | 2026-11-14 | not recorded | 73.5 → 33 ms (**−55%**) | 3.33 → 2.95 ms (**−11%**) |
-| 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept | `10a442a` → `a266d81` | 2026-11-14 | about 3–7 | 34.5 → 34.5 ms (+0%) | 2.91 → 2.72 ms (**−7%**) |
-| 2.8 step 7: no paths in the build | `a266d81` → `fc626e4` | 2026-11-14 | about 12 | 34.8 → 32.7 ms (−6%) | 2.9 → 2.88 ms (**−1%**) |
+| Measured | Before → after | Date | Load | `bookmarks-layout` | `bookmarks-scroll` | `reader-scroll` | `flashcards-card` |
+|---|---|---|---|---|---|---|---|
+| Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5 | `4adf040` → `f6c6802` | 2026-11-14 | not recorded | 73.5 → 33 ms (**−55%**) |  |  | 3.33 → 2.95 ms (**−11%**) |
+| 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept | `10a442a` → `a266d81` | 2026-11-14 | about 3–7 | 34.5 → 34.5 ms (+0%) |  |  | 2.91 → 2.72 ms (**−7%**) |
+| 2.8 step 7: no paths in the build | `a266d81` → `fc626e4` | 2026-11-14 | about 12 | 34.8 → 32.7 ms (−6%) |  |  | 2.9 → 2.88 ms (**−1%**) |
+| 4.1 step 3 (moved subtrees drawn moved), text measured and fonts read with Skia, 5.4–5.6 (text blobs, a text's face resolved once); 7.1 step 3 tried and taken out | `258f4e9` → `8f15bbc` | 2026-11-14 | 3.4–29.9 | 34.3 → 33.2 ms (**−3%**) | 13 → 13.6 ms (**+5%**) | 4.88 → 4.33 ms (**−11%**) |  |
 <!-- /measurements:summary -->
 
 ## Every cache in this plan

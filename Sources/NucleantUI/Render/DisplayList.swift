@@ -838,8 +838,13 @@ public struct DisplayList: Equatable, Sendable {
         }
         copy.commands = commands.map { $0.translated(dx: dx, dy: dy) }
         copy.version = nil
-        for index in commands.indices {
-            copy.bounds[index] = copy.commands[index].paintBox.flatMap(copy.state(at: index).paintBounds(of:))
+        if states.allSatisfy({ $0.clip == nil }) {
+            // Nothing cuts them: their bounds move with them.
+            copy.bounds = bounds.map { $0?.offsetBy(dx: dx, dy: dy) }
+        } else {
+            for index in commands.indices {
+                copy.bounds[index] = copy.commands[index].paintBox.flatMap(copy.state(at: index).paintBounds(of:))
+            }
         }
         return copy
     }
