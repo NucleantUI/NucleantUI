@@ -51,6 +51,9 @@ final class FocusTarget {
     /// Whether Tab typed here is the view's own (a text editor inserts it)
     /// rather than a move to the next tab stop; ⌃Tab moves on either way.
     let insertsTab: Bool
+    /// The text this view takes, if any — what a platform with a soft
+    /// keyboard shows while it has the keys.
+    let textInput: TextInputKind
 
     init(
         owner: PositionHandle,
@@ -61,7 +64,8 @@ final class FocusTarget {
         editCommands: Set<EditCommand> = [],
         onEditCommand: @escaping @MainActor (EditCommand) -> Void = { _ in },
         isTabStop: Bool = false,
-        insertsTab: Bool = false
+        insertsTab: Bool = false,
+        textInput: TextInputKind = .none
     ) {
         self.owner = owner
         self.isEnabled = isEnabled
@@ -72,7 +76,20 @@ final class FocusTarget {
         self.onEditCommand = onEditCommand
         self.isTabStop = isTabStop
         self.insertsTab = insertsTab
+        self.textInput = textInput
     }
+}
+
+/// The text a focused view takes, for the platforms that have to put up a
+/// keyboard for it.
+enum TextInputKind: Equatable {
+    /// No text: a `TextureView`, a list.
+    case none
+    /// One line, whose Return submits — a text field, a secure field, a
+    /// vertical-axis text field.
+    case singleLine
+    /// Lines, whose Return is a newline — a text editor.
+    case multiLine
 }
 
 extension ViewNode {
