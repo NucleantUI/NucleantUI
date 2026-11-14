@@ -160,11 +160,20 @@ Last updated after `e43a737`.
 
 ## Measuring
 
-- `Scripts/bench_animations.py` has a baseline from before the branch
-  (`.build/bench/opt-before`: `bookmarks-layout`, `flashcards-card`). No
-  run since; the comparison is still to do. Tried after `e24ea3d`
-  (2026-11-14): the machine was busy (load around 6), so no numbers were
-  taken.
+- `Scripts/bench_animations.py`, the baseline from before the branch
+  (`.build/bench/opt-before`, `4adf040`) against `f6c6802`
+  (`.build/bench/opt-after`), 3 launches of 5 rounds each, debug builds,
+  2026-11-14:
+
+  | | `bookmarks-layout` | `flashcards-card` |
+  |---|---|---|
+  | CPU per pass | 73.5 → 33.1 ms (−55%) | 3.33 → 2.95 ms (−11%) |
+  | median pass | 67.5 → 28.0 ms | 1.6 → 1.1 ms |
+  | 95th percentile pass | 76.5 → 34.6 ms | 2.2 → 1.5 ms |
+  | passes for the same interaction | 69 → 138 | 791 → 790 |
+  | total CPU | −10% | −11% |
+
+  Bookmarks runs its layout switch at twice the frame rate on less CPU.
 - `0f10917` measured Bookmarks' Cards/List rebuild from samples: 1171
   before, 881 after (debug build).
 
