@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `52b150c`.
+Last updated after `10a442a`.
 
 ## Small fixes that are certain
 
@@ -71,10 +71,13 @@ Last updated after `52b150c`.
     `PositionHandle`, which does not keep the position: a state can
     outlive its view. A view that leaves takes itself off as it is cut.
 - [~] **2.7** `ForEach` rows
-  - [ ] a row's slot is the hash of its id
+  - [x] a row's slot is the hash of its id — `10a442a`. A table by id on
+    the `ForEach`'s position (`RowSlots`); a new id takes a slot no row
+    there has had.
   - [ ] a change read in one row closure re-runs every row closure
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1 to 4 done; 5 to 7 not started. The dirty marks are
+- Steps of 2.8: 1 to 4 done; 5 under way (the table); 6 and 7 not
+  started. The dirty marks are
   still a trie of paths (`Invalidator`), made from the readers' paths.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
