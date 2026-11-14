@@ -53,13 +53,19 @@ TABLE_FILES = [PLAN_DIR / "progress.md", PLAN_DIR / "README.md"]
 # Seconds left after each input for its animation to finish before the next.
 SETTLE = 1.5
 
-# Each scenario: the app, and one round of driver commands. Points are window
-# points (title bar included), from the apps at their launch size.
+# Each scenario: the app, the driver commands that get it there once after
+# launch (`setup`, not measured), and one round of driver commands. Points are
+# window points (title bar included), from the apps at their launch size.
 SCENARIOS: dict[str, dict] = {
     "bookmarks-layout": {
         "app": "Bookmarks",
         "about": "Cards ⇄ List: every card moves and resizes to its row (geometry motion)",
         "round": [["click", "353", "132"], ["click", "294", "132"]],
+    },
+    "bookmarks-scroll": {
+        "app": "Bookmarks",
+        "about": "the cards scrolled down and back up (content moving, nothing resized)",
+        "round": [["scroll", "600", "500", "-600"], ["scroll", "600", "500", "600"]],
     },
     "bookmarks-tags": {
         "app": "Bookmarks",
@@ -71,6 +77,12 @@ SCENARIOS: dict[str, dict] = {
         "about": "a card revealed and graded: thrown off, the next dealt in (transitions: asymmetric scale+opacity, opacity)",
         "round": [["click", "320", "300"], ["click", "450", "510"]],
     },
+    "reader-scroll": {
+        "app": "Reader",
+        "about": "the first chapter scrolled down and back up (content moving, nothing resized)",
+        "setup": [["click", "280", "330"], ["click", "280", "508"]],
+        "round": [["scroll", "280", "400", "-600"], ["scroll", "280", "400", "600"]],
+    },
     "flashcards-card": {
         "app": "Flashcards",
         "about": "the card flipped and back (animatableData), then dragged short and let go (spring-back)",
@@ -81,6 +93,8 @@ SCENARIOS: dict[str, dict] = {
         ],
     },
 }
+
+KEPT = re.compile(r"\bkept=(\d+)")
 
 PERF = re.compile(
     r"\[perf\] (\S+) ([\d.]+)ms \(build ([\d.]+)ms\) built=(\d+) reused=(\d+) measured=(\d+) text=(\d+)"
@@ -116,9 +130,11 @@ def summarize(lines: list[str]) -> dict:
         match = PERF.search(line)
         if match:
             kind, ms, build, built, reused, measured, text = match.groups()
+            kept = KEPT.search(line)
             passes.append({
                 "kind": kind, "ms": float(ms), "build": float(build),
                 "built": int(built), "measured": int(measured), "text": int(text),
+                "kept": int(kept.group(1)) if kept else 0,
             })
     times = sorted(p["ms"] for p in passes)
     kinds: dict[str, int] = {}
@@ -136,6 +152,7 @@ def summarize(lines: list[str]) -> dict:
         "built": sum(p["built"] for p in passes),
         "measured": sum(p["measured"] for p in passes),
         "text": sum(p["text"] for p in passes),
+        "kept": sum(p["kept"] for p in passes),
     }
 
 
@@ -164,6 +181,8 @@ def run_once(scenario: str, rounds: int) -> dict:
     pid = int(found.group(1))
     log = RUN_DIR / f"{app}.log"
     time.sleep(2)  # let launch passes finish
+    for step in spec.get("setup", []):
+        driver(*step, settle=SETTLE)
 
     start_bytes = log.stat().st_size
     # How busy the machine was: a loaded one makes every pass slower.
@@ -315,6 +334,8 @@ def record(a: str, b: str, what: str, load: str | None, date: str | None) -> Non
 
 
 def value(run: dict, key: str) -> float:
+    if key == "kept":
+        return run.get("kept", 0)
     if key == "build_per_pass_ms":
         return run["build_ms"] / run["passes"] if run["passes"] else 0
     if key == "cpu_per_pass_ms" and key not in run:
@@ -365,6 +386,7 @@ DETAIL_METRICS = [
     ("built", "nodes built, all passes", ""),
     ("measured", "sizes measured, all passes", ""),
     ("text", "texts measured, all passes", ""),
+    ("kept", "subtrees kept, all passes", ""),
 ]
 
 
