@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `226d865`.
+Last updated after `e43a737`.
 
 ## Small fixes that are certain
 
@@ -31,8 +31,10 @@ Last updated after `226d865`.
 - [x] **1.8** Comparing by a per-type witness, not through `Any` — `d1e038c`
 - [x] **1.9** Built-in animated values as their own types — `f8eb992`.
   Colors and transitions keep their vector, as the commit says.
-- [ ] **1.10** Enums inside one content type. Did not fall out of 1.1:
-  `TransformContent.Kind` and `DecorationContent.Order` are still there.
+- [x] **1.10** Enums inside one content type — `e43a737`. Rotation and
+  scale, background and overlay, are four kinds. `StackContent.axis` and
+  `SpacerContent.axis` stay values: they feed the layout math, they do
+  not pick what the node does.
 - [x] **1.11** `ShapeStyle` is a protocol — `25eeafe`. Styles resolve
   where their view is built; examples, demo and tests moved over.
 
