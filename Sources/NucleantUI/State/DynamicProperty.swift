@@ -27,22 +27,19 @@ public struct BindingContext {
     let index: Int
     /// The view being bound — state is only ever its own.
     let owner: ViewIdentity
-    /// Its path: the subtree a write to its state invalidates.
-    let ownerPath: [Int]
     let environment: EnvironmentValues
 
-    init(position: ViewPosition, index: Int, owner: ViewIdentity, ownerPath: [Int], environment: EnvironmentValues) {
+    init(position: ViewPosition, index: Int, owner: ViewIdentity, environment: EnvironmentValues) {
         self.position = position
         self.index = index
         self.owner = owner
-        self.ownerPath = ownerPath
         self.environment = environment
     }
 
     /// The state slot of the property being bound, made from
     /// `initialValue` the first time its view is built here.
     func slot<Value>(initialValue: () -> Value) -> StateStorage<Value> {
-        position.stateSlot(index, of: owner, ownerPath: ownerPath, initialValue: initialValue)
+        position.stateSlot(index, of: owner, initialValue: initialValue)
     }
 }
 
@@ -55,7 +52,6 @@ public struct BindingContext {
 public struct DynamicPropertyBinder {
     let position: ViewPosition
     let environment: EnvironmentValues
-    let path: [Int]
     let owner: ViewIdentity
 
     public func bind<P: DynamicProperty>(_ property: inout P, index: Int) {
@@ -63,7 +59,6 @@ public struct DynamicPropertyBinder {
             position: position,
             index: index,
             owner: owner,
-            ownerPath: path,
             environment: environment
         ))
     }

@@ -298,7 +298,6 @@ final class ViewPosition {
     func stateSlot<Value>(
         _ index: Int,
         of owner: ViewIdentity,
-        ownerPath: [Int],
         initialValue: () -> Value
     ) -> StateStorage<Value> {
         if stateOwner != owner {
@@ -311,11 +310,11 @@ final class ViewPosition {
             if ObjectIdentifier(Swift.type(of: slot)) == type {
                 return unsafeDowncast(slot, to: StateStorage<Value>.self)
             }
-            let made = StateStorage(initialValue(), ownerPath: ownerPath)
+            let made = StateStorage(initialValue(), owner: handle)
             stateSlots[position].slot = made
             return made
         }
-        let made = StateStorage(initialValue(), ownerPath: ownerPath)
+        let made = StateStorage(initialValue(), owner: handle)
         stateSlots.append((index, made))
         return made
     }

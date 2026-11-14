@@ -12,8 +12,6 @@ protocol AnyStateStorage: AnyObject {
     /// Bumped on every write.
     var version: UInt32 { get }
 
-    /// The view that declared this state — the subtree a write invalidates.
-    var ownerPath: [Int] { get }
 
     /// Every view that read this slot while its `body` ran, with the key
     /// paths it read through — see `StateReaders`.
@@ -106,7 +104,9 @@ final class StateStorage<Value>: StateSlot, AnyStateStorage {
     private(set) var value: Value
     private(set) var version: UInt32 = 0
 
-    let ownerPath: [Int]
+    /// The view that declared it — dirtied by a write when the value was
+    /// read while the tree was placed.
+    let owner: PositionHandle
 
     var readers = StateReaders()
 
@@ -120,9 +120,9 @@ final class StateStorage<Value>: StateSlot, AnyStateStorage {
     /// How two values of `Value` compare — see `set(_:via:)`.
     private let isSameValue: EquivalenceWitness
 
-    init(_ value: Value, ownerPath: [Int]) {
+    init(_ value: Value, owner: PositionHandle) {
         self.value = value
-        self.ownerPath = ownerPath
+        self.owner = owner
         self.isSameValue = equivalenceWitness(for: Value.self)
     }
 
@@ -177,8 +177,8 @@ final class StateStorage<Value>: StateSlot, AnyStateStorage {
 
     private func didChange(via chain: [AnyKeyPath]) {
         version &+= 1
-        if isReadDuringPlacement {
-            Invalidator.shared.invalidate(owner: ownerPath)
+        if isReadDuringPlacement, let path = owner.standingPath {
+            Invalidator.shared.invalidate(owner: path)
         }
         // A reader no longer standing has nothing to rebuild.
         readers.forEachReader(reachedBy: chain) { reader in

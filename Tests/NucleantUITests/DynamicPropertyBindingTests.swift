@@ -84,7 +84,6 @@ struct DynamicPropertyBindingTests {
             position: ViewPosition(parent: nil, key: 0),
             index: 0,
             owner: ViewIdentity(type: ObjectIdentifier(Int.self), viewID: .unknown),
-            ownerPath: [0],
             environment: environment
         )
     }

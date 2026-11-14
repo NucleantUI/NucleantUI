@@ -178,7 +178,6 @@ public struct BuildContext {
         let binder = DynamicPropertyBinder(
             position: position,
             environment: environment,
-            path: path,
             owner: ViewIdentity(type: ObjectIdentifier(V.self), viewID: view._viewID)
         )
         view._bindDynamicProperties(binder)

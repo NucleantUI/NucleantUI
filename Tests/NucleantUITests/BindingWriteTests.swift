@@ -38,7 +38,7 @@ extension HostedViews {
 
         /// A binding onto a slot holding `value`, as `$state` makes one.
         private func bound<Value>(_ value: Value) -> (StateStorage<Value>, Binding<Value>) {
-            let storage = StateStorage(value, ownerPath: [0])
+            let storage = StateStorage(value, owner: reader(0))
             let holder = _StateProperty<Value>.Holder()
             holder.storage = storage
             let binding = Binding(

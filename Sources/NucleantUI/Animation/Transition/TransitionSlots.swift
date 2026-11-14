@@ -366,7 +366,7 @@ extension BuildContext {
         inSlot index: Int,
         among built: [(index: Int, node: ViewNode, isNew: Bool)]
     ) -> Int {
-        if let parent = node.parent, parent.ownerPath == path,
+        if let parent = node.parent, parent.owner === self.position.handle,
            parent.children.indices.contains(node.indexInParent),
            parent.children[node.indexInParent] === node {
             var position = 0

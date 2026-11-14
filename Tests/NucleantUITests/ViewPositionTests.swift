@@ -200,7 +200,7 @@ struct ViewPositionTests {
         let view = ViewIdentity(type: ObjectIdentifier(Int.self), viewID: .unknown)
         let other = ViewIdentity(type: ObjectIdentifier(Marker.self), viewID: .unknown)
         func slot<Value>(_ index: Int, of owner: ViewIdentity, _ value: Value) -> StateStorage<Value> {
-            position.stateSlot(index, of: owner, ownerPath: [], initialValue: { value })
+            position.stateSlot(index, of: owner, initialValue: { value })
         }
 
         let count = slot(0, of: view, 1)
@@ -234,7 +234,7 @@ struct ViewPositionTests {
         file(records, at: [0])
         do {
             let position = records.cursor(at: [0]).position
-            state = position.stateSlot(0, of: view, ownerPath: [0], initialValue: { 1 })
+            state = position.stateSlot(0, of: view, initialValue: { 1 })
         }
         _ = records.endRebuild()
         #expect(state != nil)
@@ -443,7 +443,7 @@ struct ViewPositionTests {
 
     @Test func aViewThatLeftIsTakenOffWhatItRead() {
         let records = RebuildRecords()
-        let storage = StateStorage(1, ownerPath: [])
+        let storage = StateStorage(1, owner: ViewPosition(parent: nil, key: 0).handle)
         func readers() -> [PositionHandle] {
             var found: [PositionHandle] = []
             storage.readers.forEachReader(reachedBy: []) { found.append($0) }

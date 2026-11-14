@@ -79,10 +79,10 @@ class ViewNode {
     /// a flag so asking doesn't copy the removal out.
     private(set) var isLeaving = false
 
-    /// The path of the view whose build made this node — as opposed to one
-    /// that only handed a child's node on (an `if`, a view's `body`).
+    /// The position of the view whose build made this node — as opposed to
+    /// one that only handed a child's node on (an `if`, a view's `body`).
     /// Motion is inherited only by the node's maker.
-    var ownerPath: [Int]?
+    var owner: PositionHandle?
 
     /// The element of a lazy container's `ForEach` this node is part of —
     /// see `LazyLayout.swift`.
@@ -912,8 +912,9 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             node.layoutValues = body.layoutValues
         }
     }
-    if node.ownerPath == nil { node.ownerPath = path }
-    if let predecessor, predecessor !== node, node.ownerPath == path {
+    let here = context.position.handle
+    if node.owner == nil { node.owner = here }
+    if let predecessor, predecessor !== node, node.owner === here {
         node.inheritMotion(from: predecessor)
     }
     let reads = DependencyTracker.shared.pop()
