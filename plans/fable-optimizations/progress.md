@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `a266d81`.
+Last updated after `fc626e4`.
 
 ## Small fixes that are certain
 
@@ -41,12 +41,13 @@ Last updated after `a266d81`.
 ## [Phase 2](phase-2-view-positions.md): a position object instead of `[Int]` paths
 
 - [x] **2.3** Forgetting without a scan — `d350522`
-- [~] **2.4 / 2.5** The position object and one trie — `795a477` (step 3 of
+- [x] **2.4 / 2.5** The position object and one trie — `795a477` (step 3 of
   2.8). The rebuild records sit on `ViewPosition`s that stay in place;
   every rebuild takes a number. A kept subtree is one number set, and the
   views that left are found from the children of the positions rebuilt.
-  What else the position holds is 2.6. Left: the dirty marks, still a
-  trie of paths, made by state writes from their readers' paths.
+  What else the position holds is 2.6. The dirty marks stay a trie of
+  paths: a write names its readers by the paths of their positions while
+  they stand, and a build steps through the trie by slot, with no path.
 - [x] **2.6** What a position caches — step 4 of 2.8, by the table's rows
   (the `ForEach` rows and the environment are steps 5 and 6):
   - [x] state slots — `3466a17`. By property index on the view's
@@ -79,9 +80,14 @@ Last updated after `a266d81`.
     its scope; a row with an equivalent element and closure is kept
     without running it, also when the data around it changed.
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1 to 6 done (6: `a266d81`, a modifier's last environment
-  write on its position; the same write over the same environment hands
-  down the same version); 7 not started. The dirty marks are
+- Steps of 2.8: all done.
+  - 6 — `a266d81`: a modifier's last environment write on its position;
+    the same write over the same environment hands down the same version.
+  - 7 — `3c7a6a9` observation scopes, `4dd6041` owners (a node's maker, a
+    state's view), `d3066e8` input targets, `fc626e4` `BuildContext`: all
+    by `PositionHandle` or position. A build carries its position, not a
+    path; `path` is worked out from the positions for trace lines and for
+    what is filed in tree order (toolbars, preference observers). The dirty marks are
   still a trie of paths (`Invalidator`), made from the readers' paths.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
@@ -213,6 +219,10 @@ Last updated after `a266d81`.
   (34.46 → 34.55 ms; building +5%, within the ranges; slowest pass
   71.9 → 44.7 ms), `flashcards-card` −7% (2.91 → 2.72 ms; nodes built
   1927 → 1811).
+- Step 7 of 2.8 (`a266d81` → `fc626e4`), 3 launches of 5 rounds,
+  2026-11-14, load about 12 throughout: `bookmarks-layout` −6% CPU per
+  pass (34.85 → 32.65 ms; building −5% with 5% more frames drawn),
+  `flashcards-card` −1% (building −5%).
 
 ## Outside this repo
 
