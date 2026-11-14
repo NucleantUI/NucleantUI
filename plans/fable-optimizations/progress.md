@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `795a477`.
+Last updated after `3466a17`.
 
 ## Small fixes that are certain
 
@@ -48,12 +48,16 @@ Last updated after `795a477`.
   Left: what the position holds besides the record (2.6, step 4), and the
   dirty marks, still a trie of paths: they move with state, whose writes
   make them.
-- [ ] **2.6** What a position caches — step 4 of 2.8.
+- [~] **2.6** What a position caches — step 4 of 2.8, by the table's rows:
+  - [x] state slots — `3466a17`. By property index on the view's
+    position; `StateStore` and the per-entry state keys are gone.
+  - [ ] effects, animated values, transition slots, render nodes, readers
 - [~] **2.7** `ForEach` rows
   - [ ] a row's slot is the hash of its id
   - [ ] a change read in one row closure re-runs every row closure
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 to 7 not started.
+- Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 under way (state
+  done); 5 to 7 not started.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
 
