@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `a0f05ce`.
+Last updated after `7326fb9`.
 
 ## Small fixes that are certain
 
@@ -59,8 +59,9 @@ Last updated after `a0f05ce`.
 - [x] **3.5** Capabilities found by casting — no commit of its own: since
   1.3 both casts run only on nodes whose traits say they have the
   capability.
-- [ ] **3.6** A scoped rebuild keeps the ancestors' caches when the new
-  subtree measures the same.
+- [x] **3.6** A scoped rebuild keeps the ancestors' caches when the new
+  subtree measures the same — `7326fb9`. Only for subtrees of kinds
+  that place purely, and an old node whose cache dropped no answer.
 - [x] **3.7** Nothing to do, by the plan.
 - [x] **3.8** Flattened layout children kept on the node — `d27ea61`
 - [x] **3.9** Transform math — `d350522`
