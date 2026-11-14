@@ -60,18 +60,29 @@ struct PlacementRecord {
     /// it is the context's, and the context's transform only moves.
     var isMovable = false
 
-    /// Whether a placement under these draws what this one drew.
-    func matches(_ rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> Bool {
-        self.epoch == epoch && self.rect == rect && self.proposal == proposal && self.context.placesLike(context)
+    /// How a placement under these compares with this one, the context
+    /// compared once.
+    enum Likeness {
+        /// It draws what this one drew.
+        case same
+        /// It draws what this one drew, moved this far — and nothing placed
+        /// somewhere new would start moving there, as under an animation.
+        case moved(dx: Double, dy: Double)
+        case different
     }
 
-    /// How far a placement under these is this one moved, when that is all
-    /// that differs — and nothing placed somewhere new would start moving
-    /// there, as it does under an animation.
-    func offset(to rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> (dx: Double, dy: Double)? {
-        guard self.epoch == epoch, self.rect.size == rect.size, self.proposal == proposal,
-              context.animation == nil, self.context.placesLike(context) else { return nil }
-        return (rect.minX - self.rect.minX, rect.minY - self.rect.minY)
+    func likeness(_ rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> Likeness {
+        guard self.epoch == epoch, self.rect.size == rect.size, self.proposal == proposal else { return .different }
+        let moved = self.rect.origin != rect.origin
+        if moved, context.animation != nil { return .different }
+        guard self.context.placesLike(context) else { return .different }
+        return moved ? .moved(dx: rect.minX - self.rect.minX, dy: rect.minY - self.rect.minY) : .same
+    }
+
+    /// Whether a placement under these draws what this one drew.
+    func matches(_ rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> Bool {
+        if case .same = likeness(rect, proposal, context, epoch: epoch) { return true }
+        return false
     }
 
     /// This record keeping `list`.
@@ -118,6 +129,11 @@ final class PlacementRecorder {
     /// The number the next kept list gets (`DisplayList.version`).
     private var nextKept = 0
 
+    /// How many commands a subtree draws before drawing it moved is worth
+    /// it: a smaller one is placed again sooner than its list is copied and
+    /// its nodes moved.
+    static let movedAtLeast = 24
+
     private init() {}
 
     /// Something animated asked for another frame, or state was read while
@@ -141,29 +157,27 @@ final class PlacementRecorder {
         into list: inout DisplayList,
         fresh: (inout DisplayList) -> Void
     ) {
+        let likeness = node.placed?.likeness(rect, proposal, context, epoch: epoch) ?? .different
         if let record = node.placed, let kept = record.list {
-            if record.matches(rect, proposal, context, epoch: epoch) {
+            switch likeness {
+            case .same:
                 list.append(contentsOf: kept)
                 if PerfTrace.isEnabled { PerfTrace.placementsKept += 1 }
                 return
-            }
-            if record.isMovable, let offset = record.offset(to: rect, proposal, context, epoch: epoch) {
+            case .moved(let dx, let dy) where record.isMovable && kept.commands.count >= Self.movedAtLeast:
                 // Placed at another origin: what it drew, moved there.
-                var moved = kept.moving(dx: offset.dx, dy: offset.dy)
+                var moved = kept.moving(dx: dx, dy: dy)
                 nextKept += 1
                 moved.markKept(nextKept)
                 list.append(contentsOf: moved)
-                node.movePlacement(dx: offset.dx, dy: offset.dy)
+                node.movePlacement(dx: dx, dy: dy)
                 node.placed = PlacementRecord(rect: rect, proposal: proposal, context: context, epoch: epoch).keeping(moved)
                 if PerfTrace.isEnabled { PerfTrace.placementsMoved += 1 }
                 return
+            default:
+                break
             }
         }
-        // Placed as it was, or only moved: what it draws is worth keeping
-        // either way — a moved one is drawn moved the next time it moves.
-        let stable = node.placed.map {
-            $0.matches(rect, proposal, context, epoch: epoch) || $0.offset(to: rect, proposal, context, epoch: epoch) != nil
-        } ?? false
         let start = list.commands.count
         let mark = disturbances
         frames.append(Frame())
@@ -172,6 +186,14 @@ final class PlacementRecorder {
         let record = PlacementRecord(rect: rect, proposal: proposal, context: context, epoch: epoch)
         node.placed = record
         let range = start..<list.commands.count
+        // Placed as it was: worth keeping. Only moved: worth keeping when it
+        // is big enough to be drawn moved the next time it moves.
+        let stable: Bool
+        switch likeness {
+        case .same: stable = true
+        case .moved: stable = range.count >= Self.movedAtLeast
+        case .different: stable = false
+        }
 
         if disturbances == mark && stable {
             if frames.isEmpty {

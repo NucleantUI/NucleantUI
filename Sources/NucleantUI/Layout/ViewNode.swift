@@ -462,7 +462,11 @@ class ViewNode {
     private func noteHitExtent() {
         let inner = layoutChildren
         placedContentTransform = inner.count == 1 ? inner[0].placedContentTransform : transform
-        var extent: Rect? = frame.width > 0 && frame.height > 0 ? frame.applying(placedContentTransform) : nil
+        var extent: Rect?
+        if frame.width > 0 && frame.height > 0 {
+            let drawn = placedContentTransform
+            extent = drawn.onlyMoves ? frame.offsetBy(dx: drawn.e13, dy: drawn.e23) : frame.applying(drawn)
+        }
         for child in children {
             if let childExtent = child.extentAsPlaced() {
                 extent = extent.map { $0.union(childExtent) } ?? childExtent

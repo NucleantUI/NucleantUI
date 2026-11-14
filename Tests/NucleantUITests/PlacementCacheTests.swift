@@ -214,15 +214,20 @@ struct PlacementCacheTests {
 
     // MARK: - At another origin
 
-    /// A kept subtree of one counted swatch, and the swatch.
+    /// A kept subtree of counted swatches, enough of them to be drawn moved
+    /// (`PlacementRecorder.movedAtLeast`), and the first of them.
     private func keptSwatch(clipsItself: Bool = false, context: DrawContext = DrawContext()) -> (root: ViewNode, swatch: ViewNode, count: Count) {
         let count = Count()
-        let swatch = ContentNode(content: CountedSwatch(count: count, clipsItself: clipsItself))
-        let root = stack(swatch)
+        let swatches = (0..<PlacementRecorder.movedAtLeast).map { _ in
+            ContentNode(content: CountedSwatch(count: count, clipsItself: clipsItself)) as ViewNode
+        }
+        let root = ContentNode(content: ZStackContent(alignment: .center), children: swatches)
         _ = place(root, context: context)
         _ = place(root, context: context)
-        return (root, swatch, count)
+        return (root, swatches[0], count)
     }
+
+    private var placedOnce: Int { PlacementRecorder.movedAtLeast }
 
     @Test func movedElsewhereItIsDrawnMovedAsPlacingWould() {
         let (root, swatch, count) = keptSwatch()
@@ -234,7 +239,7 @@ struct PlacementCacheTests {
 
         PlacementRecorder.shared.invalidateAll()
         let fresh = place(root, in: there)
-        #expect(count.value == placed + 1)
+        #expect(count.value == placed + placedOnce)
         #expect(fresh == moved)
         #expect(swatch.frame == Rect(x: 65, y: 75, width: 10, height: 10))
     }
@@ -263,7 +268,7 @@ struct PlacementCacheTests {
         let own = keptSwatch(clipsItself: true)
         var placed = own.count.value
         _ = place(own.root, in: there)
-        #expect(own.count.value == placed + 1, "a clip of its own: placed")
+        #expect(own.count.value == placed + placedOnce, "a clip of its own: placed")
 
         // A turned space does not move it as it moves its rect.
         var turned = DrawContext()
@@ -271,7 +276,7 @@ struct PlacementCacheTests {
         let turning = keptSwatch(context: turned)
         placed = turning.count.value
         _ = place(turning.root, in: there, context: turned)
-        #expect(turning.count.value == placed + 1, "a turned space: placed")
+        #expect(turning.count.value == placed + placedOnce, "a turned space: placed")
 
         // Under an animation it would start moving there.
         let animating = keptSwatch()
@@ -279,12 +284,24 @@ struct PlacementCacheTests {
         var animated = DrawContext()
         animated.animation = .linear(duration: 1)
         _ = place(animating.root, in: there, context: animated)
-        #expect(animating.count.value == placed + 1, "under an animation: placed")
+        #expect(animating.count.value == placed + placedOnce, "under an animation: placed")
+    }
+
+    @Test func aSmallSubtreeMovedIsPlacedAgain() {
+        let count = Count()
+        let root = stack(ContentNode(content: CountedSwatch(count: count)))
+        _ = place(root)
+        _ = place(root)
+        let placed = count.value
+        _ = place(root, in: Rect(x: 20, y: 30, width: 100, height: 100))
+        #expect(count.value == placed + 1, "one command: placed sooner than moved")
     }
 
     @Test func whatKeepsMovingIsKeptOnTheWay() {
         let count = Count()
-        let root = stack(ContentNode(content: CountedSwatch(count: count)))
+        let root = ContentNode(content: ZStackContent(alignment: .center), children: (0..<PlacementRecorder.movedAtLeast).map { _ in
+            ContentNode(content: CountedSwatch(count: count)) as ViewNode
+        })
         _ = place(root, in: Rect(x: 0, y: 0, width: 100, height: 100))
         _ = place(root, in: Rect(x: 0, y: 10, width: 100, height: 100))
         #expect(root.placed?.list != nil, "only moved: kept")
