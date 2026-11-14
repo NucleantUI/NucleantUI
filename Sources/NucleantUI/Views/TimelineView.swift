@@ -207,7 +207,7 @@ extension TimelineView: BuiltinView {
         let node = context.child(0) { ctx in buildNode(built, &ctx) }
 
         let next = schedule.entries(from: now, mode: .normal).first { $0 > now }
-        context.animations.schedule(timelineAt: path, next: next)
+        context.animations.schedule(timelineAt: context.position, next: next)
 
         // Redrawn on its own clock: a node of its own, so the redraw lands
         // there rather than in whatever encloses it.

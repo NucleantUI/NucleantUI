@@ -8,10 +8,13 @@
 //  built or kept; and once it is over, what a rebuilt position no longer
 //  holds is cut out with everything below it — looked through a place no
 //  view is built at itself — while a kept subtree is left as it stands.
-//  A view's state, and what its effects keep, go with its position, and
-//  are dropped for another view.
+//  A view's state, what its effects keep and its animated values go with
+//  its position, and are dropped for another view — hosted: an animating
+//  view or a timeline that left is not built again, and another view in an
+//  animating one's place starts from its own value.
 //
 
+import Foundation
 import Testing
 @testable import NucleantUI
 
@@ -292,6 +295,32 @@ struct ViewPositionTests {
         #expect(ran == [[0], [0, 1, 2], [3]])
     }
 
+    // MARK: - Animations
+
+    @Test func animatedValuesAreKeptBySlotForTheirView() {
+        let store = AnimationStore()
+        let position = ViewPosition(parent: nil, key: 0)
+        let fill = store.value(at: position, slot: .fill, target: [1, 0, 0, 1], animation: nil)
+        #expect(store.value(at: position, slot: .fill, target: [0, 1, 0, 1], animation: nil) === fill)
+        #expect(fill.target == [0, 1, 0, 1])
+        #expect(store.value(at: position, slot: .stroke, target: [0, 0, 1, 1], animation: nil) !== fill)
+
+        let opacity = store.state(at: position, slot: .opacity, target: 0.5, animation: nil)
+        #expect(store.state(at: position, slot: .opacity, target: 0.25, animation: nil) === opacity)
+        #expect(opacity.target == 0.25)
+        // A value of another type in the slot: one of its own.
+        let pair = store.state(at: position, slot: .opacity, target: AnimatablePair(1.0, 2.0), animation: nil)
+        #expect(pair.target == AnimatablePair(1.0, 2.0))
+
+        let data = store.animatableData(at: position, target: 3.0, animation: nil)
+        #expect(store.animatableData(at: position, target: 4.0, animation: nil) === data)
+
+        // Another view takes the position: everything starts afresh.
+        #expect(position.release() == nil)
+        #expect(store.value(at: position, slot: .fill, target: [1, 0, 0, 1], animation: nil) !== fill)
+        #expect(store.animatableData(at: position, target: 3.0, animation: nil) !== data)
+    }
+
     // MARK: - Built views
 
     @MainActor
@@ -362,5 +391,152 @@ struct ViewPositionTests {
         #expect(builder.build(PositionShelf(title: "c", count: 3)).departed.isEmpty)
         #expect(standing(2) != nil)
         #expect(standing(2) !== built[2])
+    }
+}
+
+// MARK: - Hosted
+
+/// A number logged at every value it is built at, on its way up.
+@View
+struct RisingNumber: Animatable {
+    var amount: Double
+    let log: Log
+
+    var animatableData: Double {
+        get { amount }
+        set { amount = newValue }
+    }
+
+    var body: some View {
+        let _ = log("up \(Int(amount.rounded()))")
+        Color.blue.frame(width: 10, height: 10)
+    }
+}
+
+/// The same, of another type — another view in the same place.
+@View
+struct FallingNumber: Animatable {
+    var amount: Double
+    let log: Log
+
+    var animatableData: Double {
+        get { amount }
+        set { amount = newValue }
+    }
+
+    var body: some View {
+        let _ = log("down \(Int(amount.rounded()))")
+        Color.red.frame(width: 10, height: 10)
+    }
+}
+
+/// A rising number while `knobs.isShown`.
+@View
+struct RisingStage {
+    let knobs: Knobs
+    let log: Log
+
+    var body: some View {
+        VStack {
+            if knobs.isShown {
+                RisingNumber(amount: Double(knobs.value), log: log)
+            }
+        }
+    }
+}
+
+/// A rising number, or a falling one in its place.
+@View
+struct RisingOrFalling {
+    let knobs: Knobs
+    let log: Log
+
+    var body: some View {
+        AnyView(
+            knobs.isShown
+                ? AnyView(RisingNumber(amount: Double(knobs.value), log: log))
+                : AnyView(FallingNumber(amount: 50, log: log))
+        )
+    }
+}
+
+/// A timeline ticking every hundredth of a second while `knobs.isShown`.
+@View
+struct TickingStage {
+    let knobs: Knobs
+    let log: Log
+
+    var body: some View {
+        let _ = log("stage")
+        VStack {
+            if knobs.isShown {
+                TimelineView(.periodic(from: .now, by: 0.01)) { _ in
+                    let _ = log("tick")
+                    Color.green.frame(width: 10, height: 10)
+                }
+            }
+        }
+    }
+}
+
+extension HostedViews {
+    @MainActor
+    @Suite
+    struct AnimatedPositionTests {
+
+        /// Rising from 0 towards 100 over a second, a few frames in.
+        private func rise(_ knobs: Knobs, _ harness: Harness, _ log: Log) async -> [Int] {
+            withAnimation(.linear(duration: 1)) { knobs.value = 100 }
+            harness.host.update()
+            for _ in 0..<3 { await harness.settle(0.05) }
+            return log.take().compactMap { Int($0.dropFirst(3)) }
+        }
+
+        @Test func anAnimatingViewThatLeftIsNotBuiltAgain() async {
+            let knobs = Knobs()
+            let log = Log()
+            let harness = Harness(RisingStage(knobs: knobs, log: log))
+            #expect(log.take() == ["up 0"])
+
+            let rising = await rise(knobs, harness, log)
+            #expect(rising.count > 1)
+            #expect((rising.last ?? 100) < 100, "still on its way")
+
+            knobs.isShown = false
+            harness.host.update()
+            _ = log.take()
+            for _ in 0..<5 { await harness.settle(0.05) }
+            #expect(log.take().isEmpty)
+        }
+
+        @Test func anotherViewInAnAnimatingOnesPlaceStartsAtItsOwnValue() async {
+            let knobs = Knobs()
+            let log = Log()
+            let harness = Harness(RisingOrFalling(knobs: knobs, log: log))
+            #expect(log.take() == ["up 0"])
+
+            let rising = await rise(knobs, harness, log)
+            #expect((rising.last ?? 100) < 100, "still on its way")
+
+            // Under an animation too: it has nowhere to come from.
+            withAnimation(.linear(duration: 1)) { knobs.isShown = false }
+            harness.host.update()
+            for _ in 0..<5 { await harness.settle(0.05) }
+            #expect(log.take() == ["down 50"])
+        }
+
+        @Test func aTimelineThatLeftDoesNotTick() async {
+            let knobs = Knobs()
+            let log = Log()
+            let harness = Harness(TickingStage(knobs: knobs, log: log))
+            for _ in 0..<3 { await harness.settle(0.03) }
+            #expect(log.take().filter { $0 == "tick" }.count > 1)
+
+            knobs.isShown = false
+            harness.host.update()
+            #expect(log.take() == ["stage"])
+            for _ in 0..<4 { await harness.settle(0.03) }
+            #expect(log.take().isEmpty)
+        }
     }
 }

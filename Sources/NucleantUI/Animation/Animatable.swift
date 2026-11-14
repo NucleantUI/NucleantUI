@@ -280,19 +280,11 @@ extension AnimationStore {
     /// `isFinished` is false while it is still on its way.
     func animated<A: Animatable>(
         _ value: A,
-        at path: [Int],
+        at position: ViewPosition,
         animation: Animation?
     ) -> (value: A, isFinished: Bool) {
         guard A.AnimatableData.self != EmptyAnimatableData.self else { return (value, true) }
-        let target = value.animatableData
-        let state: AnimatableDataState<A.AnimatableData>
-        if let existing = animatableData[path] as? AnimatableDataState<A.AnimatableData> {
-            state = existing
-            state.update(to: target, animation: animation, in: self)
-        } else {
-            state = AnimatableDataState(target)
-            animatableData[path] = state
-        }
+        let state = animatableData(at: position, target: value.animatableData, animation: animation)
         let sample = state.sample(at: now)
         var shown = value
         shown.animatableData = sample.value
@@ -319,9 +311,10 @@ extension BuildContext {
     }
 
     private func showing<A: Animatable>(animatable: A) -> A {
-        let result = animations.animated(animatable, at: path, animation: transaction.animation)
+        let position = self.position
+        let result = animations.animated(animatable, at: position, animation: transaction.animation)
         if !result.isFinished {
-            animations.rebuildNextFrame(path)
+            animations.rebuildNextFrame(position)
         }
         return result.value
     }
@@ -333,10 +326,12 @@ extension BuildContext {
     /// that is where it was built — drawn as it is.
     func drawnShape<S: Shape>(_ shape: S) -> (@MainActor () -> S)? {
         guard S.AnimatableData.self != EmptyAnimatableData.self else { return nil }
-        let result = animations.animated(shape, at: path, animation: transaction.animation)
-        guard !result.isFinished,
-              let state = animations.animatableData[path] as? AnimatableDataState<S.AnimatableData>
-        else { return nil }
+        let state = animations.animatableData(
+            at: position,
+            target: shape.animatableData,
+            animation: transaction.animation
+        )
+        guard !state.sample(at: animations.now).isFinished else { return nil }
         return {
             guard let store = AnimationStore.current else { return shape }
             let sample = state.sample(at: store.now)

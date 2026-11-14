@@ -839,7 +839,7 @@ final class RebuildRecords {
         }
         guard !left.isEmpty else { return }
         for child in left {
-            child.collect(base: child.path, into: &departed)
+            child.leave(base: child.path, into: &departed)
             position.removeChild(child.key)
         }
     }

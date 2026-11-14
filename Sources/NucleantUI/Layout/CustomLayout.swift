@@ -379,7 +379,7 @@ extension _LayoutView: BuiltinView {
         // are equivalent and stand — each frame until it arrives.
         let animated = layout._animated(in: context)
         if !animated.isFinished {
-            context.animations.rebuildNextFrame(context.path)
+            context.animations.rebuildNextFrame(context.position)
         }
         let layout = animated.value
 
@@ -398,7 +398,7 @@ extension Layout {
             let result = erased.storage.animated(in: context)
             return (result.layout as! Self, result.isFinished)
         }
-        return context.animations.animated(self, at: context.path, animation: context.transaction.animation)
+        return context.animations.animated(self, at: context.position, animation: context.transaction.animation)
     }
 
     /// The axis `Spacer`s inside it follow. An instance member rather than

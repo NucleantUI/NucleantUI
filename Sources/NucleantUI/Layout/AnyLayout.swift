@@ -143,12 +143,12 @@ final class LayoutStorage<L: Layout>: AnyLayoutStorage {
             return (AnyLayout(storage: self), true)
         }
         // Animated as `TypedLayoutData<L>` rather than as `L.AnimatableData`:
-        // the store keeps one value per path, by type, and another layout
-        // with the same kind of data (a `Double`, say) must not animate from
-        // this one's.
+        // a position keeps one value, by type, and another layout with the
+        // same kind of data (a `Double`, say) must not animate from this
+        // one's.
         let result = context.animations.animated(
             TypedLayout(layout: layout),
-            at: context.path,
+            at: context.position,
             animation: context.transaction.animation
         )
         guard !result.isFinished else { return (AnyLayout(storage: self), true) }

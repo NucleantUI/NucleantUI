@@ -38,13 +38,14 @@ extension View {
 }
 
 /// `.animation(_:value:)`. Built again whenever its parent is — the value
-/// it last saw is filed by path, and each build asks whether it changed.
+/// it last saw is kept on its position, and each build asks whether it
+/// changed.
 struct AnimationValueModifier<V: Equatable>: PrimitiveModifier {
     let animation: Animation?
     let value: V
 
     func makeContent(_ context: inout BuildContext) -> AnimationScopeContent {
-        let changed = context.animations.valueChanged(value, at: context.path)
+        let changed = context.animations.valueChanged(value, at: context.position)
         // `disablesAnimations` is the change asking to be animated only
         // by its own transaction.
         let overrides = changed && !context.transaction.disablesAnimations

@@ -16,11 +16,13 @@
 //  against. See `RebuildRecords`.
 //
 //  It also holds what belongs to the view standing there for as long as it
-//  is the same view: its state, and what its effects keep between builds —
-//  an `onAppear`'s mark, an `onChange`'s last value. A rebuild of the same
-//  view keeps them; another view taking the position, or the view leaving,
-//  drops them.
+//  is the same view: its state, what its effects keep between builds — an
+//  `onAppear`'s mark, an `onChange`'s last value — and its animated values.
+//  A rebuild of the same view keeps them; another view taking the position,
+//  or the view leaving, drops them.
 //
+
+import Foundation
 
 /// One place in the view tree, kept in place across rebuilds.
 final class ViewPosition {
@@ -60,8 +62,8 @@ final class ViewPosition {
     /// runs with what that build captured.
     var disappearing: (() -> Void)?
 
-    /// The value the `onChange` standing here last saw, to compare the next
-    /// build's against.
+    /// The value the modifier standing here last saw — an `onChange`'s, an
+    /// `.animation(_:value:)`'s — to compare the next build's against.
     var observed: AnyBox?
 
     /// What the `onGeometryChange` standing here worked out when it was
@@ -76,6 +78,33 @@ final class ViewPosition {
     }
 
     private var placedIfMade: PlacedValue?
+
+    // What the animations of the view standing here keep from one build to
+    // the next, so that a rebuild goes on from where the last one's values
+    // are. They go as the state does.
+
+    /// The animated parameters of the modifier or builtin standing here —
+    /// an opacity, a fill and a stroke — by which parameter each is.
+    var animatedVectors: [(slot: AnimationStore.Slot, value: AnimatedVector)] = []
+
+    /// The same, for parameters kept as a type of their own.
+    var animatedStates: [(slot: AnimationStore.Slot, state: AnyAnimatableDataState)] = []
+
+    /// The `animatableData` of the `Animatable` view, shape or layout
+    /// standing here, on its way somewhere.
+    var animatableData: AnyAnimatableDataState?
+
+    /// Whether the view standing here is rebuilt next frame — an
+    /// `Animatable` one still on its way.
+    var rebuildsNextFrame = false
+
+    /// When the `TimelineView` standing here wants its content rebuilt next.
+    var nextTimelineDate: Date?
+
+    /// Whether this position was cut out of the tree, with the view that
+    /// stood here. A list of positions kept past a rebuild — the rebuilds
+    /// `AnimationStore` has to come — passes it by.
+    private(set) var hasLeft = false
 
     // The children, by slot, in no particular order: the slots in `keys`,
     // the positions in `children`, retained by hand. Raw buffers so that
@@ -241,11 +270,16 @@ final class ViewPosition {
     }
 
     /// Drop what the view that stood here kept — its state, what its
-    /// effects kept — for another takes the position; and hand back its
-    /// `onDisappear` action, to run.
+    /// effects kept, its animated values — for another takes the position;
+    /// and hand back its `onDisappear` action, to run.
     func release() -> (() -> Void)? {
         stateSlots.removeAll()
         stateOwner = nil
+        animatedVectors.removeAll()
+        animatedStates.removeAll()
+        animatableData = nil
+        rebuildsNextFrame = false
+        nextTimelineDate = nil
         defer {
             hasAppeared = false
             disappearing = nil
@@ -255,14 +289,16 @@ final class ViewPosition {
         return disappearing
     }
 
-    /// What leaves with this position, here and below: each record, with
-    /// its path — this position's being `base` — and each `onDisappear`
+    /// Mark this position and everything below it as gone — cut out of
+    /// the tree — and collect what leaves with them: each record, with its
+    /// path — this position's being `base` — and each `onDisappear`
     /// action, in the order of the tree.
-    func collect(base: [Int], into departed: inout RebuildRecords.Departed) {
+    func leave(base: [Int], into departed: inout RebuildRecords.Departed) {
+        hasLeft = true
         if let record { departed.entries.append((base, record)) }
         if let disappearing { departed.disappearing.append(disappearing) }
         forEachChild { child in
-            child.collect(base: base + [child.key], into: &departed)
+            child.leave(base: base + [child.key], into: &departed)
         }
     }
 }
