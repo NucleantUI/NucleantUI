@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `96041c7`.
+Last updated after `4deee21`.
 
 ## Small fixes that are certain
 
@@ -155,7 +155,10 @@ Last updated after `96041c7`.
   layout entry: `TextDraw` is a value compared by its fields.
 - [x] **5.5** Letter spacing — `cfc7fea`: a spaced line is the same blob,
   built once.
-- [ ] **5.6** A font resolved to a small integer once.
+- [x] **5.6** A font resolved to a small integer once — `4deee21`: a `Text`
+  resolves its face when it builds; its draw carries the number to the
+  renderer. `FontRegistry` reads faces with Skia now (`b35ced9`): none of
+  NucleantUI's own text goes through ThorVG.
 - [ ] **5.7** The raster surface initializer. Not a performance item; goes
   when the pixel tests move to a software Vulkan driver.
 
