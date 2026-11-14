@@ -173,7 +173,7 @@ Last updated after `96041c7`.
 - [x] **7.1** Every hit test walks every node
   - [x] step 1: skip subtrees without the wanted trait — `d24813b`
   - [x] step 2: one walk per pointer down — `226d865`
-  - [x] step 3: skip a subtree placed away from the point — `HEAD`. Not by
+  - [x] step 3: skip a subtree placed away from the point — `28806dd`. Not by
     paint bounds — a view that paints nothing can still be hit — but by
     where its subtree can be hit: each node keeps the box of its frames
     under the transforms they are drawn with (`hitExtent`), noted as it is
