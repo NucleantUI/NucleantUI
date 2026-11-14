@@ -132,7 +132,7 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         if let entry = context.records.entry(for: path) {
             context.environment = entry.environment
         }
-        context.records.beginRebuild(under: path + [0])
+        context.records.beginRebuild()
 
         DependencyTracker.shared.push(path)
         EnvironmentReads.shared.begin()

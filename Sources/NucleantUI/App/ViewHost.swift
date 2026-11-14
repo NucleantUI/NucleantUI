@@ -363,7 +363,7 @@ public final class ViewHost {
     /// compared against what stood there, and kept if equivalent — which is
     /// why a resize, whose views are all unchanged, mostly reuses.
     private func rebuildAll(dirty: Set<[Int]>, transaction: Transaction) {
-        records.beginRebuild(under: [])
+        records.beginRebuild()
         var context = BuildContext(
             environment: environment,
             store: store,
@@ -416,7 +416,7 @@ public final class ViewHost {
             // over whatever is first among its siblings.
             let slot = old.indexInParent
 
-            records.beginRebuild(under: path)
+            records.beginRebuild()
 
             // The environment is the one captured when this view was first
             // built: nothing above it re-ran, so nothing above it changed.

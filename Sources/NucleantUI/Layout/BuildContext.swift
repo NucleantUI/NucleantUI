@@ -16,7 +16,8 @@ public struct BuildContext {
     /// `move(to:)`, which keep the cursors below with it.
     private(set) var path: [Int] = []
 
-    /// Where `path` stands in the record tries — see `RebuildRecords.Cursor`.
+    /// Where `path` stands among the positions of the tree — see
+    /// `RebuildRecords.Cursor`.
     private var recordCursor: RebuildRecords.Cursor?
 
     /// The node of `dirtyPaths` at `path`; `nil` where no dirty path runs
@@ -101,9 +102,9 @@ public struct BuildContext {
     }
 
     /// A copy to keep past this build — a `GeometryReader`'s, for building
-    /// its content during placement: without the cursor into the record
-    /// tries, which would hold on to what this build stood on. It is found
-    /// again from the roots when the copy builds.
+    /// its content during placement: without the cursor, which says where
+    /// this build stands and no later one. It is found again from the root
+    /// when the copy builds.
     var keptPastThisBuild: BuildContext {
         var copy = self
         copy.recordCursor = nil
@@ -154,7 +155,7 @@ public struct BuildContext {
     /// Keep the standing subtree `candidate` at this context's path, now
     /// standing under `environment`.
     func reuse(_ candidate: RebuildRecords.Candidate) {
-        records.reuse(candidate, at: path, cursor: recordCursor, under: environment)
+        records.reuse(candidate, under: environment)
     }
 
     /// File `entry` at this context's path.
@@ -162,8 +163,8 @@ public struct BuildContext {
         records.record(entry, at: path, cursor: recordCursor)
     }
 
-    /// What still stands, un-rebuilt, directly under this context's path in
-    /// the subtree being rebuilt — by slot.
+    /// What still stands, un-rebuilt, directly under this context's path —
+    /// by slot.
     var leftoverChildren: [(Int, ViewNode)] {
         records.leftoverChildren(under: path, cursor: recordCursor)
     }
@@ -378,18 +379,16 @@ struct ViewIdentity: Hashable {
     let viewID: ViewID
 }
 
-/// A tree keyed by path components. Everything the builder files is keyed
-/// by structural path, and everything it does with those files is by
-/// *subtree* — take this one out, put that one back, drop whatever is left.
-/// In a flat dictionary each of those is a scan of every key; here each is
-/// one pointer, found by walking the path.
+/// A tree keyed by path components — the paths state writes dirtied this
+/// frame (`BuildContext.dirtyPaths`). What the builder asks of them is by
+/// *subtree* — is anything under this path dirty — which in a flat set is a
+/// scan of every path; here it is one node, found by walking the path.
 ///
-/// Every build walks it — to find what stood at a path, to file what was
-/// built there, to ask whether anything under it is dirty — and a path is as
-/// deep as the view tree. So a step costs a scan of a few keys and nothing
-/// else: no hashing, and no reference counting. A walk holds each node it
-/// passes through unretained, which is sound because the trie owns every
-/// node and nothing is removed while a walk is under way.
+/// Every build steps through it with the path, and a path is as deep as the
+/// view tree. So a step costs a scan of a few keys and nothing else: no
+/// hashing, and no reference counting. A walk holds each node it passes
+/// through unretained, which is sound because the trie owns every node and
+/// nothing is removed while a walk is under way.
 final class PathTrie<Value> {
 
     final class Node {
@@ -598,6 +597,25 @@ final class PathTrie<Value> {
 /// equivalent to the one already standing — same identity, same inputs, same
 /// environment, no dirty state beneath — keeps its subtree, and its body is
 /// never asked for.
+///
+/// The entries are filed on the positions of one tree (`ViewPosition`),
+/// which stay where they are from one rebuild to the next. Every rebuild
+/// takes a new number — a full one, a scoped one, a `GeometryReader`'s
+/// during placement, an offscreen render's — and each position carries the
+/// number of the rebuild that last built or kept the view there:
+///
+/// - **Candidate.** An entry from an older rebuild is what stood there
+///   before this one.
+/// - **Kept.** The position takes this rebuild's number. Nothing below it is
+///   touched, whatever the size of the subtree.
+/// - **Rebuilt.** Its entry is replaced, with this rebuild's number.
+/// - **Left.** A child of a rebuilt position that is still on an older
+///   number once the rebuild is over was neither built again nor kept: the
+///   view there has left. It is cut out, with everything below it.
+///
+/// Only the children of rebuilt positions are looked at. A position deep
+/// inside a kept subtree carries an older number, and that is harmless:
+/// nothing asks until a rebuild reaches its parent.
 @MainActor
 final class RebuildRecords {
 
@@ -638,173 +656,117 @@ final class RebuildRecords {
         var lazyUnits = 0
     }
 
-    /// Entries for the tree as it stands.
-    private let live = PathTrie<Entry>()
+    /// The tree as it stands.
+    private let root = ViewPosition(parent: nil, key: 0)
 
-    /// Bumped by every `beginRebuild`: a cursor found before it no longer
-    /// says where anything stands.
-    private var generation = 0
+    /// The rebuild under way — bumped by every `beginRebuild`.
+    private var session: UInt64 = 0
 
-    /// Where a build stands in the tries: the node at its path in `previous`
-    /// — what stood there before this rebuild — and in `live` — where what
-    /// is built there is filed — with the parents of both. Moved one child
-    /// at a time as the builder descends (`BuildContext.child`), so finding
-    /// the candidate, filing the entry and grafting a kept subtree back each
-    /// take one step, not a walk from the root along the path.
-    ///
-    /// The `live` node is made as it is stepped into: what is built below
-    /// is filed under it, and the view there files its own entry on it
-    /// once they are, or — kept — puts the subtree that stood there in its
-    /// place.
+    /// The positions built in this rebuild, in the order they were filed:
+    /// once it is over, each one's children are looked over for views that
+    /// left.
+    private var rebuilt: [ViewPosition] = []
+
+    /// Where a build stands: its position, found in this rebuild. Moved one
+    /// child at a time as the builder descends (`BuildContext.child`), so
+    /// finding the candidate and filing the entry each take one step, not a
+    /// walk from the root along the path.
     struct Cursor {
-        fileprivate let generation: Int
-        /// The slot in the parent, and the parents; `nil` where the cursor
-        /// was found from the roots rather than stepped into.
-        fileprivate let index: Int?
-        fileprivate let previousParent: PathTrie<Entry>.Node?
-        fileprivate let liveParent: PathTrie<Entry>.Node?
-        fileprivate let previous: PathTrie<Entry>.Node?
-        fileprivate let live: PathTrie<Entry>.Node
+        fileprivate let session: UInt64
+        let position: ViewPosition
     }
 
-    /// The cursor at `path`, found from the roots.
+    /// The cursor at `path`, found from the root — the positions on the way
+    /// made where missing.
     func cursor(at path: [Int]) -> Cursor {
-        Cursor(
-            generation: generation,
-            index: nil,
-            previousParent: nil,
-            liveParent: nil,
-            previous: previousNode(at: path),
-            live: live.makeNode(at: path)
-        )
+        Cursor(session: session, position: root.makeDescendant(along: path))
     }
 
     /// The cursor one step below `parent`, into slot `index` — at `path`.
-    /// Found from the roots when `parent` is from before this rebuild began.
+    /// Found from the root when `parent` is from before this rebuild began.
     func cursor(stepping parent: Cursor?, into index: Int, at path: [Int]) -> Cursor {
-        guard let parent, parent.generation == generation else { return cursor(at: path) }
-        let live: PathTrie<Entry>.Node
-        if let existing = parent.live.child(index) {
-            live = existing
-        } else {
-            live = PathTrie<Entry>.Node()
-            parent.live.setChild(live, at: index)
-        }
-        return Cursor(
-            generation: generation,
-            index: index,
-            previousParent: parent.previous,
-            liveParent: parent.live,
-            previous: parent.previous?.child(index),
-            live: live
-        )
+        guard let parent, parent.session == session else { return cursor(at: path) }
+        return Cursor(session: session, position: parent.position.makeChild(index))
     }
 
-    /// `cursor`, if it is from this rebuild.
-    private func current(_ cursor: Cursor?) -> Cursor? {
-        guard let cursor, cursor.generation == generation else { return nil }
-        return cursor
+    /// The position at `path`: `cursor`'s, if it is from this rebuild, or
+    /// else found from the root.
+    private func position(at path: [Int], cursor: Cursor?) -> ViewPosition? {
+        if let cursor, cursor.session == session { return cursor.position }
+        return root.descendant(along: path)
     }
 
-    /// Entries for the subtree currently being rebuilt, as it stood before,
-    /// rooted at that subtree's path. Each is either reused (moved back to
-    /// `live`), replaced (a fresh build at the same path), or left over at
-    /// the end — a view that vanished.
-    private var previous: PathTrie<Entry>.Node?
-    private var previousBase: [Int] = []
-
-    /// Start rebuilding the subtree at `path`: everything at or beneath it
-    /// becomes a candidate for reuse.
-    func beginRebuild(under path: [Int]) {
-        previous = live.detach(at: path)
-        previousBase = path
-        generation &+= 1
+    /// Start a rebuild: every entry filed so far becomes what stood before.
+    func beginRebuild() {
+        session &+= 1
+        rebuilt.removeAll(keepingCapacity: true)
     }
 
-    private func previousNode(at path: [Int]) -> PathTrie<Entry>.Node? {
-        guard let previous, path.count >= previousBase.count else { return nil }
-        for depth in previousBase.indices where path[depth] != previousBase[depth] { return nil }
-        return PathTrie.descend(from: previous, along: path[previousBase.count...])
+    /// What stood at `position` before this rebuild began, if it is still
+    /// there to be kept or replaced.
+    private func candidate(standingAt position: ViewPosition) -> Candidate? {
+        guard position.record != nil, position.session != session else { return nil }
+        return Candidate(position: position)
     }
 
     /// What stood at `path` before this rebuild began, as a handle the
-    /// builder can either keep or replace — one walk of the trie, not three.
-    func candidate(at path: [Int]) -> Candidate? {
-        guard let node = previousNode(at: path), node.value != nil else { return nil }
-        return Candidate(node: node)
-    }
-
-    /// The same, read off `cursor` when it stands at `path` in this rebuild.
+    /// builder can either keep or replace — read off `cursor` when it
+    /// stands at `path` in this rebuild.
     func candidate(at path: [Int], cursor: Cursor?) -> Candidate? {
-        guard let cursor = current(cursor) else { return candidate(at: path) }
-        guard let node = cursor.previous, node.value != nil else { return nil }
-        return Candidate(node: node)
+        position(at: path, cursor: cursor).flatMap { candidate(standingAt: $0) }
     }
 
     /// Whether nothing stood in slot `index` below `path` — `cursor`'s.
     func isNewChild(at index: Int, under path: [Int], cursor: Cursor?) -> Bool {
-        guard let cursor = current(cursor) else { return candidate(at: path + [index]) == nil }
-        return cursor.previous?.child(index)?.value == nil
+        guard let child = position(at: path, cursor: cursor)?.child(index) else { return true }
+        return candidate(standingAt: child) == nil
     }
 
-    /// Read in place on the trie node: deciding whether to reuse a view
+    /// Read in place on the position: deciding whether to reuse a view
     /// needs a few of its entry's fields, not a copy of the whole entry.
     @MainActor
     struct Candidate {
-        fileprivate let node: PathTrie<Entry>.Node
-        var entry: Entry { node.value! }
-        var identity: ViewIdentity { node.value.unsafelyUnwrapped.identity }
-        var stackAxis: Axis? { node.value.unsafelyUnwrapped.stackAxis }
-        var lazyKey: LazyBuildKey? { node.value.unsafelyUnwrapped.lazyKey }
-        var lazyUnits: Int { node.value.unsafelyUnwrapped.lazyUnits }
-        var standingNode: ViewNode { node.value.unsafelyUnwrapped.node }
+        fileprivate let position: ViewPosition
+        var entry: Entry { position.record! }
+        var identity: ViewIdentity { position.record.unsafelyUnwrapped.identity }
+        var stackAxis: Axis? { position.record.unsafelyUnwrapped.stackAxis }
+        var lazyKey: LazyBuildKey? { position.record.unsafelyUnwrapped.lazyKey }
+        var lazyUnits: Int { position.record.unsafelyUnwrapped.lazyUnits }
+        var standingNode: ViewNode { position.record.unsafelyUnwrapped.node }
 
         /// Whether every environment value the subtree read is the one
         /// `environment` holds.
         func readsAgree(with environment: EnvironmentValues) -> Bool {
-            let entry = node.value.unsafelyUnwrapped
+            let entry = position.record.unsafelyUnwrapped
             return entry.environment.agrees(with: environment, on: entry.environmentReads)
         }
 
         var environmentReads: EnvironmentKeySet {
-            node.value.unsafelyUnwrapped.environmentReads
+            position.record.unsafelyUnwrapped.environmentReads
         }
 
         /// Whether `view` is equivalent to the view recorded here. Only for a
         /// view of the recorded one's own type — the caller has matched
         /// `identity`, whose type is that type.
         func isEquivalent<V: View>(to view: V) -> Bool {
-            withUnsafePointer(to: view) { node.value.unsafelyUnwrapped.view.isEquivalent(to: UnsafeRawPointer($0)) }
+            withUnsafePointer(to: view) { position.record.unsafelyUnwrapped.view.isEquivalent(to: UnsafeRawPointer($0)) }
         }
     }
 
-    /// Keep the standing subtree at `path`, now standing under
-    /// `environment`: its entries go back to `live` — readers, state,
-    /// `onAppear` marks and all.
+    /// Keep the standing subtree `candidate`, now standing under
+    /// `environment` — readers, state, `onAppear` marks and all.
     ///
     /// The subtree read none of the values that differ (`readsAgree`), but
     /// its entries still hold them, and a rebuild started from one of them
     /// later would build with the old ones. So each entry takes the new
     /// values of the keys it inherited unchanged.
-    func reuse(_ candidate: Candidate, at path: [Int], cursor: Cursor? = nil, under environment: EnvironmentValues) {
-        if let cursor = current(cursor), let index = cursor.index, let liveParent = cursor.liveParent,
-           let previousParent = cursor.previousParent, cursor.previous === candidate.node {
-            // Stepped into: both parents at hand.
-            previousParent.removeChild(at: index)
-            liveParent.setChild(candidate.node, at: index)
-        } else {
-            if path == previousBase {
-                previous = nil
-            } else if let parent = previousNode(at: Array(path.dropLast())), let last = path.last {
-                parent.removeChild(at: last)
-            }
-            live.attach(candidate.node, at: path)
-        }
-
-        let old = candidate.node.value.unsafelyUnwrapped.environment
+    func reuse(_ candidate: Candidate, under environment: EnvironmentValues) {
+        let position = candidate.position
+        position.session = session
+        let old = position.record.unsafelyUnwrapped.environment
         if differs(old, environment) {
             var relinked: [ObjectIdentifier: (from: EnvironmentEntry, to: EnvironmentEntry)] = [:]
-            rebase(candidate.node, from: old, to: environment, relinked: &relinked)
+            rebase(position, from: old, to: environment, relinked: &relinked)
         }
     }
 
@@ -823,16 +785,16 @@ final class RebuildRecords {
     }
 
     private func rebase(
-        _ node: PathTrie<Entry>.Node,
+        _ position: ViewPosition,
         from old: EnvironmentValues,
         to new: EnvironmentValues,
         relinked: inout [ObjectIdentifier: (from: EnvironmentEntry, to: EnvironmentEntry)]
     ) {
-        if var entry = node.value {
+        if var entry = position.record {
             entry.environment = entry.environment.rebased(from: old, to: new, relinked: &relinked)
-            node.value = entry
+            position.record = entry
         }
-        node.forEachChild { _, child in
+        position.forEachChild { child in
             rebase(child, from: old, to: new, relinked: &relinked)
         }
     }
@@ -843,45 +805,45 @@ final class RebuildRecords {
     /// subtrees hold it.
     func addEnvironmentReads(_ keys: EnvironmentKeySet, along path: [Int]) {
         guard !keys.isEmpty else { return }
-        var node: PathTrie<Entry>.Node? = live.root
+        var position: ViewPosition? = root
         var depth = 0
-        while let current = node {
-            if var entry = current.value, !keys.isSubset(of: entry.environmentReads) {
+        while let current = position {
+            if var entry = current.record, !keys.isSubset(of: entry.environmentReads) {
                 entry.environmentReads.formUnion(keys)
-                current.value = entry
+                current.record = entry
             }
             guard depth < path.count else { return }
-            node = current.child(path[depth])
+            position = current.child(path[depth])
             depth += 1
         }
     }
 
-    /// Take the old entry at exactly `path` out of the running, because a
-    /// fresh build is replacing it. Its descendants stay candidates.
+    /// Take the old entry out of the running, because a fresh build is
+    /// replacing it. Its descendants stay candidates.
     func replace(_ candidate: Candidate) -> Entry {
-        defer { candidate.node.value = nil }
+        defer { candidate.position.record = nil }
         return candidate.entry
     }
 
-    func record(_ entry: Entry, at path: [Int], cursor: Cursor? = nil) {
-        if let cursor = current(cursor) {
-            cursor.live.value = entry
-        } else {
-            live.set(entry, at: path)
-        }
+    /// File `entry` at `path` — `cursor`'s — as this rebuild's.
+    func record(_ entry: Entry, at path: [Int], cursor: Cursor?) {
+        let position = position(at: path, cursor: cursor) ?? root.makeDescendant(along: path)
+        position.record = entry
+        position.session = session
+        rebuilt.append(position)
     }
 
-    func entry(for path: [Int]) -> Entry? { live.value(at: path) }
+    func entry(for path: [Int]) -> Entry? { root.descendant(along: path)?.record }
 
     /// State the view at `path` read after its entry was filed — a
     /// `GeometryReader`'s content, built again during placement — added to
     /// that entry, so the reader registrations go when the view does.
     func addReads(_ reads: [any AnyStateStorage], at path: [Int]) {
-        guard !reads.isEmpty, let node = live.node(at: path), var entry = node.value else { return }
+        guard !reads.isEmpty, let position = root.descendant(along: path), var entry = position.record else { return }
         for storage in reads where !entry.reads.contains(where: { $0 === storage }) {
             entry.reads.append(storage)
         }
-        node.value = entry
+        position.record = entry
     }
 
     /// A scoped rebuild put `replacement` where `old` stood at `path`. Every
@@ -890,39 +852,63 @@ final class RebuildRecords {
     /// replacement; left pointing at `old`, its next reuse would graft the
     /// stale subtree back in.
     func replaceNode(_ old: ViewNode, with replacement: ViewNode, above path: [Int]) {
-        var ancestor = path
-        while !ancestor.isEmpty {
-            ancestor.removeLast()
-            guard let node = live.node(at: ancestor), var entry = node.value, entry.node === old else { return }
+        var ancestor = root.descendant(along: path)?.parent
+        while let position = ancestor {
+            guard var entry = position.record, entry.node === old else { return }
             entry.node = replacement
-            node.value = entry
+            position.record = entry
+            ancestor = position.parent
         }
     }
 
-    func node(for path: [Int]) -> ViewNode? { live.value(at: path)?.node }
+    func node(for path: [Int]) -> ViewNode? { entry(for: path)?.node }
 
-    /// What still stands, un-rebuilt, directly under `path` in the subtree
-    /// being rebuilt — by slot. Asked by a container once its new children
-    /// are built: whatever is left is a child it no longer has.
-    func leftoverChildren(under path: [Int], cursor: Cursor? = nil) -> [(Int, ViewNode)] {
-        let standing = current(cursor).map(\.previous) ?? previousNode(at: path)
-        guard let node = standing else { return [] }
+    /// What still stands, un-rebuilt, directly under `path` — by slot. Asked
+    /// by a container once its new children are built: whatever is left is
+    /// a child it no longer has.
+    func leftoverChildren(under path: [Int], cursor: Cursor?) -> [(Int, ViewNode)] {
+        guard let position = position(at: path, cursor: cursor) else { return [] }
         var leftover: [(Int, ViewNode)] = []
-        node.forEachChild { index, child in
-            if let value = child.value { leftover.append((index, value.node)) }
+        position.forEachChild { child in
+            if let entry = child.record, child.session != session { leftover.append((child.key, entry.node)) }
         }
         return leftover
     }
 
-    /// Finish the rebuild: whatever is still `previous` belonged to views that
-    /// are no longer in the tree. Returned with their paths so the caller can
-    /// release what they held.
+    /// Finish the rebuild: every child of a position built in it that was
+    /// neither built nor kept belonged to a view no longer in the tree. Cut
+    /// out, and returned with their paths so the caller can release what
+    /// they held.
     func endRebuild() -> [([Int], Entry)] {
-        defer { previous = nil }
-        guard let previous else { return [] }
+        defer { rebuilt.removeAll(keepingCapacity: true) }
         var departed: [([Int], Entry)] = []
-        previous.collect(base: previousBase, into: &departed)
+        for position in rebuilt {
+            cutLeftChildren(of: position, into: &departed)
+        }
         return departed
+    }
+
+    /// Cut out every child of `position` that this rebuild did not build or
+    /// keep, adding what it and everything below it held to `departed`.
+    ///
+    /// A child with no entry of its own — where a container builds the
+    /// bodies of its transitions — is looked through: what stands below it
+    /// belongs to `position`. It goes once nothing does.
+    private func cutLeftChildren(of position: ViewPosition, into departed: inout [([Int], Entry)]) {
+        var left: [ViewPosition] = []
+        position.forEachChild { child in
+            if child.record == nil {
+                cutLeftChildren(of: child, into: &departed)
+                if child.childCount == 0 { left.append(child) }
+            } else if child.session != session {
+                left.append(child)
+            }
+        }
+        guard !left.isEmpty else { return }
+        for child in left {
+            child.collect(base: child.path, into: &departed)
+            position.removeChild(child.key)
+        }
     }
 }
 

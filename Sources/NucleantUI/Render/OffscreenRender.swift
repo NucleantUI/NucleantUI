@@ -78,7 +78,7 @@ final class OffscreenRender {
         animations.beginFrame()
         animations.beginPass(transaction: nil, isCommit: true)
 
-        records.beginRebuild(under: [Self.rootIndex])
+        records.beginRebuild()
         var context = BuildContext(
             environment: environment,
             store: store,
