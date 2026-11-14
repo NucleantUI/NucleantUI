@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `3085e1c`.
+Last updated after `7934fa3`.
 
 ## Small fixes that are certain
 
@@ -60,14 +60,21 @@ Last updated after `3085e1c`.
     timelines to come are lists of positions that pass by one that left.
   - [x] transition slots — `3085e1c`. On the container's position; a
     container that leaves hands back the exits it was playing, to end.
-  - [ ] render nodes, readers
+  - [x] render nodes — `268d4a1`, `7934fa3`. Every manager files a
+    view's nodes — boundary images, canvases, texture, `ThorCanvas`,
+    render-texture and shader slots — under a `RenderSlot` its position
+    holds, hashed as an object, not under its path. Not "a reference
+    each": the managers pool their GPU objects and hand them on, so a
+    position holding one would need a check on every reuse that nobody
+    still holds it. The managers' pools and retiring stay as they were.
+  - [ ] readers
 - [~] **2.7** `ForEach` rows
   - [ ] a row's slot is the hash of its id
   - [ ] a change read in one row closure re-runs every row closure
   - [x] a `ForEach` compared like any other input — `5ce17e3`
 - Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 under way (state,
-  effects, animated values and transition slots done); 5 to 7 not
-  started.
+  effects, animated values, transition slots and render nodes done);
+  5 to 7 not started.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
 
