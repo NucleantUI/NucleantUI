@@ -108,15 +108,15 @@ extension ViewNode {
         )
     }
 
-    /// The gesture attachment at `path` in this subtree, if that view still
-    /// stands.
-    fileprivate func gestureAttachment(at path: [Int]) -> GestureAttachment? {
+    /// The gesture attachment of `owner`'s view in this subtree, if that
+    /// view still stands.
+    fileprivate func gestureAttachment(of owner: PositionHandle) -> GestureAttachment? {
         guard subtreeTraits.contains(.gestureAttachment) else { return nil }
-        if traits.contains(.gestureAttachment), let attachment = content.gestureAttachment, attachment.path == path {
+        if traits.contains(.gestureAttachment), let attachment = content.gestureAttachment, attachment.owner === owner {
             return attachment
         }
         for child in children {
-            if let found = child.gestureAttachment(at: path) { return found }
+            if let found = child.gestureAttachment(of: owner) { return found }
         }
         return nil
     }
@@ -147,7 +147,7 @@ final class GestureArena {
 
     private enum Key: Hashable {
         case press(Int)
-        case gesture([Int])
+        case gesture(PositionHandle)
     }
 
     @MainActor
@@ -286,7 +286,7 @@ final class GestureArena {
 
         var joined: [Participant] = []
         for link in chain.gestures {
-            let key = Key.gesture(link.hit.value.path)
+            let key = Key.gesture(link.hit.value.owner)
             if let existing = participants[key], existing.isAlive {
                 guard accepts(existing) else { continue }
                 existing.attachment = link.hit.value
@@ -563,15 +563,16 @@ final class GestureArena {
     }
 
     /// Point the gestures in flight at the actions of the latest build. The
-    /// view that attached one is found through its record; the tree is
-    /// walked only when the node there holds no such attachment.
-    func refreshAttachments(from root: ViewNode, records: RebuildRecords) {
+    /// view that attached one is found through its record, read off its
+    /// position; the tree is walked only when the node there holds no such
+    /// attachment.
+    func refreshAttachments(from root: ViewNode) {
         for participant in participants.values where participant.isAlive && !participant.isPress {
-            guard let path = participant.attachment?.path else { continue }
-            let recorded = records.node(for: path).flatMap { node in
-                node.traits.contains(.gestureAttachment) ? node.content.gestureAttachment : nil
+            guard let owner = participant.attachment?.owner else { continue }
+            let recorded = owner.standingRecord.flatMap { entry in
+                entry.node.traits.contains(.gestureAttachment) ? entry.node.content.gestureAttachment : nil
             }
-            guard let current = recorded?.path == path ? recorded : root.gestureAttachment(at: path) else { continue }
+            guard let current = recorded?.owner === owner ? recorded : root.gestureAttachment(of: owner) else { continue }
             participant.attachment = current
         }
     }
@@ -598,7 +599,7 @@ final class GestureArena {
                 case (.magnify, .magnify), (.rotate, .rotate): break
                 default: continue
                 }
-                let key = Key.gesture(link.hit.value.path)
+                let key = Key.gesture(link.hit.value.owner)
                 if let existing = participants[key] { cancel(existing) }
                 let participant = Participant(key: key, depth: link.depth, priority: link.hit.value.priority)
                 participant.attachment = link.hit.value

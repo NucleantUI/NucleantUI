@@ -1062,7 +1062,7 @@ extension _CollectionFocus: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let keys = self.keys
         let target = FocusTarget(
-            path: context.path,
+            owner: context.position.handle,
             isEnabled: keys.isEnabled,
             onFocusChange: { keys.onFocusChange($0) },
             onKeyDown: { keys.onKeyDown($0) },

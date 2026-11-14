@@ -140,7 +140,7 @@ struct FocusableModifier: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> FocusableContent {
         FocusableContent(target: FocusTarget(
-            path: context.path,
+            owner: context.position.handle,
             isEnabled: isFocusable && context.environment.isEnabled,
             onFocusChange: onFocusChange,
             onKeyDown: { _ in },
@@ -324,11 +324,11 @@ extension ViewNode {
 
     /// The node holding the focus target at `path`, if that view still
     /// stands.
-    func focusNode(at path: [Int]) -> ViewNode? {
+    func focusNode(of owner: PositionHandle) -> ViewNode? {
         guard subtreeTraits.contains(.focusTarget) else { return nil }
-        if traits.contains(.focusTarget), let target = content.focusTarget, target.path == path { return self }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.owner === owner { return self }
         for child in children {
-            if let found = child.focusNode(at: path) { return found }
+            if let found = child.focusNode(of: owner) { return found }
         }
         return nil
     }

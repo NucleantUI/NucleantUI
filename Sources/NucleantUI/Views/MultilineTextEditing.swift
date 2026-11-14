@@ -692,7 +692,7 @@ extension TextAreaLines: BuiltinView {
             onDrag: { point in onDrag(index(point)) },
             onScroll: onScroll,
             focus: FocusTarget(
-                path: context.path,
+                owner: context.position.handle,
                 isEnabled: isEnabled,
                 onFocusChange: onFocusChange,
                 onKeyDown: onKeyDown,

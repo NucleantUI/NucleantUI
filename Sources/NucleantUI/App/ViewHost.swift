@@ -144,8 +144,9 @@ public final class ViewHost {
     private var textureHovered: Hit<TextureInputTarget>?
 
     /// The view keys go to — a `TextField`, a `TextureView` — known by its
-    /// path: the last one pressed. A press anywhere else takes the keys away.
-    private var focusedPath: [Int]?
+    /// position: the last one pressed. A press anywhere else takes the keys
+    /// away.
+    private var focused: PositionHandle?
 
     /// The frame of the control most recently released — where a `Menu`
     /// pressed as a button opens its items.
@@ -271,7 +272,7 @@ public final class ViewHost {
 
         // A hovered node the rebuild removed (a menu that closed under the
         // pointer) is forgotten without being told: its view is gone.
-        if let hovered, records.entry(for: hovered.value.path) == nil {
+        if let hovered, hovered.value.owner.standingRecord == nil {
             self.hovered = nil
         }
 
@@ -305,7 +306,7 @@ public final class ViewHost {
         }
         if builds || builtDuringLayout, let rootNode {
             if !arena.isIdle {
-                arena.refreshAttachments(from: rootNode, records: records)
+                arena.refreshAttachments(from: rootNode)
             }
             applyFocusRequests()
         }
@@ -828,7 +829,7 @@ public final class ViewHost {
         let session = DragSession(
             source: source,
             origin: touchStart,
-            environment: records.entry(for: source.value.path)?.environment ?? environment
+            environment: source.value.owner.standingRecord?.environment ?? environment
         )
         dragSession = session
         session.move(to: pointerLocation, in: rootNode)
@@ -858,11 +859,11 @@ public final class ViewHost {
     }
 
     /// Tell the `.onHover` node under `point` it is hovered, and the one
-    /// that was, that it no longer is. Same path, same node — the object
+    /// that was, that it no longer is. Same owner, same view — the object
     /// is refreshed so the closure called is the current one.
     private func updateHover(at point: Point) {
         let found = rootNode?.hitTest(point, lookingFor: .hoverTarget) { $0.content.hoverTarget }
-        guard found?.value.path != hovered?.value.path else {
+        guard found?.value.owner !== hovered?.value.owner else {
             hovered = found
             return
         }
@@ -875,7 +876,7 @@ public final class ViewHost {
     /// one it was over, if another, that it left.
     private func updateTextureHover(at point: Point) {
         let found = rootNode?.hitTest(point, lookingFor: .textureInput) { $0.content.textureInput }
-        if let previous = textureHovered, previous.value.path != found?.value.path {
+        if let previous = textureHovered, previous.value.owner !== found?.value.owner {
             previous.value.send(.pointerExited)
         }
         textureHovered = found
@@ -889,37 +890,38 @@ public final class ViewHost {
     /// Focus `found`, the frontmost enabled focus target under a pointer
     /// going down, or nothing.
     private func updateFocus(to found: FocusTarget?) {
-        guard found?.path != focusedPath else { return }
-        if let path = focusedPath {
-            focusTarget(at: path)?.onFocusChange(false)
+        guard found?.owner !== focused else { return }
+        if let focused {
+            focusTarget(of: focused)?.onFocusChange(false)
         }
-        focusedPath = found?.path
+        focused = found?.owner
         found?.onFocusChange(true)
         syncFocusBindings()
     }
 
-    /// The node holding the focus target of the view at `path`, if that
-    /// view still stands. Its record names its node, found in as many steps
-    /// as the path is long; the tree is walked only when that node holds no
-    /// such target — the view left, or is on its way out.
-    private func focusNode(at path: [Int]) -> ViewNode? {
-        if let node = records.node(for: path), node.traits.contains(.focusTarget), node.content.focusTarget?.path == path {
+    /// The node holding the focus target of `owner`'s view, if that view
+    /// still stands. Its record names its node, read off its position; the
+    /// tree is walked only when that node holds no such target — the view
+    /// is on its way out.
+    private func focusNode(of owner: PositionHandle) -> ViewNode? {
+        if let node = owner.standingRecord?.node, node.traits.contains(.focusTarget),
+           node.content.focusTarget?.owner === owner {
             return node
         }
-        return rootNode?.focusNode(at: path)
+        return rootNode?.focusNode(of: owner)
     }
 
-    /// The focus target of the view at `path`, if that view still stands.
-    private func focusTarget(at path: [Int]) -> FocusTarget? {
-        focusNode(at: path)?.content.focusTarget
+    /// The focus target of `owner`'s view, if that view still stands.
+    private func focusTarget(of owner: PositionHandle) -> FocusTarget? {
+        focusNode(of: owner)?.content.focusTarget
     }
 
     /// The focused view's current target — `nil`, and the focus dropped,
     /// once that view has left the tree.
     private func focusedTarget() -> FocusTarget? {
-        guard let path = focusedPath else { return nil }
-        guard let target = focusTarget(at: path) else {
-            focusedPath = nil
+        guard let owner = focused else { return nil }
+        guard let target = focusTarget(of: owner) else {
+            focused = nil
             return nil
         }
         return target
@@ -986,7 +988,7 @@ public final class ViewHost {
         var stops: [FocusTarget] = []
         rootNode?.tabStops(into: &stops)
         guard !stops.isEmpty else { return false }
-        let current = focusedPath.flatMap { path in stops.firstIndex { $0.path == path } }
+        let current = focused.flatMap { owner in stops.firstIndex { $0.owner === owner } }
         let next: Int
         if let current {
             next = (current + (backward ? stops.count - 1 : 1)) % stops.count
@@ -994,11 +996,11 @@ public final class ViewHost {
             next = backward ? stops.count - 1 : 0
         }
         let target = stops[next]
-        guard target.path != focusedPath else { return true }
-        if let path = focusedPath {
-            focusTarget(at: path)?.onFocusChange(false)
+        guard target.owner !== focused else { return true }
+        if let focused {
+            focusTarget(of: focused)?.onFocusChange(false)
         }
-        focusedPath = target.path
+        focused = target.owner
         target.onFocusChange(true)
         syncFocusBindings()
         return true
@@ -1013,7 +1015,7 @@ public final class ViewHost {
     /// Offer `press` to the `.onKeyPress` actions around the view that has
     /// the keys, innermost first; whether one used it.
     private func offerKeyPress(_ press: KeyPress) -> Bool {
-        guard focusedTarget() != nil, let path = focusedPath, let node = focusNode(at: path) else {
+        guard focusedTarget() != nil, let focused, let node = focusNode(of: focused) else {
             return false
         }
         for scope in node.focusScope {
@@ -1029,11 +1031,11 @@ public final class ViewHost {
     /// Give the keys to `target` — or take them away, for `nil` — and
     /// bring the focus states up to date.
     private func setFocus(_ target: FocusTarget?) {
-        guard target?.path != focusedPath else { return }
-        if let path = focusedPath {
-            focusTarget(at: path)?.onFocusChange(false)
+        guard target?.owner !== focused else { return }
+        if let focused {
+            focusTarget(of: focused)?.onFocusChange(false)
         }
-        focusedPath = target?.path
+        focused = target?.owner
         target?.onFocusChange(true)
         syncFocusBindings()
     }
@@ -1048,7 +1050,7 @@ public final class ViewHost {
         guard !marks.isEmpty else { return }
 
         var holding: [ObjectIdentifier: FocusBindingRecord] = [:]
-        if let path = focusedPath, let node = focusNode(at: path) {
+        if let focused, let node = focusNode(of: focused) {
             for scope in node.focusScope {
                 if scope.traits.contains(.focusBinding), let record = scope.content.focusBinding, holding[record.group] == nil {
                     holding[record.group] = record
@@ -1073,8 +1075,8 @@ public final class ViewHost {
     /// the keys up.
     private func applyFocusRequests() {
         guard let root = rootNode else { return }
-        if let path = focusedPath, focusTarget(at: path) == nil {
-            focusedPath = nil
+        if let owner = focused, focusTarget(of: owner) == nil {
+            focused = nil
             syncFocusBindings()
         }
         var marks: [(record: FocusBindingRecord, node: ViewNode)] = []
@@ -1084,7 +1086,7 @@ public final class ViewHost {
             return
         }
 
-        let focusedNode = focusedPath.flatMap { focusNode(at: $0) }
+        let focusedNode = focused.flatMap { focusNode(of: $0) }
         let focusedScope = focusedNode?.focusScope ?? []
         var done: Set<ObjectIdentifier> = []
         for mark in marks where done.insert(mark.record.group).inserted {

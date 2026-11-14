@@ -28,13 +28,14 @@ struct KeyEvent {
 
 /// A node that can hold the keys.
 ///
-/// Compared by path, as `HoverTarget` is: the focused view usually rebuilds
-/// as it takes keys (a text field's text changes), which replaces this
-/// object, and the focus must stay with the view. `ViewHost` looks the
-/// current object up by path before each delivery.
+/// Compared by its owner, as `HoverTarget` is: the focused view usually
+/// rebuilds as it takes keys (a text field's text changes), which replaces
+/// this object, and the focus must stay with the view. `ViewHost` looks the
+/// current object up through its owner before each delivery.
 @MainActor
 final class FocusTarget {
-    let path: [Int]
+    /// The view it belongs to, by its position.
+    let owner: PositionHandle
     let isEnabled: Bool
     let onFocusChange: @MainActor (Bool) -> Void
     let onKeyDown: @MainActor (KeyEvent) -> Void
@@ -52,7 +53,7 @@ final class FocusTarget {
     let insertsTab: Bool
 
     init(
-        path: [Int],
+        owner: PositionHandle,
         isEnabled: Bool,
         onFocusChange: @escaping @MainActor (Bool) -> Void,
         onKeyDown: @escaping @MainActor (KeyEvent) -> Void,
@@ -62,7 +63,7 @@ final class FocusTarget {
         isTabStop: Bool = false,
         insertsTab: Bool = false
     ) {
-        self.path = path
+        self.owner = owner
         self.isEnabled = isEnabled
         self.onFocusChange = onFocusChange
         self.onKeyDown = onKeyDown

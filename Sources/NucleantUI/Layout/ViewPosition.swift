@@ -398,6 +398,13 @@ final class PositionHandle: Hashable, @unchecked Sendable {
         return position.path
     }
 
+    /// The last build of the view at the position while it stands — its
+    /// node, the environment it stands under.
+    var standingRecord: RebuildRecords.Entry? {
+        guard let position, !position.hasLeft else { return nil }
+        return position.record
+    }
+
     static func == (a: PositionHandle, b: PositionHandle) -> Bool { a === b }
 
     func hash(into hasher: inout Hasher) {

@@ -1131,7 +1131,7 @@ extension TextFieldLine: BuiltinView {
             scroll: scroll,
             inset: inset,
             focus: FocusTarget(
-                path: context.path,
+                owner: context.position.handle,
                 isEnabled: isEnabled,
                 onFocusChange: onFocusChange,
                 onKeyDown: onKeyDown,

@@ -18,16 +18,16 @@ extension View {
 /// A node that wants to know when the pointer is over it.
 @MainActor
 final class HoverTarget {
-    /// The node's structural path — its identity across rebuilds, the same
-    /// way `DropTarget` is known: the `true` this target is told usually
-    /// writes state, which rebuilds the view and replaces this object, and
-    /// the next move must still see the same target.
-    let path: [Int]
+    /// The view it belongs to, by its position — its identity across
+    /// rebuilds, the same way `DropTarget` is known: the `true` this target
+    /// is told usually writes state, which rebuilds the view and replaces
+    /// this object, and the next move must still see the same target.
+    let owner: PositionHandle
     let isEnabled: Bool
     let action: @MainActor (Bool) -> Void
 
-    init(path: [Int], isEnabled: Bool, action: @escaping @MainActor (Bool) -> Void) {
-        self.path = path
+    init(owner: PositionHandle, isEnabled: Bool, action: @escaping @MainActor (Bool) -> Void) {
+        self.owner = owner
         self.isEnabled = isEnabled
         self.action = action
     }
@@ -47,7 +47,7 @@ struct HoverModifier: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> HoverContent {
         HoverContent(target: HoverTarget(
-            path: context.path,
+            owner: context.position.handle,
             isEnabled: context.environment.isEnabled,
             action: action
         ))

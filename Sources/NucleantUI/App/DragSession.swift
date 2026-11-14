@@ -89,7 +89,7 @@ final class DragSession {
             guard let target = node.content.dropTarget, target.accepts(payload) else { return nil }
             return target
         }
-        guard found?.value.path != target?.value.path else {
+        guard found?.value.owner !== target?.value.owner else {
             target = found
             return false
         }

@@ -20,7 +20,7 @@ struct NodeTraitsTests {
     }
 
     private func hoverNode() -> ViewNode {
-        ContentNode(content: HoverContent(target: HoverTarget(path: [], isEnabled: true, action: { _ in })))
+        ContentNode(content: HoverContent(target: HoverTarget(owner: ViewPosition(parent: nil, key: 0).handle, isEnabled: true, action: { _ in })))
     }
 
     @Test func aNodeHasWhatItsContentCanDo() {

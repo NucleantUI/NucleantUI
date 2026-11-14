@@ -73,7 +73,7 @@ final class DragSource {
     /// environment filed there when the drag begins — the one the view
     /// stands under then, which a parent that re-ran without rebuilding it
     /// may have moved on from the one it was built with.
-    let path: [Int]
+    let owner: PositionHandle
 
     let makePayload: @MainActor () -> TransferPayload
     let makePreview: (@MainActor () -> AnyView)?
@@ -89,12 +89,12 @@ final class DragSource {
 
     init(
         isEnabled: Bool,
-        path: [Int],
+        owner: PositionHandle,
         makePayload: @escaping @MainActor () -> TransferPayload,
         makePreview: (@MainActor () -> AnyView)?
     ) {
         self.isEnabled = isEnabled
-        self.path = path
+        self.owner = owner
         self.makePayload = makePayload
         self.makePreview = makePreview
     }
@@ -103,24 +103,25 @@ final class DragSource {
 /// A node a drag can end on.
 @MainActor
 final class DropTarget {
-    /// The node's structural path — its identity across rebuilds. An
-    /// `isTargeted` write rebuilds the view and with it this object, and a
-    /// session comparing objects would see a new target every frame and tell
-    /// it "entered" again; comparing paths sees the same one.
-    let path: [Int]
+    /// The view it belongs to, by its position — its identity across
+    /// rebuilds. An `isTargeted` write rebuilds the view and with it this
+    /// object, and a session comparing objects would see a new target every
+    /// frame and tell it "entered" again; comparing owners sees the same
+    /// one.
+    let owner: PositionHandle
     let isEnabled: Bool
     let accepts: @MainActor (TransferPayload) -> Bool
     let perform: @MainActor (TransferPayload, Point) -> Bool
     let setTargeted: @MainActor (Bool) -> Void
 
     init(
-        path: [Int],
+        owner: PositionHandle,
         isEnabled: Bool,
         accepts: @escaping @MainActor (TransferPayload) -> Bool,
         perform: @escaping @MainActor (TransferPayload, Point) -> Bool,
         setTargeted: @escaping @MainActor (Bool) -> Void
     ) {
-        self.path = path
+        self.owner = owner
         self.isEnabled = isEnabled
         self.accepts = accepts
         self.perform = perform
@@ -157,7 +158,7 @@ struct DraggableModifier: PrimitiveModifier {
     func makeContent(_ context: inout BuildContext) -> DragSourceContent {
         DragSourceContent(source: DragSource(
             isEnabled: context.environment.isEnabled,
-            path: context.path,
+            owner: context.position.handle,
             makePayload: makePayload,
             makePreview: makePreview
         ))
@@ -175,7 +176,7 @@ struct DropDestinationModifier<T: Transferable>: PrimitiveModifier {
     func makeContent(_ context: inout BuildContext) -> DropTargetContent {
         let action = self.action
         return DropTargetContent(target: DropTarget(
-            path: context.path,
+            owner: context.position.handle,
             isEnabled: context.environment.isEnabled,
             accepts: { payload in payload.canImport(T.self) },
             perform: { payload, location in

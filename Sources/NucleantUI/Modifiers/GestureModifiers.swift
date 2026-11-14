@@ -153,7 +153,8 @@ final class GestureAttachment {
         case simultaneous
     }
 
-    let path: [Int]
+    /// The view it belongs to, by its position.
+    let owner: PositionHandle
     let priority: Priority
     let recognition: _GestureRecognition
     /// Whether this gesture runs at all — off for `.disabled`, `isEnabled:
@@ -164,13 +165,13 @@ final class GestureAttachment {
     let includesSubviews: Bool
 
     init(
-        path: [Int],
+        owner: PositionHandle,
         priority: Priority,
         recognition: _GestureRecognition,
         includesGesture: Bool,
         includesSubviews: Bool
     ) {
-        self.path = path
+        self.owner = owner
         self.priority = priority
         self.recognition = recognition
         self.includesGesture = includesGesture
@@ -199,7 +200,7 @@ struct GestureModifier: PrimitiveModifier {
 
     func makeContent(_ context: inout BuildContext) -> GestureContent {
         GestureContent(attachment: GestureAttachment(
-            path: context.path,
+            owner: context.position.handle,
             priority: priority,
             recognition: recognition,
             includesGesture: mask.contains(.gesture) && context.environment.isEnabled,
@@ -225,7 +226,7 @@ struct CountedTapModifier: PrimitiveModifier {
             ))
         }
         return CountedTapContent(attachment: GestureAttachment(
-            path: context.path,
+            owner: context.position.handle,
             priority: .normal,
             recognition: TapGesture(count: count).onEnded(action)._recognition,
             includesGesture: context.environment.isEnabled,
@@ -252,7 +253,7 @@ struct LocatedCountedTapModifier: PrimitiveModifier {
         var tap = TapGesture(count: count)
         tap.locatedAction = action
         return CountedTapContent(attachment: GestureAttachment(
-            path: context.path,
+            owner: context.position.handle,
             priority: .normal,
             recognition: tap._recognition,
             includesGesture: context.environment.isEnabled,
