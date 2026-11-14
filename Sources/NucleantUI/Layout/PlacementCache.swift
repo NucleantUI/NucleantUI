@@ -31,6 +31,15 @@
 //  view leaving anywhere turns keeping off for the pass, and a forced
 //  rebuild drops everything kept.
 //
+//  A kept subtree placed again at another origin — scrolled, or moved by a
+//  stack around it — the same size, under the same proposal and context,
+//  draws what it drew moved by as much: its commands are moved rather than
+//  drawn again, and what placing left on its nodes (their frames, for hit
+//  testing) is moved with them. Only while every clip it is drawn under is
+//  the context's — one from outside, which stays where it is — and the
+//  context's transform only moves: a clip of its own would move with it,
+//  and a turned or scaled space would not move it as it moves its rect.
+//
 //  Each kept list has a number of its own (`DisplayList.version`). A render
 //  boundary whose content is one kept subtree holds that list itself, in its
 //  image's space, so the painter tells the image unchanged by the number,
@@ -47,11 +56,40 @@ struct PlacementRecord {
     /// The commands it appended, in the list it appended them to; `nil`
     /// until it is known to be worth keeping.
     var list: DisplayList?
+    /// Whether `list` may be drawn at another origin, moved: every clip in
+    /// it is the context's, and the context's transform only moves.
+    var isMovable = false
 
     /// Whether a placement under these draws what this one drew.
     func matches(_ rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> Bool {
         self.epoch == epoch && self.rect == rect && self.proposal == proposal && self.context.placesLike(context)
     }
+
+    /// How far a placement under these is this one moved, when that is all
+    /// that differs — and nothing placed somewhere new would start moving
+    /// there, as it does under an animation.
+    func offset(to rect: Rect, _ proposal: ProposedSize, _ context: DrawContext, epoch: Int) -> (dx: Double, dy: Double)? {
+        guard self.epoch == epoch, self.rect.size == rect.size, self.proposal == proposal,
+              context.animation == nil, self.context.placesLike(context) else { return nil }
+        return (rect.minX - self.rect.minX, rect.minY - self.rect.minY)
+    }
+
+    /// This record keeping `list`.
+    func keeping(_ list: DisplayList) -> PlacementRecord {
+        var kept = self
+        kept.list = list
+        kept.isMovable = context.transform.onlyMoves && list.states.allSatisfy { state in
+            state.clip == context.clip
+                && state.clipCornerRadius == context.clipCornerRadius
+                && state.transformedClips == context.transformedClips
+        }
+        return kept
+    }
+}
+
+extension Transform {
+    /// Whether it moves and does nothing else: no scale, no turn.
+    var onlyMoves: Bool { e11 == 1 && e12 == 0 && e21 == 0 && e22 == 1 }
 }
 
 /// The fresh placements of pure nodes under way, innermost last, and what
@@ -103,12 +141,29 @@ final class PlacementRecorder {
         into list: inout DisplayList,
         fresh: (inout DisplayList) -> Void
     ) {
-        if let record = node.placed, let kept = record.list, record.matches(rect, proposal, context, epoch: epoch) {
-            list.append(contentsOf: kept)
-            if PerfTrace.isEnabled { PerfTrace.placementsKept += 1 }
-            return
+        if let record = node.placed, let kept = record.list {
+            if record.matches(rect, proposal, context, epoch: epoch) {
+                list.append(contentsOf: kept)
+                if PerfTrace.isEnabled { PerfTrace.placementsKept += 1 }
+                return
+            }
+            if record.isMovable, let offset = record.offset(to: rect, proposal, context, epoch: epoch) {
+                // Placed at another origin: what it drew, moved there.
+                var moved = kept.moving(dx: offset.dx, dy: offset.dy)
+                nextKept += 1
+                moved.markKept(nextKept)
+                list.append(contentsOf: moved)
+                node.movePlacement(dx: offset.dx, dy: offset.dy)
+                node.placed = PlacementRecord(rect: rect, proposal: proposal, context: context, epoch: epoch).keeping(moved)
+                if PerfTrace.isEnabled { PerfTrace.placementsMoved += 1 }
+                return
+            }
         }
-        let stable = node.placed?.matches(rect, proposal, context, epoch: epoch) ?? false
+        // Placed as it was, or only moved: what it draws is worth keeping
+        // either way — a moved one is drawn moved the next time it moves.
+        let stable = node.placed.map {
+            $0.matches(rect, proposal, context, epoch: epoch) || $0.offset(to: rect, proposal, context, epoch: epoch) != nil
+        } ?? false
         let start = list.commands.count
         let mark = disturbances
         frames.append(Frame())
@@ -121,7 +176,7 @@ final class PlacementRecorder {
         if disturbances == mark && stable {
             if frames.isEmpty {
                 // Nothing above it places purely: it keeps itself.
-                node.placed?.list = keep(range, of: list)
+                node.placed = record.keeping(keep(range, of: list))
             } else {
                 // The node above decides: it keeps itself, this with it, or
                 // this alone.
@@ -132,9 +187,7 @@ final class PlacementRecorder {
         // Something below it moves, or it was placed somewhere new: what
         // below it stood still where it stood is kept on its own.
         for child in frame.pending {
-            var kept = child.record
-            kept.list = keep(child.range, of: list)
-            child.node.placed = kept
+            child.node.placed = child.record.keeping(keep(child.range, of: list))
         }
     }
 

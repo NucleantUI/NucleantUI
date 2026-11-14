@@ -291,6 +291,7 @@ public final class ViewHost {
                 + (PerfTrace.layersDrawn > 0 ? " layers=\(PerfTrace.layersDrawn)" : "")
                 + (PerfTrace.nodesDrawn > 0 ? " nodes=\(PerfTrace.nodesDrawn)" : "")
                 + (PerfTrace.placementsKept > 0 ? " kept=\(PerfTrace.placementsKept)" : "")
+                + (PerfTrace.placementsMoved > 0 ? " moved=\(PerfTrace.placementsMoved)" : "")
                 + (windowRedrawn ? " window" : ""))
         }
 
@@ -1320,6 +1321,8 @@ enum PerfTrace {
     /// Subtrees not placed this pass: what they drew the pass before was
     /// appended — counted at their root (`PlacementCache.swift`).
     static var placementsKept = 0
+    /// Of them, the ones placed at another origin: what they drew, moved.
+    static var placementsMoved = 0
 
     static func reset() {
         textMeasures = 0
@@ -1329,6 +1332,7 @@ enum PerfTrace {
         layersDrawn = 0
         nodesDrawn = 0
         placementsKept = 0
+        placementsMoved = 0
     }
 
     static func log(_ message: @autoclosure () -> String) {

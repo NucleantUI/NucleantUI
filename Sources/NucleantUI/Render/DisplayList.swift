@@ -816,6 +816,29 @@ public struct DisplayList: Equatable, Sendable {
         return copy
     }
 
+    /// The same commands drawn `(dx, dy)` further along, under the clips
+    /// they were drawn under: what a subtree placed purely draws placed
+    /// that much further along, when every clip it is drawn under is one
+    /// from outside it, which stays where it is. A transform anchored in
+    /// the subtree moves with it. What the clips cut changes, so each
+    /// command's bounds are worked out again.
+    func moving(dx: Double, dy: Double) -> DisplayList {
+        guard dx != 0 || dy != 0 else { return self }
+        var copy = self
+        copy.states = states.map { state in
+            var moved = state.translated(dx: dx, dy: dy)
+            moved.clip = state.clip
+            moved.transformedClips = state.transformedClips
+            return moved
+        }
+        copy.commands = commands.map { $0.translated(dx: dx, dy: dy) }
+        copy.version = nil
+        for index in commands.indices {
+            copy.bounds[index] = copy.commands[index].paintBox.flatMap(copy.state(at: index).paintBounds(of:))
+        }
+        return copy
+    }
+
     /// The same list with `transform` applied after each command's own:
     /// how a `.shader` layer takes a scaled view's commands back to its
     /// frame's size. A move and a scale without a flip only — what keeps a

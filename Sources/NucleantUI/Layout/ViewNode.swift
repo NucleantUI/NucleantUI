@@ -395,6 +395,26 @@ class ViewNode {
         placeFresh(in: rect, proposal: proposal, context: context, store: store, into: &list)
     }
 
+    /// Move what placing left on this subtree `(dx, dy)` further along: a
+    /// kept subtree drawn at another origin (`PlacementCache.swift`). The
+    /// frames hit testing reads, the rects the next layout is compared with,
+    /// and the transforms anchored inside it — a turn about a view's
+    /// center — move; a transform that only moves stays as it is.
+    func movePlacement(dx: Double, dy: Double) {
+        frame = frame.offsetBy(dx: dx, dy: dy)
+        if let layoutRect {
+            self.layoutRect = layoutRect.offsetBy(dx: dx, dy: dy)
+        }
+        if !transform.onlyMoves {
+            transform = Transform.translation(x: dx, y: dy)
+                .concatenating(transform)
+                .concatenating(Transform.translation(x: -dx, y: -dy))
+        }
+        for child in children {
+            child.movePlacement(dx: dx, dy: dy)
+        }
+    }
+
     /// Position this node in `rect` and draw it, without asking whether what
     /// it drew last time would do.
     private func placeFresh(
