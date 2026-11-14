@@ -90,11 +90,19 @@ extension PrimitiveModifier where Content == EnvironmentContent {
     }
 }
 
+/// Which side of the content a decoration is painted on.
+enum DecorationOrder: Hashable {
+    /// Painted first, behind the content.
+    case background
+    /// Painted last, over the content.
+    case overlay
+}
+
 /// A view that wraps a child *and* a decoration — background and overlay.
 public struct _DecoratedView<Content: View, Decoration: View>: View {
     var content: Content
     let decoration: Decoration
-    let order: DecorationContent.Order
+    let order: DecorationOrder
     let alignment: Alignment
 
     public var body: Never { bodyUnavailable() }
@@ -114,14 +122,19 @@ public struct _DecoratedView<Content: View, Decoration: View>: View {
 
 extension _DecoratedView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        // Two positional slots — `DecorationContent` reads `children[0]` and
-        // `children[1]` directly and must not see them flattened.
+        // Two positional slots — the decoration's content reads `children[0]`
+        // and `children[1]` directly and must not see them flattened.
         let contentNode = context.child(0) { ctx in buildNode(content, &ctx) }
         let decorationNode = context.child(1) { ctx in buildNode(decoration, &ctx) }
-        let node = ContentNode(
-            content: DecorationContent(order: order, alignment: alignment),
-            children: [contentNode, decorationNode]
-        )
+        let children = [contentNode, decorationNode]
+        // The order is picked here, once: each content places in its own.
+        let node: ViewNode
+        switch order {
+        case .background:
+            node = ContentNode(content: BackgroundContent(alignment: alignment), children: children)
+        case .overlay:
+            node = ContentNode(content: OverlayContent(alignment: alignment), children: children)
+        }
         node.transitionTrait = contentNode.transitionTrait
         node.gridCellTraits = contentNode.gridCellTraits
         node.layoutValues = contentNode.layoutValues

@@ -168,8 +168,8 @@ struct RotationEffectModifier: PrimitiveModifier, Equatable {
     let angle: Angle
     let anchor: UnitPoint
 
-    func makeContent(_ context: inout BuildContext) -> TransformContent {
-        TransformContent(kind: .rotation(context.animatedState(.rotation, angle.radians)), anchor: anchor)
+    func makeContent(_ context: inout BuildContext) -> RotationContent {
+        RotationContent(radians: context.animatedState(.rotation, angle.radians), anchor: anchor)
     }
 }
 
@@ -179,8 +179,8 @@ struct ScaleEffectModifier: PrimitiveModifier, Equatable {
     let y: Double
     let anchor: UnitPoint
 
-    func makeContent(_ context: inout BuildContext) -> TransformContent {
-        TransformContent(kind: .scale(context.animatedState(.scale, AnimatablePair(x, y))), anchor: anchor)
+    func makeContent(_ context: inout BuildContext) -> ScaleContent {
+        ScaleContent(factors: context.animatedState(.scale, AnimatablePair(x, y)), anchor: anchor)
     }
 }
 

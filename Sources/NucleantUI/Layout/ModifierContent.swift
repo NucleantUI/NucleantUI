@@ -176,21 +176,16 @@ struct PaddingContent: NodeContent {
 
 /// `.background(_:)` and `.overlay(_:)` — two children, painted either side of
 /// each other. The *content* sizes the node; the decoration is stretched to it.
-struct DecorationContent: NodeContent {
-    enum Order: Hashable {
-        /// Decoration painted first, behind the content.
-        case background
-        /// Decoration painted last, over the content.
-        case overlay
-    }
+/// What the two share; each places them in its own order.
+protocol DecorationLayout: NodeContent {
+    var alignment: Alignment { get }
+}
 
-    let order: Order
-    let alignment: Alignment
-
+extension DecorationLayout {
     /// Index into `node.children` — never `layoutChildren`, because the two
     /// slots are positional and flattening would merge a multi-child group.
-    private func content(_ node: ViewNode) -> ViewNode? { node.children.first }
-    private func decoration(_ node: ViewNode) -> ViewNode? {
+    func content(_ node: ViewNode) -> ViewNode? { node.children.first }
+    func decoration(_ node: ViewNode) -> ViewNode? {
         node.children.count > 1 ? node.children[1] : nil
     }
 
@@ -198,32 +193,33 @@ struct DecorationContent: NodeContent {
         content(node)?.sizeThatFits(proposal) ?? proposal.replacingUnspecifiedDimensions()
     }
 
+    /// The decoration, stretched to the content's box: the box is what it
+    /// is offered.
+    func placeDecoration(of node: ViewNode, in rect: Rect, context: DrawContext, into list: inout DisplayList) {
+        guard let decorationNode = decoration(node) else { return }
+        let proposal = ProposedSize(rect.size)
+        let size = decorationNode.sizeThatFits(proposal)
+        decorationNode.place(in: alignment.position(size, in: rect), proposal: proposal, context: context, into: &list)
+    }
+}
+
+/// `.background(_:)`: the decoration painted first, behind the content.
+struct BackgroundContent: DecorationLayout {
+    let alignment: Alignment
+
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
-        let contentNode = content(node)
-        let decorationNode = decoration(node)
-        // The decoration is stretched to the content's box, so the box is what
-        // it is offered.
-        let decorationProposal = ProposedSize(rect.size)
+        placeDecoration(of: node, in: rect, context: context, into: &list)
+        content(node)?.place(in: rect, proposal: proposal, context: context, into: &list)
+    }
+}
 
-        func placeDecoration() {
-            guard let decorationNode else { return }
-            let size = decorationNode.sizeThatFits(decorationProposal)
-            decorationNode.place(
-                in: alignment.position(size, in: rect),
-                proposal: decorationProposal,
-                context: context,
-                into: &list
-            )
-        }
+/// `.overlay(_:)`: the decoration painted last, over the content.
+struct OverlayContent: DecorationLayout {
+    let alignment: Alignment
 
-        switch order {
-        case .background:
-            placeDecoration()
-            contentNode?.place(in: rect, proposal: proposal, context: context, into: &list)
-        case .overlay:
-            contentNode?.place(in: rect, proposal: proposal, context: context, into: &list)
-            placeDecoration()
-        }
+    func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        content(node)?.place(in: rect, proposal: proposal, context: context, into: &list)
+        placeDecoration(of: node, in: rect, context: context, into: &list)
     }
 }
 
@@ -318,30 +314,33 @@ struct PositionContent: NodeContent {
     }
 }
 
-/// `.rotationEffect(_:)` and `.scaleEffect(_:)` — a transform about an anchor
-/// inside the node's own rect, again with no effect on layout.
-struct TransformContent: NodeContent {
-    /// The parameter, animated: radians for a rotation, (x, y) for a scale.
-    enum Kind {
-        case rotation(AnimatableDataState<Double>)
-        case scale(AnimatableDataState<AnimatablePair<Double, Double>>)
-    }
-
-    let kind: Kind
+/// `.rotationEffect(_:anchor:)` — a rotation about an anchor inside the
+/// node's own rect, with no effect on layout.
+struct RotationContent: NodeContent {
+    /// The angle, in radians, animated.
+    let radians: AnimatableDataState<Double>
     let anchor: UnitPoint
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
-        let base: Transform
-        switch kind {
-        case .rotation(let radians):
-            base = .rotation(.radians(radians.current()))
-        case .scale(let factors):
-            let xy = factors.current()
-            base = .scale(x: xy.first, y: xy.second)
-        }
         var inner = context
         inner.transform = context.transform
-            .concatenating(.around(anchor.resolved(in: rect), base))
+            .concatenating(.around(anchor.resolved(in: rect), .rotation(.radians(radians.current()))))
+        node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
+    }
+}
+
+/// `.scaleEffect(x:y:anchor:)` — a scale about an anchor inside the node's
+/// own rect, with no effect on layout.
+struct ScaleContent: NodeContent {
+    /// The factors, (x, y), animated.
+    let factors: AnimatableDataState<AnimatablePair<Double, Double>>
+    let anchor: UnitPoint
+
+    func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        let xy = factors.current()
+        var inner = context
+        inner.transform = context.transform
+            .concatenating(.around(anchor.resolved(in: rect), .scale(x: xy.first, y: xy.second)))
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
     }
 }

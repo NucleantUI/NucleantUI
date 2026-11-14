@@ -186,10 +186,12 @@ extension FramedContent { static var placesPurely: Bool { true } }
 extension RelativeSizeContent { static var placesPurely: Bool { true } }
 extension PositionContent { static var placesPurely: Bool { true } }
 extension AspectRatioContent { static var placesPurely: Bool { true } }
-extension DecorationContent { static var placesPurely: Bool { true } }
+extension BackgroundContent { static var placesPurely: Bool { true } }
+extension OverlayContent { static var placesPurely: Bool { true } }
 extension OpacityContent { static var placesPurely: Bool { true } }
 extension OffsetContent { static var placesPurely: Bool { true } }
-extension TransformContent { static var placesPurely: Bool { true } }
+extension RotationContent { static var placesPurely: Bool { true } }
+extension ScaleContent { static var placesPurely: Bool { true } }
 extension ClipContent { static var placesPurely: Bool { true } }
 extension EnvironmentContent { static var placesPurely: Bool { true } }
 extension TextContent { static var placesPurely: Bool { true } }
