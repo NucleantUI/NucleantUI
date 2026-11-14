@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `ee269ed`.
+Last updated after `a0f05ce`.
 
 ## Small fixes that are certain
 
@@ -68,7 +68,11 @@ Last updated after `ee269ed`.
 ## [Phase 4](phase-4-placement-and-display-list.md): placing and drawing only what changed
 
 - [~] **4.1** Every pass places the whole tree
-  - [ ] step 1: a version per list in place of a deep comparison
+  - [x] step 1: a version per list in place of a deep comparison —
+    `a0f05ce`. Per kept list rather than per leaf: a list that is a kept
+    list, as it is or moved once (a boundary holding one kept subtree, in
+    its image's space), compares by its number; any other list by its
+    commands.
   - [x] step 2: skip a clean subtree — `ee269ed`. Kinds say whether they
     place purely (`NodeContent.placesPurely`, off by default); a clean,
     stable pure subtree appends what it kept. Clean means nothing asked for
