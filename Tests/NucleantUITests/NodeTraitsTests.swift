@@ -98,3 +98,61 @@ extension HostedViews {
         }
     }
 }
+
+// MARK: - Where a subtree can be hit
+
+/// Two squares side by side that take taps, and one drawn outside the row
+/// by an offset.
+@View
+struct HitExtentScene {
+    var body: some View {
+        HStack(spacing: 0) {
+            Color.red.frame(width: 50, height: 50).onTapGesture {}
+            Color.blue.frame(width: 50, height: 50).onTapGesture {}
+            Color.green.frame(width: 20, height: 20).offset(x: 0, y: 60).onTapGesture {}
+        }
+        .frame(width: 200, height: 200, alignment: .topLeading)
+    }
+}
+
+@MainActor
+@Suite
+struct HitExtentTests {
+
+    private func placed() -> ViewNode {
+        var context = BuildContext(
+            environment: EnvironmentValues(),
+            effects: EffectQueue(),
+            animations: AnimationStore(),
+            records: RebuildRecords()
+        )
+        let node = buildNode(HitExtentScene(), &context)
+        var list = DisplayList()
+        let window = Rect(x: 0, y: 0, width: 200, height: 200)
+        node.place(in: window, proposal: ProposedSize(window.size), context: DrawContext(), into: &list)
+        return node
+    }
+
+    @Test func aHitTestAsksNothingPlacedAwayFromThePoint() {
+        let root = placed()
+        let point = Point(x: 75, y: 25)
+        var asked: [ViewNode] = []
+        let hit = root.hitTest(point) { node -> ViewNode? in
+            asked.append(node)
+            return node.content.hitTarget != nil ? node : nil
+        }
+        #expect(hit != nil)
+        #expect(!asked.isEmpty)
+        #expect(asked.allSatisfy { $0.hitExtent.contains(point) }, "the red square's subtree is passed over")
+    }
+
+    @Test func whatIsDrawnOutsideItsParentIsHitWhereItIsDrawn() {
+        let root = placed()
+        // The green square: laid out at x 100…120, y 15…35 (centered in
+        // the row), drawn 60 lower.
+        let drawn = root.hitTest(Point(x: 110, y: 85), matching: { _ in true })
+        #expect(drawn != nil)
+        let laidOut = root.hitTest(Point(x: 110, y: 25), matching: { _ in true })
+        #expect(laidOut == nil)
+    }
+}

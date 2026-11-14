@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `fc626e4`.
+Last updated after `96041c7`.
 
 ## Small fixes that are certain
 
@@ -120,8 +120,13 @@ Last updated after `fc626e4`.
     a frame and no state was read while it was placed. Checked in Bookmarks,
     Flashcards, MindMap and Reader by placing each appended subtree fresh
     too: about 70,000 appends, none different.
-  - [ ] step 3: frames relative to the boundary, so a scrolled or moved
-    subtree is kept too
+  - [x] step 3: a scrolled or moved subtree is kept too — `96041c7`. Not
+    by frames relative to the boundary: a kept subtree placed at another
+    origin (same size, proposal and context) is drawn moved, and its
+    nodes' frames are moved with it, so hit testing stays as it is. Only
+    while every clip in it is the context's, the context only moves, and
+    no animation would start it moving. Bench scenarios for it:
+    `bookmarks-scroll`, `reader-scroll` (`258f4e9`).
 - [x] **4.2** Paths in their own space — `d6af0fd`
 - [x] **4.3** The path kept on the node — `d6af0fd`
 - [x] **4.4** One draw state shared by the five commands — `5e8fe6e`. The
@@ -165,10 +170,15 @@ Last updated after `fc626e4`.
 
 ## [Phase 7](phase-7-input.md): hit testing and focus lookups
 
-- [~] **7.1** Every hit test walks every node
+- [x] **7.1** Every hit test walks every node
   - [x] step 1: skip subtrees without the wanted trait — `d24813b`
   - [x] step 2: one walk per pointer down — `226d865`
-  - [ ] step 3: skip a boundary by its paint bounds (with 4.1)
+  - [x] step 3: skip a subtree placed away from the point — `HEAD`. Not by
+    paint bounds — a view that paints nothing can still be hit — but by
+    where its subtree can be hit: each node keeps the box of its frames
+    under the transforms they are drawn with (`hitExtent`), noted as it is
+    placed and moved with a moved subtree; both walks pass over a subtree
+    whose box does not hold the point.
 - [x] **7.2** Finding a node by path — `d350522`; the focus-binding walk
   is skipped through the trait bit since `d24813b`.
 - [x] **7.3** Covered by 3.8: the single-child loops read the cached
