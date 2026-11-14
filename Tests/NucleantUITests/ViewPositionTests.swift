@@ -560,6 +560,25 @@ struct ViewPositionTests {
         let departed = builder.build(ClashingRows(ids: [Clash(value: 2)])).departed
         #expect(departed.filter(isRow).count == 1)
     }
+
+    // MARK: - Environment
+
+    @Test func theSameWriteOverTheSameEnvironmentHandsDownTheSameOne() {
+        let builder = Builder()
+        let log = EnvironmentLog()
+        var reads: [EnvironmentKeySet?] = []
+        for (pass, alignment) in [(1, TextAlignment.center), (2, .center), (3, .trailing)] {
+            _ = builder.build(WrittenAbove(pass: pass, alignment: alignment, log: log))
+            reads.append(builder.records.entry(for: [0])?.environmentReads)
+        }
+        #expect(log.versions.count == 3)
+        #expect(log.versions[1] == log.versions[0], "the same write over the same environment")
+        #expect(log.versions[2] != log.versions[1], "another value written")
+        // What writing read is read again: a change of it above still
+        // builds the modifier again.
+        #expect(reads[0] != EnvironmentKeySet())
+        #expect(reads[1] == reads[0])
+    }
 }
 
 /// An id whose hash is every other one's.
@@ -568,6 +587,55 @@ struct Clash: Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(0)
+    }
+}
+
+/// The environment versions views were built under.
+@MainActor
+final class EnvironmentLog {
+    var versions: [UInt64] = []
+}
+
+/// Logs the version of the environment it is built under, and is built
+/// again for every `pass`.
+@View
+struct VersionProbe {
+    let pass: Int
+    let log: EnvironmentLog
+
+    var body: Never { bodyUnavailable() }
+}
+
+extension VersionProbe: BuiltinView {
+    func makeNode(_ context: inout BuildContext) -> ViewNode {
+        log.versions.append(context.environment.version)
+        return ContentNode(content: GroupContent())
+    }
+}
+
+/// Writes a line limit worked out from the alignment it is written under:
+/// a write that reads.
+struct LimitFromAlignment: PrimitiveModifier, Equatable {
+    let alignment: TextAlignment
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.lineLimit = environment.multilineTextAlignment == alignment ? 1 : 2
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+}
+
+/// A probe under the write.
+@View
+struct WrittenAbove {
+    let pass: Int
+    let alignment: TextAlignment
+    let log: EnvironmentLog
+
+    var body: some View {
+        _ModifierView(content: VersionProbe(pass: pass, log: log), modifier: LimitFromAlignment(alignment: alignment))
     }
 }
 

@@ -17,9 +17,10 @@
 //
 //  It also holds what belongs to the view standing there for as long as it
 //  is the same view: its state, what its effects keep between builds — an
-//  `onAppear`'s mark, an `onChange`'s last value — its animated values, and
-//  a container's transition slots. A rebuild of the same view keeps them;
-//  another view taking the position, or the view leaving, drops them.
+//  `onAppear`'s mark, an `onChange`'s last value — its animated values, a
+//  container's transition slots, and the environment a modifier wrote. A
+//  rebuild of the same view keeps them; another view taking the position,
+//  or the view leaving, drops them.
 //
 
 import Foundation
@@ -133,6 +134,10 @@ final class ViewPosition {
     /// for as long as the position, like the rows themselves: a row keeps
     /// its slot, and so its state, while the data moves around it.
     private var rowSlotsIfMade: AnyRowSlots?
+
+    /// The last write the modifier standing here made into the environment
+    /// — see `EnvironmentWrite`.
+    var environmentWrite: AnyEnvironmentWrite?
 
     /// The table of row slots for ids of type `ID` — made the first time,
     /// and again for ids of another type, numbering on from the last.
@@ -330,6 +335,7 @@ final class ViewPosition {
         rebuildsNextFrame = false
         nextTimelineDate = nil
         renderSlotIfMade = nil
+        environmentWrite = nil
         if let disappearing { departed.disappearing.append(disappearing) }
         takeExits(into: &departed)
         hasAppeared = false
@@ -394,6 +400,29 @@ final class PositionHandle: Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(ObjectIdentifier(self))
+    }
+}
+
+/// The last write a modifier made into the environment, whatever the
+/// modifier's type.
+class AnyEnvironmentWrite {}
+
+/// What a modifier wrote into the environment last time: the version of
+/// the environment it wrote over, the modifier, what writing read, and the
+/// environment that came out. The same write over the same environment is
+/// that environment again, version and all — so a kept view below, which
+/// read values from it, compares two numbers rather than each value.
+final class EnvironmentWrite<Modifier>: AnyEnvironmentWrite {
+    let incoming: UInt64
+    let modifier: Modifier
+    let reads: EnvironmentKeySet
+    let outgoing: EnvironmentValues
+
+    init(incoming: UInt64, modifier: Modifier, reads: EnvironmentKeySet, outgoing: EnvironmentValues) {
+        self.incoming = incoming
+        self.modifier = modifier
+        self.reads = reads
+        self.outgoing = outgoing
     }
 }
 

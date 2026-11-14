@@ -69,7 +69,7 @@ extension _ModifierView {
 extension _ModifierView: BuiltinView where Modifier: PrimitiveModifier {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         var inner = context
-        modifier.modifyEnvironment(&inner.environment)
+        inner.environment = writtenEnvironment(over: context)
         let nodeContent = modifier.makeContent(&inner)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
         let node = ContentNode(content: nodeContent, children: [child])
@@ -79,6 +79,37 @@ extension _ModifierView: BuiltinView where Modifier: PrimitiveModifier {
         node.gridCellTraits = child.gridCellTraits
         node.layoutValues = child.layoutValues
         return node
+    }
+
+    /// The environment the content is built in: the one coming in, with
+    /// what the modifier writes. Written again over the environment it
+    /// wrote over last time, by an equivalent modifier, it is the
+    /// environment that came out then — the same version, so what was kept
+    /// below agrees with it at once — and what writing read is read again.
+    private func writtenEnvironment(over context: BuildContext) -> EnvironmentValues {
+        let incoming = context.environment
+        let position = context.position
+        if let standing = position.environmentWrite,
+           ObjectIdentifier(type(of: standing)) == ObjectIdentifier(EnvironmentWrite<Modifier>.self) {
+            let last = unsafeDowncast(standing, to: EnvironmentWrite<Modifier>.self)
+            if last.incoming == incoming.version, modifier._isEquivalent(to: last.modifier) {
+                EnvironmentReads.shared.add(last.reads)
+                return last.outgoing
+            }
+        }
+        var outgoing = incoming
+        EnvironmentReads.shared.begin()
+        modifier.modifyEnvironment(&outgoing)
+        let reads = EnvironmentReads.shared.end()
+        if outgoing.version != incoming.version {
+            position.environmentWrite = EnvironmentWrite(
+                incoming: incoming.version,
+                modifier: modifier,
+                reads: reads,
+                outgoing: outgoing
+            )
+        }
+        return outgoing
     }
 }
 
