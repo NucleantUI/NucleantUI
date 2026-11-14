@@ -120,9 +120,9 @@ struct Calculator {
 /// both. `ShapeStyle.dynamic` is the framework's light/dark pair; `.background`
 /// and `.primary` are its semantic colors, which already are.
 struct Theme {
-    static let background = ShapeStyle.background
-    static let digit = ShapeStyle.dynamic(light: Color(hex: 0xE2E4EA), dark: Color(hex: 0x2B2F38))
-    static let function = ShapeStyle.dynamic(light: Color(hex: 0xC9CCD4), dark: Color(hex: 0x3D424D))
+    static let background = BackgroundStyle.background
+    static let digit = DynamicShapeStyle(light: Color(hex: 0xE2E4EA), dark: Color(hex: 0x2B2F38))
+    static let function = DynamicShapeStyle(light: Color(hex: 0xC9CCD4), dark: Color(hex: 0x3D424D))
     static let operation = Color(hex: 0xFF9F0A)
     static let operationActive = Color(hex: 0xFFD08A)
 }
@@ -144,7 +144,7 @@ struct Key {
     var body: some View {
         Text(label)
             .font(.system(size: 26, weight: style == .operation ? .medium : .regular))
-            .foregroundStyle(style == .operation ? .color(isActive ? Theme.operation : .white) : .primary)
+            .foregroundStyle(style == .operation ? (isActive ? AnyShapeStyle(Theme.operation) : AnyShapeStyle(.white)) : AnyShapeStyle(.primary))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 Capsule().fill(fill.opacity(isPressed ? 0.6 : 1))
@@ -164,11 +164,11 @@ struct Key {
             )
     }
 
-    private var fill: ShapeStyle {
+    private var fill: AnyShapeStyle {
         switch style {
-        case .digit:     return Theme.digit
-        case .function:  return Theme.function
-        case .operation: return .color(isActive ? Theme.operationActive : Theme.operation)
+        case .digit:     return AnyShapeStyle(Theme.digit)
+        case .function:  return AnyShapeStyle(Theme.function)
+        case .operation: return AnyShapeStyle(isActive ? Theme.operationActive : Theme.operation)
         }
     }
 }

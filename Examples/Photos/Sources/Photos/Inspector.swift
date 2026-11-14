@@ -156,7 +156,7 @@ struct ExposureValue {
             .font(.system(size: 12))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(ShapeStyle.fill)
+            .background(.fill)
             .cornerRadius(4)
     }
 }

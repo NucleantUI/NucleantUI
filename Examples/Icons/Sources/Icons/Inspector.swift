@@ -94,12 +94,12 @@ struct Preview {
         VStack(alignment: .leading, spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(library.tint == nil ? ShapeStyle.color(Theme.paper) : Theme.tile)
+                    .fill(library.tint == nil ? AnyShapeStyle(Theme.paper) : AnyShapeStyle(Theme.tile))
                 if let image {
                     SvgView(image)
                         .resizable()
                         .renderingMode(library.tint == nil ? .original : .template)
-                        .foregroundStyle(library.tint ?? .primary)
+                        .foregroundStyle(library.tint ?? AnyShapeStyle(.primary))
                         .scaledToFit()
                         .padding(36)
                 }
@@ -142,12 +142,12 @@ struct StylesRow {
                     Glyph(image: library.image(icon, style), size: 28, ink: library.tint)
                     Text(style.name)
                         .font(.system(size: 10))
-                        .foregroundStyle(isCurrent ? ShapeStyle.color(Theme.accent) : .secondary)
+                        .foregroundStyle(isCurrent ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 8).fill(isCurrent ? ShapeStyle.color(Theme.accent.opacity(0.16)) : Theme.tile))
+                .background(RoundedRectangle(cornerRadius: 8).fill(isCurrent ? AnyShapeStyle(Theme.accent.opacity(0.16)) : AnyShapeStyle(Theme.tile)))
                 .contentShape(RoundedRectangle(cornerRadius: 8))
                 .onTapGesture { library.style = style }
             }
@@ -160,7 +160,7 @@ struct StylesRow {
 @View
 struct SizesRow {
     let image: SvgImage
-    let ink: ShapeStyle?
+    let ink: AnyShapeStyle?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 14) {
@@ -192,7 +192,7 @@ struct SizesRow {
 @View
 struct FittingRow {
     let image: SvgImage
-    let ink: ShapeStyle?
+    let ink: AnyShapeStyle?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 14) {
@@ -201,7 +201,7 @@ struct FittingRow {
                     SvgView(image)
                         .resizable()
                         .renderingMode(ink == nil ? .original : .template)
-                        .foregroundStyle(ink ?? .primary)
+                        .foregroundStyle(ink ?? AnyShapeStyle(.primary))
                         .frame(width: box.width, height: box.height)
                         .background(RoundedRectangle(cornerRadius: 4).fill(ink == nil ? Theme.paper : Theme.accent.opacity(0.14)))
                     Caption(text: "\(Int(box.width)) × \(Int(box.height))")
@@ -342,7 +342,7 @@ struct InUse {
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x8E5CF7)))
                 Text(title)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Glyph(image: library.chrome("navigation/chevron_right"), size: 18, ink: .tertiary)
+                Glyph(image: library.chrome("navigation/chevron_right"), size: 18, ink: AnyShapeStyle(.tertiary))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -350,7 +350,7 @@ struct InUse {
 
             // Under a badge.
             HStack(spacing: 18) {
-                Glyph(image: image, size: 28, ink: .primary)
+                Glyph(image: image, size: 28, ink: AnyShapeStyle(.primary))
                     .overlay(alignment: .topTrailing) {
                         Text("3")
                             .font(.system(size: 10, weight: .bold))
@@ -360,7 +360,7 @@ struct InUse {
                             .background(Capsule().fill(Color(hex: 0xFF3B30)))
                             .offset(x: 8, y: -6)
                     }
-                Glyph(image: image, size: 28, ink: .secondary)
+                Glyph(image: image, size: 28, ink: AnyShapeStyle(.secondary))
                     .overlay(alignment: .topTrailing) {
                         Circle()
                             .fill(Color(hex: 0x22B573))
@@ -382,7 +382,7 @@ struct TabItem {
     let open: () -> Void
 
     var body: some View {
-        let ink: ShapeStyle = isSelected ? .color(Theme.accent) : .secondary
+        let ink: AnyShapeStyle = isSelected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary)
         VStack(spacing: 3) {
             Glyph(image: image, size: 22, ink: ink)
             Text(title)

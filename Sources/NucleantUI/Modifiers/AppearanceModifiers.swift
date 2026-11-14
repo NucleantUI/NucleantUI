@@ -46,34 +46,25 @@ extension View {
     }
 
     /// `style` filling a rectangle behind this view, stretched to its size.
-    public func background(_ style: ShapeStyle) -> some View {
+    public func background<S: ShapeStyle>(_ style: S) -> some View {
         background(Rectangle().fill(style))
     }
 
     /// A stroked outline just inside this view's bounds.
-    public func border(_ color: Color, width: Double = 1, cornerRadius: Double = 0) -> some View {
+    public func border<S: ShapeStyle>(_ content: S, width: Double = 1, cornerRadius: Double = 0) -> some View {
         overlay(
             RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(color, lineWidth: width)
-        )
-    }
-
-    public func border(_ style: ShapeStyle, width: Double = 1, cornerRadius: Double = 0) -> some View {
-        overlay(
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(style, lineWidth: width)
+                .stroke(content, lineWidth: width)
         )
     }
 
     public func opacity(_ opacity: Double) -> some View {
-        _ModifierView(content: self, key: ["opacity", opacity] as [AnyHashable]) { context in
-            OpacityContent(opacity: context.animatedValue(.opacity, [opacity]))
-        }
+        _ModifierView(content: self, modifier: OpacityModifier(opacity: opacity))
     }
 
     /// Laid out as usual, drawn not at all.
     public func hidden() -> some View {
-        _ModifierView(content: self, key: ["hidden"] as [AnyHashable]) { _ in HiddenContent() }
+        _ModifierView(content: self, modifier: HiddenModifier())
     }
 
     /// Offset this view by the horizontal and vertical amount specified in
@@ -84,9 +75,7 @@ extension View {
     /// place, and every other view's, stays where layout put it. A change
     /// animates the offset itself.
     public func offset(_ offset: Size) -> some View {
-        _ModifierView(content: self, key: ["offset", offset] as [AnyHashable]) { context in
-            OffsetContent(offset: context.animatedValue(.offset, [offset.width, offset.height]))
-        }
+        _ModifierView(content: self, modifier: OffsetModifier(offset: offset))
     }
 
     /// Offset this view by the specified horizontal and vertical distances.
@@ -95,15 +84,11 @@ extension View {
     /// measured from outside — without disturbing the layout. A change
     /// animates the offset itself.
     public func offset(x: Double = 0, y: Double = 0) -> some View {
-        _ModifierView(content: self, key: ["offset(x:y:)", x, y] as [AnyHashable]) { context in
-            OffsetContent(offset: context.animatedValue(.offset, [x, y]))
-        }
+        _ModifierView(content: self, modifier: OffsetXYModifier(x: x, y: y))
     }
 
     public func rotationEffect(_ angle: Angle, anchor: UnitPoint = .center) -> some View {
-        _ModifierView(content: self, key: ["rotation", angle, anchor] as [AnyHashable]) { context in
-            TransformContent(kind: .rotation(context.animatedValue(.rotation, [angle.radians])), anchor: anchor)
-        }
+        _ModifierView(content: self, modifier: RotationEffectModifier(angle: angle, anchor: anchor))
     }
 
     public func scaleEffect(_ scale: Double, anchor: UnitPoint = .center) -> some View {
@@ -111,19 +96,17 @@ extension View {
     }
 
     public func scaleEffect(x: Double = 1, y: Double = 1, anchor: UnitPoint = .center) -> some View {
-        _ModifierView(content: self, key: ["scale", x, y, anchor] as [AnyHashable]) { context in
-            TransformContent(kind: .scale(context.animatedValue(.scale, [x, y])), anchor: anchor)
-        }
+        _ModifierView(content: self, modifier: ScaleEffectModifier(x: x, y: y, anchor: anchor))
     }
 
     /// Clips to this view's bounds.
     public func clipped() -> some View {
-        _ModifierView(content: self, key: ["clip", 0.0] as [AnyHashable]) { _ in ClipContent(cornerRadius: 0) }
+        _ModifierView(content: self, modifier: ClippedModifier())
     }
 
     /// Rounds the corners and clips to them.
     public func cornerRadius(_ radius: Double) -> some View {
-        _ModifierView(content: self, key: ["clip", radius] as [AnyHashable]) { _ in ClipContent(cornerRadius: radius) }
+        _ModifierView(content: self, modifier: CornerRadiusModifier(radius: radius))
     }
 
     /// Clips to a shape. Only the shape's bounding box (with its corner
@@ -131,10 +114,7 @@ extension View {
     /// clips against a clipper paint, and a rect is what the display list
     /// carries.
     public func clipShape<S: Shape>(_ shape: S) -> some View {
-        let radius = Self.clipCornerRadius(for: shape)
-        return _ModifierView(content: self, key: ["clip", radius] as [AnyHashable]) { _ in
-            ClipContent(cornerRadius: radius)
-        }
+        _ModifierView(content: self, modifier: ClipShapeModifier(cornerRadius: Self.clipCornerRadius(for: shape)))
     }
 
     private static func clipCornerRadius<S: Shape>(for shape: S) -> Double {
@@ -145,5 +125,86 @@ extension View {
         case is Capsule, is Circle, is Ellipse: return .greatestFiniteMagnitude
         default: return 0
         }
+    }
+}
+
+/// `.opacity(_:)`, animated.
+struct OpacityModifier: PrimitiveModifier, Equatable {
+    let opacity: Double
+
+    func makeContent(_ context: inout BuildContext) -> OpacityContent {
+        OpacityContent(opacity: context.animatedState(.opacity, opacity))
+    }
+}
+
+/// `.hidden()`.
+struct HiddenModifier: PrimitiveModifier, Equatable {
+    func makeContent(_ context: inout BuildContext) -> HiddenContent {
+        HiddenContent()
+    }
+}
+
+/// `.offset(_:)`, animated.
+struct OffsetModifier: PrimitiveModifier, Equatable {
+    let offset: Size
+
+    func makeContent(_ context: inout BuildContext) -> OffsetContent {
+        OffsetContent(offset: context.animatedState(.offset, AnimatablePair(offset.width, offset.height)))
+    }
+}
+
+/// `.offset(x:y:)`, animated.
+struct OffsetXYModifier: PrimitiveModifier, Equatable {
+    let x: Double
+    let y: Double
+
+    func makeContent(_ context: inout BuildContext) -> OffsetContent {
+        OffsetContent(offset: context.animatedState(.offset, AnimatablePair(x, y)))
+    }
+}
+
+/// `.rotationEffect(_:anchor:)`, animated.
+struct RotationEffectModifier: PrimitiveModifier, Equatable {
+    let angle: Angle
+    let anchor: UnitPoint
+
+    func makeContent(_ context: inout BuildContext) -> RotationContent {
+        RotationContent(radians: context.animatedState(.rotation, angle.radians), anchor: anchor)
+    }
+}
+
+/// `.scaleEffect(x:y:anchor:)`, animated.
+struct ScaleEffectModifier: PrimitiveModifier, Equatable {
+    let x: Double
+    let y: Double
+    let anchor: UnitPoint
+
+    func makeContent(_ context: inout BuildContext) -> ScaleContent {
+        ScaleContent(factors: context.animatedState(.scale, AnimatablePair(x, y)), anchor: anchor)
+    }
+}
+
+/// `.clipped()`.
+struct ClippedModifier: PrimitiveModifier, Equatable {
+    func makeContent(_ context: inout BuildContext) -> ClipContent {
+        ClipContent(cornerRadius: 0)
+    }
+}
+
+/// `.cornerRadius(_:)`.
+struct CornerRadiusModifier: PrimitiveModifier, Equatable {
+    let radius: Double
+
+    func makeContent(_ context: inout BuildContext) -> ClipContent {
+        ClipContent(cornerRadius: radius)
+    }
+}
+
+/// `.clipShape(_:)`, as the corner rounding of the shape's box.
+struct ClipShapeModifier: PrimitiveModifier, Equatable {
+    let cornerRadius: Double
+
+    func makeContent(_ context: inout BuildContext) -> ClipContent {
+        ClipContent(cornerRadius: cornerRadius)
     }
 }

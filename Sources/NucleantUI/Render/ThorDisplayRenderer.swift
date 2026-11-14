@@ -19,6 +19,7 @@
 //  while a parent scene's transform reaches both.
 //
 
+import Foundation
 import NucleantThorVG
 
 @MainActor
@@ -114,8 +115,12 @@ public final class ThorDisplayRenderer {
         }
     }
 
+    /// The clip and transform of the command being drawn.
+    private var state = DrawState()
+
     private func emit(_ list: DisplayList) {
-        for command in list.commands {
+        for (index, command) in list.commands.enumerated() {
+            state = list.state(at: index)
             switch command {
             case .shape(let draw):
                 emit(draw)
@@ -160,14 +165,16 @@ public final class ThorDisplayRenderer {
             apply(stroke, to: shape, bounds: draw.bounds, stroke: true)
         }
 
-        finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        // A path in its own space, carried out to where it lands.
+        let transform = draw.origin.map { state.transform.concatenating(.translation(x: $0.x, y: $0.y)) } ?? state.transform
+        finish(paint: shape, transform: transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     private func appendPath(_ path: Path, to shape: Tvg_Paint) {
         // Where the pen is, which a quadratic needs to become a cubic.
         var current = Point.zero
         var subpathStart = Point.zero
-        for element in path.elements {
+        for element in path.elementSequence {
             switch element {
             case .move(let point):
                 _ = tvg_shape_move_to(shape, f(point.x), f(point.y))
@@ -209,11 +216,9 @@ public final class ThorDisplayRenderer {
         }
     }
 
-    private func apply(_ style: ShapeStyle, to shape: Tvg_Paint, bounds: Rect, stroke: Bool) {
-        switch style {
-        // A display list holds styles resolved for their scheme as they were
-        // recorded; a dynamic one that got past that draws its light color.
-        case .color(let color), .dynamic(light: let color, dark: _):
+    private func apply(_ paint: _ResolvedPaint, to shape: Tvg_Paint, bounds: Rect, stroke: Bool) {
+        switch paint.kind {
+        case .color(let color):
             let (r, g, b, a) = color.rgba8
             if stroke {
                 _ = tvg_shape_set_stroke_color(shape, r, g, b, a)
@@ -268,7 +273,7 @@ public final class ThorDisplayRenderer {
         }
         guard let text = tvg_text_new() else { return }
 
-        if let family = FontRegistry.resolve(draw.font) {
+        if let family = FontRegistry.resolve(draw.font), ThorFaces.shared.load(family) {
             _ = family.withCString { tvg_text_set_font(text, $0) }
         } else {
             // No face resolved — ThorVG picks its own fallback rather than
@@ -308,7 +313,7 @@ public final class ThorDisplayRenderer {
         _ = tvg_text_align(text, Float(alignFactor(draw.alignment)), 0)
         _ = tvg_paint_translate(text, f(draw.frame.minX), f(draw.frame.minY))
 
-        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: text, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     /// `draw`'s lines one at a time, each a line height and the line spacing
@@ -347,7 +352,7 @@ public final class ThorDisplayRenderer {
     /// or cut.
     private func emitRun(_ string: String, x: Double, top: Double, width: Double, lineHeight: Double, _ draw: TextDraw) {
         guard let text = tvg_text_new() else { return }
-        if let family = FontRegistry.resolve(draw.font) {
+        if let family = FontRegistry.resolve(draw.font), ThorFaces.shared.load(family) {
             _ = family.withCString { tvg_text_set_font(text, $0) }
         } else {
             _ = tvg_text_set_font(text, nil)
@@ -364,7 +369,7 @@ public final class ThorDisplayRenderer {
         _ = tvg_text_wrap_mode(text, TVG_TEXT_WRAP_NONE)
         _ = tvg_text_align(text, 0, 0)
         _ = tvg_paint_translate(text, f(x), f(top))
-        finish(paint: text, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: text, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     /// One line's underline and strikethrough, from `start` to `end` along
@@ -385,7 +390,7 @@ public final class ThorDisplayRenderer {
             }
             let (r, g, b, a) = (style.color ?? draw.color).rgba8
             _ = tvg_shape_set_fill_color(shape, r, g, b, a)
-            finish(paint: shape, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+            finish(paint: shape, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
         }
     }
 
@@ -417,7 +422,7 @@ public final class ThorDisplayRenderer {
         if draw.opacity < 1 {
             _ = tvg_paint_set_opacity(picture, UInt8(max(0, min(1, draw.opacity)) * 255))
         }
-        finish(paint: picture, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: picture, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     // MARK: - SVG
@@ -443,7 +448,7 @@ public final class ThorDisplayRenderer {
         if draw.opacity < 1 {
             _ = tvg_paint_set_opacity(paint, UInt8(max(0, min(1, draw.opacity)) * 255))
         }
-        finish(paint: paint, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        finish(paint: paint, transform: state.transform, clip: state.clip, cornerRadius: state.clipCornerRadius, transformedClips: state.transformedClips)
     }
 
     /// `image` parsed by ThorVG's own SVG loader, once.
@@ -575,5 +580,40 @@ public final class ThorDisplayRenderer {
         case .round: return TVG_STROKE_JOIN_ROUND
         case .bevel: return TVG_STROKE_JOIN_BEVEL
         }
+    }
+}
+
+/// The faces this renderer's text paints name, loaded into ThorVG from the
+/// files `FontRegistry` resolved — by the name it resolved, so a paint finds
+/// its face by that name.
+@MainActor
+private final class ThorFaces {
+    static let shared = ThorFaces()
+
+    private var loaded: Set<String> = []
+    private var failed: Set<String> = []
+
+    /// Load `family` into ThorVG if it isn't already; whether it is there.
+    func load(_ family: String) -> Bool {
+        if loaded.contains(family) { return true }
+        if failed.contains(family) { return false }
+        guard let path = FontRegistry.path(ofResolved: family),
+              let data = FileManager.default.contents(atPath: path) else {
+            failed.insert(family)
+            return false
+        }
+        // copy: true — ThorVG keeps the bytes, and `data` dies with this call.
+        let result = tvg_font_load_from_data(
+            name: family,
+            data: [UInt8](data),
+            mimetype: (path as NSString).pathExtension.lowercased(),
+            copy: true
+        )
+        guard result == TVG_RESULT_SUCCESS else {
+            failed.insert(family)
+            return false
+        }
+        loaded.insert(family)
+        return true
     }
 }

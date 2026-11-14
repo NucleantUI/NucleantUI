@@ -26,16 +26,29 @@ public struct HStackLayout: Layout, Sendable {
         return properties
     }
 
-    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> Size {
-        StackLayoutRun(axis: .horizontal, spacing: spacing, subviews: subviews, proposal: proposal).total
+    /// What a horizontal stack layout keeps between measuring and placing:
+    /// the run it laid out last, and how far each subview stretches along
+    /// the axis under the last height proposed — dropped when the subviews
+    /// change.
+    public struct Cache {
+        fileprivate var run: StackLayoutRun?
+        fileprivate var stretch: StackLayoutRun.Stretch?
     }
 
-    public func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    public func makeCache(subviews: Subviews) -> Cache {
+        Cache()
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> Size {
+        run(proposal, subviews: subviews, cache: &cache).total
+    }
+
+    public func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         // Laid out again under the proposal it was sized by along its axis,
         // as SwiftUI does, so the subviews get the shares they were measured
         // with; across it, the bounds' height when none was proposed.
         let placing = ProposedViewSize(width: proposal.width, height: proposal.height ?? bounds.height)
-        let run = StackLayoutRun(axis: .horizontal, spacing: spacing, subviews: subviews, proposal: placing)
+        let run = run(placing, subviews: subviews, cache: &cache)
         var x = bounds.minX
         for (offset, subview) in subviews.enumerated() {
             let size = run.sizes[offset]
@@ -48,6 +61,16 @@ public struct HStackLayout: Layout, Sendable {
             subview.place(at: Point(x: x, y: y), proposal: run.proposals[offset])
             x += size.width + run.gaps[offset]
         }
+    }
+
+    /// The run under `proposal`: the one kept, when it was laid out under
+    /// the same — placing follows measuring under the proposal just
+    /// measured — or worked out and kept.
+    private func run(_ proposal: ProposedSize, subviews: Subviews, cache: inout Cache) -> StackLayoutRun {
+        if let run = cache.run, run.proposal == proposal, run.sizes.count == subviews.count { return run }
+        let run = StackLayoutRun(axis: .horizontal, spacing: spacing, subviews: subviews, proposal: proposal, stretch: &cache.stretch)
+        cache.run = run
+        return run
     }
 }
 
@@ -67,15 +90,28 @@ public struct VStackLayout: Layout, Sendable {
         return properties
     }
 
-    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> Size {
-        StackLayoutRun(axis: .vertical, spacing: spacing, subviews: subviews, proposal: proposal).total
+    /// What a vertical stack layout keeps between measuring and placing:
+    /// the run it laid out last, and how far each subview stretches along
+    /// the axis under the last width proposed — dropped when the subviews
+    /// change.
+    public struct Cache {
+        fileprivate var run: StackLayoutRun?
+        fileprivate var stretch: StackLayoutRun.Stretch?
     }
 
-    public func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    public func makeCache(subviews: Subviews) -> Cache {
+        Cache()
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> Size {
+        run(proposal, subviews: subviews, cache: &cache).total
+    }
+
+    public func placeSubviews(in bounds: Rect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         // Laid out again under the proposal it was sized by along its axis,
         // as SwiftUI does; across it, the bounds' width when none was proposed.
         let placing = ProposedViewSize(width: proposal.width ?? bounds.width, height: proposal.height)
-        let run = StackLayoutRun(axis: .vertical, spacing: spacing, subviews: subviews, proposal: placing)
+        let run = run(placing, subviews: subviews, cache: &cache)
         var y = bounds.minY
         for (offset, subview) in subviews.enumerated() {
             let size = run.sizes[offset]
@@ -88,6 +124,15 @@ public struct VStackLayout: Layout, Sendable {
             subview.place(at: Point(x: x, y: y), proposal: run.proposals[offset])
             y += size.height + run.gaps[offset]
         }
+    }
+
+    /// The run under `proposal`: the one kept, when it was laid out under
+    /// the same, or worked out and kept.
+    private func run(_ proposal: ProposedSize, subviews: Subviews, cache: inout Cache) -> StackLayoutRun {
+        if let run = cache.run, run.proposal == proposal, run.sizes.count == subviews.count { return run }
+        let run = StackLayoutRun(axis: .vertical, spacing: spacing, subviews: subviews, proposal: proposal, stretch: &cache.stretch)
+        cache.run = run
+        return run
     }
 }
 
@@ -135,16 +180,29 @@ public struct ZStackLayout: Layout, Sendable {
 /// One measuring pass of a horizontal or vertical stack layout: the size
 /// and proposal of every subview, the gap after each, and the total.
 @MainActor
-private struct StackLayoutRun {
+fileprivate struct StackLayoutRun {
+    /// How far each subview stretches along the axis — its length offered
+    /// nothing, and how much longer offered everything — under the
+    /// cross-axis proposal they were asked with. It depends on that alone,
+    /// so a run under another length along the axis sorts the subviews by
+    /// it without asking them again.
+    struct Stretch {
+        var cross: Double?
+        var ranges: [(min: Double, span: Double)]
+    }
+
+    /// The proposal the run was laid out under.
+    var proposal: ProposedSize
     var sizes: [Size]
     var proposals: [ProposedSize]
     /// The gap after each subview — zero after the last.
     var gaps: [Double]
     var total: Size
 
-    init(axis: Axis, spacing: Double?, subviews: LayoutSubviews, proposal: ProposedSize) {
+    init(axis: Axis, spacing: Double?, subviews: LayoutSubviews, proposal: ProposedSize, stretch: inout Stretch?) {
         let count = subviews.count
         let items = Array(subviews)
+        self.proposal = proposal
         sizes = Array(repeating: .zero, count: count)
         proposals = Array(repeating: proposal, count: count)
         gaps = Array(repeating: 0, count: count)
@@ -163,13 +221,23 @@ private struct StackLayoutRun {
             // that stretch without end, the one needing more first; ties in
             // the subviews' own order — each offered an equal share of what
             // the ones before it left.
-            var least = proposal
-            least[axis] = 0
-            var most = proposal
-            most[axis] = .infinity
-            let ranges = items.map { item -> (min: Double, span: Double) in
-                let min = item.sizeThatFits(least)[axis]
-                return (min, item.sizeThatFits(most)[axis] - min)
+            // One subview has no order to find.
+            let cross = proposal[axis.cross]
+            var ranges: [(min: Double, span: Double)] = []
+            if count > 1 {
+                if let kept = stretch, kept.cross == cross, kept.ranges.count == count {
+                    ranges = kept.ranges
+                } else {
+                    var least = proposal
+                    least[axis] = 0
+                    var most = proposal
+                    most[axis] = .infinity
+                    ranges = items.map { item -> (min: Double, span: Double) in
+                        let min = item.sizeThatFits(least)[axis]
+                        return (min, item.sizeThatFits(most)[axis] - min)
+                    }
+                    stretch = Stretch(cross: cross, ranges: ranges)
+                }
             }
             var order = Array(0..<count)
             for next in order.indices.dropFirst() {

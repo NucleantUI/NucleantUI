@@ -62,22 +62,13 @@ extension View {
         backdrop: Bool = false,
         isEnabled: Bool = true
     ) -> some View {
-        let function = function.reading(arguments, textures: textures, content: true)
-        let draw = ShaderDraw(vertices: max(0, vertices), instances: max(0, instances))
-        return _ModifierView(
-            content: self,
-            // The function by value, its arguments included: its input is
-            // made anew from them, so its identity says nothing.
-            key: ["shader", function, draw, textures, backdrop, isEnabled] as [AnyHashable]
-        ) { context in
-            ShaderEffectContent(
-                path: context.path,
-                module: isEnabled ? (function.spirv, function.input, function.isAnimated) : nil,
-                draw: draw,
-                textures: ShaderTextures(textures),
-                backdrop: backdrop
-            )
-        }
+        _ModifierView(content: self, modifier: ShaderFunctionModifier(
+            function: function.reading(arguments, textures: textures, content: true),
+            draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
+            textures: textures,
+            backdrop: backdrop,
+            isEnabled: isEnabled
+        ))
     }
 
     /// Runs `function` — generic over its `ShaderProtocol` type: a
@@ -112,24 +103,15 @@ extension View {
         backdrop: Bool = false,
         isEnabled: Bool = true
     ) -> some View {
-        let draw = ShaderDraw(vertices: max(0, vertices), instances: max(0, instances))
-        let words = function.spirv
-        let input = function.input
-        let isAnimated = function.isAnimated
-        return _ModifierView(
-            content: self,
-            // The module by its words and its input by which object it is —
-            // the values the input holds reach the effect through observation.
-            key: ["shader-module", words, ObjectIdentifier(input), isAnimated, draw, textures, backdrop, isEnabled] as [AnyHashable]
-        ) { context in
-            ShaderEffectContent(
-                path: context.path,
-                module: isEnabled ? (words, input, isAnimated) : nil,
-                draw: draw,
-                textures: ShaderTextures(textures),
-                backdrop: backdrop
-            )
-        }
+        _ModifierView(content: self, modifier: ShaderModuleModifier(
+            words: function.spirv,
+            input: function.input,
+            isAnimated: function.isAnimated,
+            draw: ShaderDraw(vertices: max(0, vertices), instances: max(0, instances)),
+            textures: textures,
+            backdrop: backdrop,
+            isEnabled: isEnabled
+        ))
     }
 
     /// `shader(_:)` with the GLSL body inline.
@@ -148,7 +130,8 @@ extension View {
 /// and hands that to the layer's canvas instead of the window's. The child's
 /// frames are still written, so hit testing is untouched.
 struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
-    let path: [Int]
+    /// What the shader's slot is filed under: its view's.
+    let slot: RenderSlot
     /// The module that runs over the view, and its input. `nil` when
     /// disabled — the child then draws straight into the window.
     let module: (words: [UInt32], input: Input, isAnimated: Bool)?
@@ -190,7 +173,7 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
             // The view is one canvas node and nothing else: its image is
             // already the view's pixels, and the shader samples it as it is.
             host.useModule(
-                path: path,
+                slot: slot,
                 words: module.words,
                 input: module.input,
                 isAnimated: module.isAnimated,
@@ -209,7 +192,7 @@ struct ShaderEffectContent<Input: ShaderInput>: NodeContent {
                 canvas.composite(host: host)
             }
             host.useModule(
-                path: path,
+                slot: slot,
                 words: module.words,
                 input: module.input,
                 isAnimated: module.isAnimated,
@@ -270,5 +253,60 @@ final class ShaderCanvasInput {
 
     func add(_ canvas: Canvas) {
         canvases.append(canvas)
+    }
+}
+
+/// `.shader(_:arguments:textures:vertices:instances:backdrop:isEnabled:)`
+/// with a `ShaderFunction`: the function by value, its arguments included —
+/// its input is made anew from them, so its identity says nothing.
+struct ShaderFunctionModifier: PrimitiveModifier {
+    let function: ShaderFunction
+    let draw: ShaderDraw
+    let textures: [ShaderTextureInput]
+    let backdrop: Bool
+    let isEnabled: Bool
+
+    func makeContent(_ context: inout BuildContext) -> ShaderEffectContent<ShaderArguments> {
+        ShaderEffectContent(
+            slot: context.position.renderSlot,
+            module: isEnabled ? (function.spirv, function.input, function.isAnimated) : nil,
+            draw: draw,
+            textures: ShaderTextures(textures),
+            backdrop: backdrop
+        )
+    }
+
+    func _isEquivalent(to other: ShaderFunctionModifier) -> Bool {
+        function == other.function && draw == other.draw && textures == other.textures
+            && backdrop == other.backdrop && isEnabled == other.isEnabled
+    }
+}
+
+/// `.shader(_:textures:vertices:instances:backdrop:isEnabled:)` with a
+/// `ShaderProtocol` module: the module by its words and its input by which
+/// object it is — the values the input holds reach the effect through
+/// observation.
+struct ShaderModuleModifier<Input: ShaderInput>: PrimitiveModifier {
+    let words: [UInt32]
+    let input: Input
+    let isAnimated: Bool
+    let draw: ShaderDraw
+    let textures: [ShaderTextureInput]
+    let backdrop: Bool
+    let isEnabled: Bool
+
+    func makeContent(_ context: inout BuildContext) -> ShaderEffectContent<Input> {
+        ShaderEffectContent(
+            slot: context.position.renderSlot,
+            module: isEnabled ? (words, input, isAnimated) : nil,
+            draw: draw,
+            textures: ShaderTextures(textures),
+            backdrop: backdrop
+        )
+    }
+
+    func _isEquivalent(to other: ShaderModuleModifier<Input>) -> Bool {
+        input === other.input && words == other.words && isAnimated == other.isAnimated && draw == other.draw
+            && textures == other.textures && backdrop == other.backdrop && isEnabled == other.isEnabled
     }
 }

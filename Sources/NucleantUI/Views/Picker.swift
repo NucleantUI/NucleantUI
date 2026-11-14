@@ -502,7 +502,7 @@ struct _MenuPicker<SelectionValue: Hashable> {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isPressed ? controlTrackColor : ShapeStyle.tertiaryBackground)
+                .fill(isPressed ? AnyShapeStyle(controlTrackColor) : AnyShapeStyle(.tertiaryBackground))
         )
         .border(.separator, width: 1, cornerRadius: 6)
         .opacity(isEnabled ? 1 : 0.4)
@@ -579,19 +579,19 @@ struct _SegmentedPicker<SelectionValue: Hashable> {
                 let isSelected = option.tag == selection
                 option.label
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(isSelected ? .color(.white) : .primary)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                     .lineLimit(1)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(isSelected ? tint : .color(.clear))
+                            .fill(isSelected ? tint : AnyShapeStyle(.clear))
                     )
                     .onTapGesture { selection = option.tag }
             }
         }
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 8).fill(ShapeStyle.tertiaryBackground))
+        .background(RoundedRectangle(cornerRadius: 8).fill(.tertiaryBackground))
         .opacity(isEnabled ? 1 : 0.4)
     }
 }
@@ -652,14 +652,14 @@ struct _RadioGroupPicker<SelectionValue: Hashable> {
                     HStack(spacing: 6) {
                         ZStack {
                             Circle()
-                                .fill(isSelected ? tint : ShapeStyle.secondaryBackground)
+                                .fill(isSelected ? tint : AnyShapeStyle(.secondaryBackground))
                             if isSelected {
                                 Circle()
                                     .fill(Color.white)
                                     .frame(width: 6, height: 6)
                             } else {
                                 Circle()
-                                    .stroke(ShapeStyle.separator, lineWidth: 1)
+                                    .stroke(.separator, lineWidth: 1)
                             }
                         }
                         .frame(width: 16, height: 16)

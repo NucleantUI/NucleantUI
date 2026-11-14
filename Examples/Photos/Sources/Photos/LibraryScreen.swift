@@ -84,12 +84,12 @@ struct ZoomControl {
     var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(ShapeStyle.secondary)
+                .fill(.secondary)
                 .frame(width: 8, height: 8)
             Slider(value: $library.tileSize, in: 60...260)
                 .frame(width: 140)
             RoundedRectangle(cornerRadius: 2.5)
-                .fill(ShapeStyle.secondary)
+                .fill(.secondary)
                 .frame(width: 14, height: 14)
         }
     }

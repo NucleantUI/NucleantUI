@@ -191,7 +191,7 @@ struct TimelineContent<Schedule: TimelineSchedule, Content: View>: ViewInput {
 
 extension TimelineView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let path = context.path
+        let reader = context.position.handle
         let now = Date()
         let cadence: TimelineViewDefaultContext.Cadence
         switch schedule {
@@ -201,19 +201,19 @@ extension TimelineView: BuiltinView {
         }
         // The content is user code and may read an `@Observable` model;
         // those reads are this view's, like a `body`'s.
-        let built = trackingObservation(at: path) {
+        let built = trackingObservation(for: reader) {
             content.build(TimelineViewDefaultContext(date: now, cadence: cadence))
         }
         let node = context.child(0) { ctx in buildNode(built, &ctx) }
 
         let next = schedule.entries(from: now, mode: .normal).first { $0 > now }
-        context.animations.schedule(timelineAt: path, next: next)
+        context.animations.schedule(timelineAt: context.position, next: next)
 
         // Redrawn on its own clock: a node of its own, so the redraw lands
         // there rather than in whatever encloses it.
-        guard !node.content.isTransparent else { return node }
-        let boundary = ViewNode(
-            content: RenderBoundaryContent(key: RenderNodeKey(path: path, identity: context.viewIdentity)),
+        guard !node.isTransparent else { return node }
+        let boundary = ContentNode(
+            content: RenderBoundaryContent(key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity)),
             children: [node]
         )
         boundary.transitionTrait = node.transitionTrait

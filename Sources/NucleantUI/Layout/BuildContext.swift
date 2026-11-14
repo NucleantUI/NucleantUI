@@ -4,16 +4,29 @@
 //
 //  The state carried *down* a build pass. A value type: `child(_:_:)` hands a
 //  copy to a subtree, so an environment change made inside it can't leak back
-//  out to a sibling. The state store is the one shared thing, and it is a
-//  class for exactly that reason.
+//  out to a sibling. The records, the effects and the animations are shared,
+//  and they are classes for exactly that reason.
 //
 
 @MainActor
 public struct BuildContext {
 
-    /// The structural path to the view being built — one index per level.
-    /// `@State` identity is derived from it.
-    var path: [Int] = []
+    /// Where the view being built stands: what it holds as long as it
+    /// stands — its record, its state — is held there. One step from its
+    /// parent's: moved only by `child(_:_:)`, `step(into:)` and
+    /// `move(to:)`, which keep the dirty cursor below with it.
+    private(set) var position: ViewPosition
+
+    /// The structural path to the view being built — one index per level —
+    /// worked out from the positions when asked for: for a trace line, or
+    /// for what is filed by where it is in the tree.
+    var path: [Int] { position.path }
+
+    /// The node of `dirtyPaths` at this context's position; `nil` where no
+    /// dirty path runs through it. Stepped with the position, so a view
+    /// asks whether anything under it is dirty without walking the trie
+    /// from the root.
+    private var dirtyCursor: PathTrie<Void>.Node?
 
     /// The identity of the view whose `makeNode` is running — type and
     /// stamped call site — so a builtin that owns a render node can key it
@@ -33,8 +46,6 @@ public struct BuildContext {
     /// into its layout: which of its units to build, and the count so far.
     /// See `LazyLayout.swift`.
     var lazyCursor: LazyBuildCursor?
-
-    let store: StateStore
 
     /// `onAppear` / `onDisappear` actions collected during this pass, run
     /// once the tree is built. Reference-boxed so a copied context still
@@ -64,148 +75,181 @@ public struct BuildContext {
 
     init(
         environment: EnvironmentValues,
-        store: StateStore,
         effects: EffectQueue,
         animations: AnimationStore,
         records: RebuildRecords,
         dirtyPaths: Set<[Int]> = []
     ) {
         self.environment = environment
-        self.store = store
         self.effects = effects
         self.animations = animations
         self.records = records
         let trie = PathTrie<Void>()
         for path in dirtyPaths { trie.set((), at: path) }
         self.dirtyPaths = trie
+        self.position = records.rootPosition
+        self.dirtyCursor = trie.root
     }
 
     /// Build a subtree at child slot `index`.
     func child<R>(_ index: Int, _ body: (inout BuildContext) -> R) -> R {
         var sub = self
-        sub.path.append(index)
+        sub.step(into: index)
         return body(&sub)
     }
 
-    /// Whether a state write dirtied exactly `path` this frame — the view
-    /// there is where the change originated.
-    func isDirty(at path: [Int]) -> Bool {
-        dirtyPaths.value(at: path) != nil
+    /// Stand at child slot `index` of where this context stands — a
+    /// transition's body, built beside the children.
+    mutating func step(into index: Int) {
+        position = position.makeChild(index)
+        dirtyCursor = dirtyCursor?.child(index)
     }
 
-    /// Whether anything at or below `path` was dirtied this frame.
-    func isDirty(under path: [Int]) -> Bool {
-        // The trie only has nodes along dirty paths, so a node existing at
-        // `path` means some dirty path runs through or ends there.
-        dirtyPaths.node(at: path) != nil
+    /// A copy to keep past this build — a `GeometryReader`'s, for building
+    /// its content during placement. It stands at the root rather than
+    /// holding the position: the position holds the node that keeps the
+    /// copy. `resume(at:)` puts it back where it was.
+    var keptPastThisBuild: BuildContext {
+        var copy = self
+        copy.position = records.rootPosition
+        return copy
     }
 
-    /// Bind every `@State` / `@Environment` on `view` before its `body` runs.
-    /// Returns the keys bound, so the view's record can release them when the
-    /// view goes away. The view does the walking, through what `@View`
-    /// generated.
-    func bindDynamicProperties<V: View>(of view: V) -> [StateKey] {
+    /// Stand at `position` again — a kept copy, building there once more.
+    mutating func resume(at position: ViewPosition) {
+        self.position = position
+    }
+
+    /// Stand at `path` — a rebuild starting there — found from the roots.
+    mutating func move(to path: [Int]) {
+        position = records.position(along: path)
+        dirtyCursor = dirtyPaths.node(at: path)
+    }
+
+    /// Whether a state write dirtied the view standing here this frame —
+    /// the view where the change originated.
+    var isDirtyHere: Bool { dirtyCursor?.value != nil }
+
+    /// Whether anything here or below was dirtied this frame.
+    var isDirtyHereOrBelow: Bool { dirtyCursor != nil }
+
+    /// What stood at this context's position before this rebuild began, if
+    /// anything did.
+    var candidate: RebuildRecords.Candidate? {
+        records.candidate(standingAt: position)
+    }
+
+    /// Whether the child about to be built in slot `index` is new here.
+    func isNewChild(at index: Int) -> Bool {
+        records.isNewChild(at: index, under: position)
+    }
+
+    /// Keep the standing subtree `candidate` at this context's position,
+    /// now standing under `environment`.
+    func reuse(_ candidate: RebuildRecords.Candidate) {
+        records.reuse(candidate, under: environment)
+    }
+
+    /// File `entry` at this context's position.
+    func record(_ entry: RebuildRecords.Entry) {
+        records.record(entry, at: position)
+    }
+
+    /// What still stands, un-rebuilt, directly under this context's
+    /// position — by slot.
+    var leftoverChildren: [(Int, ViewNode)] {
+        records.leftoverChildren(under: position)
+    }
+
+    /// Bind every `@State` / `@Environment` on `view`, in place, before its
+    /// `body` runs — its state held at this context's position. The view
+    /// does the walking, through what `@View` generated.
+    func bindDynamicProperties<V: View>(of view: inout V) {
         let binder = DynamicPropertyBinder(
-            store: store,
+            position: position,
             environment: environment,
-            path: path,
-            viewType: ObjectIdentifier(V.self),
-            viewID: view._viewID
+            owner: ViewIdentity(type: ObjectIdentifier(V.self), viewID: view._viewID)
         )
         view._bindDynamicProperties(binder)
-        return binder.keys.keys
     }
 }
 
 /// Deferred work a build pass produced — `onAppear`, `onDisappear` and
-/// `onChange` bodies.
+/// `onChange` bodies. What each effect keeps between builds — whether it
+/// ran, the value it last saw — is on the position of the view that
+/// attached it (`ViewPosition`), and goes with it.
 @MainActor
 final class EffectQueue {
-    /// Identities that have already run their `onAppear`, so it fires once per
-    /// appearance rather than once per rebuild.
-    private var appeared: Set<StateKey> = []
     private var pending: [() -> Void] = []
-
-    /// The `onDisappear` action of every view standing — the latest build's,
-    /// so it runs with what that build captured.
-    private var disappearing: [StateKey: () -> Void] = [:]
-
-    /// The value each `.onChange` standing last saw, to compare the next
-    /// build's against.
-    private var observed: [StateKey: OpaqueValue] = [:]
 
     /// Every `.onPreferenceChange` standing — checked after each pass that
     /// built, and forgotten with the views that attached them.
     let preferenceObservers = PreferenceObservers()
-
-    /// The value each `.onGeometryChange` with a new-value action worked
-    /// out when it was last placed.
-    private var geometryValues: [StateKey: OpaqueValue] = [:]
-
-    /// The same, for each `.onGeometryChange` with an old-and-new action.
-    private var geometryTransitions: [StateKey: OpaqueValue] = [:]
 
     /// Whether placement built views this pass — a `GeometryReader`'s
     /// content — so that a pass that only laid out still gets the work that
     /// follows a build.
     private var builtDuringLayout = false
 
-    func onAppear(_ key: StateKey, _ action: @escaping () -> Void) {
-        guard !appeared.contains(key) else { return }
-        appeared.insert(key)
+    /// Queue `action` unless the view at `position` has appeared already:
+    /// once per appearance, not once per build.
+    func onAppear(at position: ViewPosition, _ action: @escaping () -> Void) {
+        guard !position.hasAppeared else { return }
+        position.hasAppeared = true
         pending.append(action)
     }
 
-    func onDisappear(_ key: StateKey, _ action: @escaping () -> Void) {
-        disappearing[key] = action
+    /// Keep `action` to run when the view at `position` leaves.
+    func onDisappear(at position: ViewPosition, _ action: @escaping () -> Void) {
+        position.disappearing = action
     }
 
-    /// Queue `action` with the value last seen here and `value`, if they
-    /// differ — or with `value` twice, the first time, when `initial`. The
-    /// action is this build's, so it sees what this build captured.
+    /// Queue `action` with the value last seen at `position` and `value`, if
+    /// they differ — or with `value` twice, the first time, when `initial`.
+    /// The action is this build's, so it sees what this build captured.
     func onChange<V: Equatable>(
-        _ key: StateKey,
+        at position: ViewPosition,
         of value: V,
         initial: Bool,
         _ action: @escaping (V, V) -> Void
     ) {
-        guard let previous = observed[key]?.value(as: V.self) else {
-            observed[key] = OpaqueValue(value)
+        guard let previous = position.observed?.value(as: V.self) else {
+            position.observed = Box(value)
             if initial { pending.append { action(value, value) } }
             return
         }
         guard previous != value else { return }
-        observed[key] = OpaqueValue(value)
+        position.observed = Box(value)
         pending.append { action(previous, value) }
     }
 
     /// Queue `action` with `value` if it differs from the value worked out
-    /// at the last placement — or if there was none. Called from placement,
-    /// which comes before the queued actions run.
+    /// at the last placement, `placed` — or if there was none. Called from
+    /// placement, which comes before the queued actions run.
     func onGeometryChange<V: Equatable>(
-        _ key: StateKey,
+        _ placed: PlacedValue,
         to value: V,
         _ action: @escaping @MainActor (V) -> Void
     ) {
-        if let previous = geometryValues[key]?.value(as: V.self), previous == value { return }
-        geometryValues[key] = OpaqueValue(value)
+        if let previous = placed.value?.value(as: V.self), previous == value { return }
+        placed.value = Box(value)
         pending.append { action(value) }
     }
 
     /// Queue `action` with the value worked out at the last placement and
     /// `value`, if they differ — or with `value` twice, the first time.
     func onGeometryTransition<V: Equatable>(
-        _ key: StateKey,
+        _ placed: PlacedValue,
         to value: V,
         _ action: @escaping @MainActor (V, V) -> Void
     ) {
-        guard let previous = geometryTransitions[key]?.value(as: V.self) else {
-            geometryTransitions[key] = OpaqueValue(value)
+        guard let previous = placed.value?.value(as: V.self) else {
+            placed.value = Box(value)
             pending.append { action(value, value) }
             return
         }
         guard previous != value else { return }
-        geometryTransitions[key] = OpaqueValue(value)
+        placed.value = Box(value)
         pending.append { action(previous, value) }
     }
 
@@ -225,27 +269,13 @@ final class EffectQueue {
         return pending
     }
 
-    /// Forget the views at `paths`, so one that comes back appears again —
-    /// and run their `onDisappear` actions with this pass's effects.
-    func forget(paths: Set<[Int]>) {
+    /// Forget the views at `paths`, which left or were replaced — the
+    /// preference observers they attached — and run `disappearing`, their
+    /// `onDisappear` actions, with this pass's effects. What else their
+    /// effects kept went with their positions.
+    func forget(paths: Set<[Int]>, disappearing: [() -> Void]) {
         preferenceObservers.forget(paths: paths)
-        if !appeared.isEmpty {
-            appeared = appeared.filter { !paths.contains($0.path) }
-        }
-        if !observed.isEmpty {
-            observed = observed.filter { !paths.contains($0.key.path) }
-        }
-        if !geometryValues.isEmpty {
-            geometryValues = geometryValues.filter { !paths.contains($0.key.path) }
-        }
-        if !geometryTransitions.isEmpty {
-            geometryTransitions = geometryTransitions.filter { !paths.contains($0.key.path) }
-        }
-        guard !disappearing.isEmpty else { return }
-        for (key, action) in disappearing where paths.contains(key.path) {
-            disappearing[key] = nil
-            pending.append(action)
-        }
+        pending.append(contentsOf: disappearing)
     }
 }
 
@@ -257,18 +287,16 @@ struct ViewIdentity: Hashable {
     let viewID: ViewID
 }
 
-/// A tree keyed by path components. Everything the builder files is keyed
-/// by structural path, and everything it does with those files is by
-/// *subtree* — take this one out, put that one back, drop whatever is left.
-/// In a flat dictionary each of those is a scan of every key; here each is
-/// one pointer, found by walking the path.
+/// A tree keyed by path components — the paths state writes dirtied this
+/// frame (`BuildContext.dirtyPaths`). What the builder asks of them is by
+/// *subtree* — is anything under this path dirty — which in a flat set is a
+/// scan of every path; here it is one node, found by walking the path.
 ///
-/// Every build walks it — to find what stood at a path, to file what was
-/// built there, to ask whether anything under it is dirty — and a path is as
-/// deep as the view tree. So a step costs a scan of a few keys and nothing
-/// else: no hashing, and no reference counting. A walk holds each node it
-/// passes through unretained, which is sound because the trie owns every
-/// node and nothing is removed while a walk is under way.
+/// Every build steps through it with the path, and a path is as deep as the
+/// view tree. So a step costs a scan of a few keys and nothing else: no
+/// hashing, and no reference counting. A walk holds each node it passes
+/// through unretained, which is sound because the trie owns every node and
+/// nothing is removed while a walk is under way.
 final class PathTrie<Value> {
 
     final class Node {
@@ -477,6 +505,25 @@ final class PathTrie<Value> {
 /// equivalent to the one already standing — same identity, same inputs, same
 /// environment, no dirty state beneath — keeps its subtree, and its body is
 /// never asked for.
+///
+/// The entries are filed on the positions of one tree (`ViewPosition`),
+/// which stay where they are from one rebuild to the next. Every rebuild
+/// takes a new number — a full one, a scoped one, a `GeometryReader`'s
+/// during placement, an offscreen render's — and each position carries the
+/// number of the rebuild that last built or kept the view there:
+///
+/// - **Candidate.** An entry from an older rebuild is what stood there
+///   before this one.
+/// - **Kept.** The position takes this rebuild's number. Nothing below it is
+///   touched, whatever the size of the subtree.
+/// - **Rebuilt.** Its entry is replaced, with this rebuild's number.
+/// - **Left.** A child of a rebuilt position that is still on an older
+///   number once the rebuild is over was neither built again nor kept: the
+///   view there has left. It is cut out, with everything below it.
+///
+/// Only the children of rebuilt positions are looked at. A position deep
+/// inside a kept subtree carries an older number, and that is harmless:
+/// nothing asks until a rebuild reaches its parent.
 @MainActor
 final class RebuildRecords {
 
@@ -491,7 +538,7 @@ final class RebuildRecords {
         /// (`EnvironmentReads`) — the only ones a change of which rebuilds
         /// it when its parent re-runs. Only ever grows while the view
         /// stands: a rebuild below adds what it read (`addEnvironmentReads`).
-        var environmentReads: Set<ObjectIdentifier> = []
+        var environmentReads = EnvironmentKeySet()
         let stackAxis: Axis?
         /// The view built here: rebuilds it in place, and says whether a
         /// freshly built view is equivalent to it.
@@ -501,8 +548,6 @@ final class RebuildRecords {
         /// `if`) records its child's node as its own; `replaceNode` keeps
         /// that true when the child is rebuilt on its own.
         var node: ViewNode
-        /// `@State` / `@Environment` slots this view bound.
-        let stateKeys: [StateKey]
         /// State this view read while its body ran; each slot has this
         /// view's path among its readers.
         var reads: [any AnyStateStorage]
@@ -517,110 +562,122 @@ final class RebuildRecords {
         var lazyUnits = 0
     }
 
-    /// Entries for the tree as it stands.
-    private let live = PathTrie<Entry>()
+    /// The tree as it stands.
+    private let root = ViewPosition(parent: nil, key: 0)
 
-    /// Entries for the subtree currently being rebuilt, as it stood before,
-    /// rooted at that subtree's path. Each is either reused (moved back to
-    /// `live`), replaced (a fresh build at the same path), or left over at
-    /// the end — a view that vanished.
-    private var previous: PathTrie<Entry>.Node?
-    private var previousBase: [Int] = []
+    /// The rebuild under way — bumped by every `beginRebuild`.
+    private var session: UInt64 = 0
 
-    /// Start rebuilding the subtree at `path`: everything at or beneath it
-    /// becomes a candidate for reuse.
-    func beginRebuild(under path: [Int]) {
-        previous = live.detach(at: path)
-        previousBase = path
+    /// The positions built in this rebuild, in the order they were filed:
+    /// once it is over, each one's children are looked over for views that
+    /// left.
+    private var rebuilt: [ViewPosition] = []
+
+    /// The root's position, where a build starts.
+    var rootPosition: ViewPosition { root }
+
+    /// The position at `path`, found from the root — the positions on the
+    /// way made where missing. A build steps from position to position as
+    /// it descends (`BuildContext.child`); only a rebuild that starts
+    /// partway down finds its first one this way.
+    func position(along path: [Int]) -> ViewPosition {
+        root.makeDescendant(along: path)
     }
 
-    private func previousNode<Path: Collection<Int>>(at path: Path) -> PathTrie<Entry>.Node? {
-        guard let previous, path.starts(with: previousBase) else { return nil }
-        return PathTrie.descend(from: previous, along: path.dropFirst(previousBase.count))
+    /// Start a rebuild: every entry filed so far becomes what stood before.
+    func beginRebuild() {
+        session &+= 1
+        rebuilt.removeAll(keepingCapacity: true)
     }
 
-    /// What stood at `path` before this rebuild began, as a handle the
-    /// builder can either keep or replace — one walk of the trie, not three.
-    func candidate(at path: [Int]) -> Candidate? {
-        guard let node = previousNode(at: path), node.value != nil else { return nil }
-        return Candidate(node: node)
+    /// What stood at `position` before this rebuild began, if it is still
+    /// there to be kept or replaced — as a handle the builder can either
+    /// keep or replace.
+    func candidate(standingAt position: ViewPosition) -> Candidate? {
+        guard position.record != nil, position.session != session else { return nil }
+        return Candidate(position: position)
     }
 
-    /// Read in place on the trie node: deciding whether to reuse a view
+    /// Whether nothing stood in slot `index` below `position`.
+    func isNewChild(at index: Int, under position: ViewPosition) -> Bool {
+        guard let child = position.child(index) else { return true }
+        return candidate(standingAt: child) == nil
+    }
+
+    /// Read in place on the position: deciding whether to reuse a view
     /// needs a few of its entry's fields, not a copy of the whole entry.
     @MainActor
     struct Candidate {
-        fileprivate let node: PathTrie<Entry>.Node
-        var entry: Entry { node.value! }
-        var identity: ViewIdentity { node.value.unsafelyUnwrapped.identity }
-        var stackAxis: Axis? { node.value.unsafelyUnwrapped.stackAxis }
-        var lazyKey: LazyBuildKey? { node.value.unsafelyUnwrapped.lazyKey }
-        var lazyUnits: Int { node.value.unsafelyUnwrapped.lazyUnits }
-        var standingNode: ViewNode { node.value.unsafelyUnwrapped.node }
+        fileprivate let position: ViewPosition
+        var entry: Entry { position.record! }
+        var identity: ViewIdentity { position.record.unsafelyUnwrapped.identity }
+        var stackAxis: Axis? { position.record.unsafelyUnwrapped.stackAxis }
+        var lazyKey: LazyBuildKey? { position.record.unsafelyUnwrapped.lazyKey }
+        var lazyUnits: Int { position.record.unsafelyUnwrapped.lazyUnits }
+        var standingNode: ViewNode { position.record.unsafelyUnwrapped.node }
 
         /// Whether every environment value the subtree read is the one
         /// `environment` holds.
         func readsAgree(with environment: EnvironmentValues) -> Bool {
-            let entry = node.value.unsafelyUnwrapped
+            let entry = position.record.unsafelyUnwrapped
             return entry.environment.agrees(with: environment, on: entry.environmentReads)
         }
 
-        var environmentReads: Set<ObjectIdentifier> {
-            node.value.unsafelyUnwrapped.environmentReads
+        var environmentReads: EnvironmentKeySet {
+            position.record.unsafelyUnwrapped.environmentReads
         }
 
         /// Whether `view` is equivalent to the view recorded here. Only for a
         /// view of the recorded one's own type — the caller has matched
         /// `identity`, whose type is that type.
         func isEquivalent<V: View>(to view: V) -> Bool {
-            withUnsafePointer(to: view) { node.value.unsafelyUnwrapped.view.isEquivalent(to: UnsafeRawPointer($0)) }
+            withUnsafePointer(to: view) { position.record.unsafelyUnwrapped.view.isEquivalent(to: UnsafeRawPointer($0)) }
         }
     }
 
-    /// Keep the standing subtree at `path`, now standing under
-    /// `environment`: its entries go back to `live` — readers, state,
-    /// `onAppear` marks and all.
+    /// Keep the standing subtree `candidate`, now standing under
+    /// `environment` — readers, state, `onAppear` marks and all.
     ///
     /// The subtree read none of the values that differ (`readsAgree`), but
     /// its entries still hold them, and a rebuild started from one of them
     /// later would build with the old ones. So each entry takes the new
     /// values of the keys it inherited unchanged.
-    func reuse(_ candidate: Candidate, at path: [Int], under environment: EnvironmentValues) {
-        if path == previousBase {
-            previous = nil
-        } else if let parent = previousNode(at: path.dropLast()), let last = path.last {
-            parent.removeChild(at: last)
-        }
-        live.attach(candidate.node, at: path)
-
-        let old = candidate.node.value.unsafelyUnwrapped.environment
-        let changed = keysDiffering(old, environment)
-        if !changed.isEmpty {
-            rebase(candidate.node, from: old, to: environment, keys: changed)
+    func reuse(_ candidate: Candidate, under environment: EnvironmentValues) {
+        let position = candidate.position
+        position.session = session
+        let old = position.record.unsafelyUnwrapped.environment
+        if differs(old, environment) {
+            var relinked: [ObjectIdentifier: (from: EnvironmentEntry, to: EnvironmentEntry)] = [:]
+            rebase(position, from: old, to: environment, relinked: &relinked)
         }
     }
 
-    /// The last pair of environments compared by `keysDiffering`, by
-    /// version, and the answer: the rows of a `ForEach` are all kept under
-    /// the same new environment, having been built under the same old one.
-    private var lastDifference: (old: UInt64, new: UInt64, keys: [ObjectIdentifier])?
+    /// The last pair of environments compared by `differs`, by version, and
+    /// the answer: the rows of a `ForEach` are all kept under the same new
+    /// environment, having been built under the same old one.
+    private var lastDifference: (old: UInt64, new: UInt64, differs: Bool)?
 
-    private func keysDiffering(_ old: EnvironmentValues, _ new: EnvironmentValues) -> [ObjectIdentifier] {
+    private func differs(_ old: EnvironmentValues, _ new: EnvironmentValues) -> Bool {
         if let last = lastDifference, last.old == old.version, last.new == new.version {
-            return last.keys
+            return last.differs
         }
-        let keys = old.keysDiffering(from: new)
-        lastDifference = (old.version, new.version, keys)
-        return keys
+        let differs = old.differs(from: new)
+        lastDifference = (old.version, new.version, differs)
+        return differs
     }
 
-    private func rebase(_ node: PathTrie<Entry>.Node, from old: EnvironmentValues, to new: EnvironmentValues, keys: [ObjectIdentifier]) {
-        if var entry = node.value {
-            entry.environment = entry.environment.rebased(from: old, to: new, keys: keys)
-            node.value = entry
+    private func rebase(
+        _ position: ViewPosition,
+        from old: EnvironmentValues,
+        to new: EnvironmentValues,
+        relinked: inout [ObjectIdentifier: (from: EnvironmentEntry, to: EnvironmentEntry)]
+    ) {
+        if var entry = position.record {
+            entry.environment = entry.environment.rebased(from: old, to: new, relinked: &relinked)
+            position.record = entry
         }
-        node.forEachChild { _, child in
-            rebase(child, from: old, to: new, keys: keys)
+        position.forEachChild { child in
+            rebase(child, from: old, to: new, relinked: &relinked)
         }
     }
 
@@ -628,43 +685,46 @@ final class RebuildRecords {
     /// rebuild that started there, a `GeometryReader`'s content built during
     /// placement — added to that entry and every one above it, whose
     /// subtrees hold it.
-    func addEnvironmentReads(_ keys: Set<ObjectIdentifier>, along path: [Int]) {
+    func addEnvironmentReads(_ keys: EnvironmentKeySet, along path: [Int]) {
         guard !keys.isEmpty else { return }
-        var node: PathTrie<Entry>.Node? = live.root
+        var position: ViewPosition? = root
         var depth = 0
-        while let current = node {
-            if var entry = current.value, !keys.isSubset(of: entry.environmentReads) {
+        while let current = position {
+            if var entry = current.record, !keys.isSubset(of: entry.environmentReads) {
                 entry.environmentReads.formUnion(keys)
-                current.value = entry
+                current.record = entry
             }
             guard depth < path.count else { return }
-            node = current.child(path[depth])
+            position = current.child(path[depth])
             depth += 1
         }
     }
 
-    /// Take the old entry at exactly `path` out of the running, because a
-    /// fresh build is replacing it. Its descendants stay candidates.
+    /// Take the old entry out of the running, because a fresh build is
+    /// replacing it. Its descendants stay candidates.
     func replace(_ candidate: Candidate) -> Entry {
-        defer { candidate.node.value = nil }
+        defer { candidate.position.record = nil }
         return candidate.entry
     }
 
-    func record(_ entry: Entry, at path: [Int]) {
-        live.set(entry, at: path)
+    /// File `entry` at `position` as this rebuild's.
+    func record(_ entry: Entry, at position: ViewPosition) {
+        position.record = entry
+        position.session = session
+        rebuilt.append(position)
     }
 
-    func entry(for path: [Int]) -> Entry? { live.value(at: path) }
+    func entry(for path: [Int]) -> Entry? { root.descendant(along: path)?.record }
 
     /// State the view at `path` read after its entry was filed — a
     /// `GeometryReader`'s content, built again during placement — added to
     /// that entry, so the reader registrations go when the view does.
     func addReads(_ reads: [any AnyStateStorage], at path: [Int]) {
-        guard !reads.isEmpty, let node = live.node(at: path), var entry = node.value else { return }
+        guard !reads.isEmpty, let position = root.descendant(along: path), var entry = position.record else { return }
         for storage in reads where !entry.reads.contains(where: { $0 === storage }) {
             entry.reads.append(storage)
         }
-        node.value = entry
+        position.record = entry
     }
 
     /// A scoped rebuild put `replacement` where `old` stood at `path`. Every
@@ -673,38 +733,75 @@ final class RebuildRecords {
     /// replacement; left pointing at `old`, its next reuse would graft the
     /// stale subtree back in.
     func replaceNode(_ old: ViewNode, with replacement: ViewNode, above path: [Int]) {
-        var ancestor = path
-        while !ancestor.isEmpty {
-            ancestor.removeLast()
-            guard let node = live.node(at: ancestor), var entry = node.value, entry.node === old else { return }
+        var ancestor = root.descendant(along: path)?.parent
+        while let position = ancestor {
+            guard var entry = position.record, entry.node === old else { return }
             entry.node = replacement
-            node.value = entry
+            position.record = entry
+            ancestor = position.parent
         }
     }
 
-    func node(for path: [Int]) -> ViewNode? { live.value(at: path)?.node }
+    func node(for path: [Int]) -> ViewNode? { entry(for: path)?.node }
 
-    /// What still stands, un-rebuilt, directly under `path` in the subtree
-    /// being rebuilt — by slot. Asked by a container once its new children
-    /// are built: whatever is left is a child it no longer has.
-    func leftoverChildren(under path: [Int]) -> [(Int, ViewNode)] {
-        guard let node = previousNode(at: path) else { return [] }
+    /// What still stands, un-rebuilt, directly under `position` — by slot.
+    /// Asked by a container once its new children are built: whatever is
+    /// left is a child it no longer has.
+    func leftoverChildren(under position: ViewPosition) -> [(Int, ViewNode)] {
         var leftover: [(Int, ViewNode)] = []
-        node.forEachChild { index, child in
-            if let value = child.value { leftover.append((index, value.node)) }
+        position.forEachChild { child in
+            if let entry = child.record, child.session != session { leftover.append((child.key, entry.node)) }
         }
         return leftover
     }
 
-    /// Finish the rebuild: whatever is still `previous` belonged to views that
-    /// are no longer in the tree. Returned with their paths so the caller can
-    /// release what they held.
-    func endRebuild() -> [([Int], Entry)] {
-        defer { previous = nil }
-        guard let previous else { return [] }
-        var departed: [([Int], Entry)] = []
-        previous.collect(base: previousBase, into: &departed)
+    /// What a rebuild did not put back.
+    struct Departed {
+        /// Every view that left, with its path.
+        var entries: [([Int], Entry)] = []
+        /// The `onDisappear` actions that left with them, to run.
+        var disappearing: [() -> Void] = []
+        /// The slot nodes their containers were playing exits of — over,
+        /// with the containers.
+        var exits: [ViewNode] = []
+
+        var isEmpty: Bool { entries.isEmpty && disappearing.isEmpty && exits.isEmpty }
+    }
+
+    /// Finish the rebuild: every child of a position built in it that was
+    /// neither built nor kept belonged to a view no longer in the tree. Cut
+    /// out, and returned with their paths so the caller can release what
+    /// they held.
+    func endRebuild() -> Departed {
+        defer { rebuilt.removeAll(keepingCapacity: true) }
+        var departed = Departed()
+        for position in rebuilt {
+            cutLeftChildren(of: position, into: &departed)
+        }
         return departed
+    }
+
+    /// Cut out every child of `position` that this rebuild did not build or
+    /// keep, adding what it and everything below it held to `departed`.
+    ///
+    /// A child with no entry of its own — where a container builds the
+    /// bodies of its transitions — is looked through: what stands below it
+    /// belongs to `position`. It goes once nothing does.
+    private func cutLeftChildren(of position: ViewPosition, into departed: inout Departed) {
+        var left: [ViewPosition] = []
+        position.forEachChild { child in
+            if child.record == nil {
+                cutLeftChildren(of: child, into: &departed)
+                if child.childCount == 0 { left.append(child) }
+            } else if child.session != session {
+                left.append(child)
+            }
+        }
+        guard !left.isEmpty else { return }
+        for child in left {
+            child.leave(base: child.path, into: &departed)
+            position.removeChild(child.key)
+        }
     }
 }
 

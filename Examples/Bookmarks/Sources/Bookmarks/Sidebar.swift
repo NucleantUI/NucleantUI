@@ -105,7 +105,7 @@ struct SidebarRow {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? .color(Theme.accent.opacity(0.18)) : (isHovered ? .fill : .color(.clear)))
+                .fill(isSelected ? AnyShapeStyle(Theme.accent.opacity(0.18)) : (isHovered ? AnyShapeStyle(.fill) : AnyShapeStyle(.clear)))
         )
         .padding(.horizontal, 8)
         .onHover { isHovered = $0 }
@@ -123,7 +123,7 @@ struct LayoutChoice {
     var body: some View {
         Text(title)
             .font(.system(size: 11, weight: isChosen ? .semibold : .regular))
-            .foregroundStyle(isChosen ? .color(Theme.accent) : .secondary)
+            .foregroundStyle(isChosen ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
             .onTapGesture { choose() }
     }
 }

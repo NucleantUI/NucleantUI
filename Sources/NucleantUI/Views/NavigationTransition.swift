@@ -143,14 +143,7 @@ extension View {
     /// }
     /// ```
     public func navigationTransition<T: NavigationTransition>(_ style: T) -> some View {
-        let content = style._content
-        return _ModifierView(content: self, key: ["navigationTransition", content] as [AnyHashable]) { context in
-            if let router = context.environment.navigationRouter,
-               let screen = context.environment.navigationScreen {
-                router.storage.setTransition(content, for: screen)
-            }
-            return EnvironmentContent(colorScheme: context.environment.colorScheme)
-        }
+        _ModifierView(content: self, modifier: NavigationTransitionModifier(content: style._content))
     }
 }
 
@@ -248,16 +241,10 @@ extension View {
     ) -> some View {
         var style = _MatchedTransitionSourceStyle()
         configuration(EmptyMatchedTransitionSourceConfiguration())._update(&style)
-        let key = MatchedTransitionSourceKey(namespace: namespace, id: AnyHashable(id))
-        let resolved = style
-        return _ModifierView(content: self, key: ["matchedTransitionSource", key, resolved] as [AnyHashable]) { context in
-            MatchedTransitionSourceContent(
-                key: key,
-                style: resolved,
-                storage: context.environment.navigationRouter?.storage,
-                screen: context.environment.navigationScreen
-            )
-        }
+        return _ModifierView(content: self, modifier: MatchedTransitionSourceModifier(
+            key: MatchedTransitionSourceKey(namespace: namespace, id: AnyHashable(id)),
+            style: style
+        ))
     }
 }
 
@@ -298,12 +285,8 @@ struct MatchedTransitionSourceContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: Path { $0.addRect(rect, cornerRadius: style.cornerRadius) },
                 bounds: rect,
-                fill: inner.resolve(.color(background)),
-                transform: inner.transform,
-                clip: inner.clip,
-                clipCornerRadius: inner.clipCornerRadius,
-                transformedClips: inner.transformedClips
-            )))
+                fill: inner.resolve(.color(background))
+            )), under: inner.drawState)
         }
         // Clipped only when rounded, as a source with square corners is
         // left as it draws.
@@ -311,5 +294,41 @@ struct MatchedTransitionSourceContent: NodeContent {
             inner = inner.clipped(to: rect, cornerRadius: style.cornerRadius)
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
+    }
+}
+
+/// `.navigationTransition(_:)`.
+struct NavigationTransitionModifier: PrimitiveModifier {
+    let content: _NavigationTransitionContent
+
+    func _isEquivalent(to other: NavigationTransitionModifier) -> Bool {
+        content == other.content
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        if let router = context.environment.navigationRouter,
+           let screen = context.environment.navigationScreen {
+            router.storage.setTransition(content, for: screen)
+        }
+        return environmentContent(context)
+    }
+}
+
+/// `.matchedTransitionSource(id:in:configuration:)`.
+struct MatchedTransitionSourceModifier: PrimitiveModifier {
+    let key: MatchedTransitionSourceKey
+    let style: _MatchedTransitionSourceStyle
+
+    func _isEquivalent(to other: MatchedTransitionSourceModifier) -> Bool {
+        key == other.key && style == other.style
+    }
+
+    func makeContent(_ context: inout BuildContext) -> MatchedTransitionSourceContent {
+        MatchedTransitionSourceContent(
+            key: key,
+            style: style,
+            storage: context.environment.navigationRouter?.storage,
+            screen: context.environment.navigationScreen
+        )
     }
 }

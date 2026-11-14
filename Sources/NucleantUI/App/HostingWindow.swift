@@ -228,7 +228,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     private func applyColorScheme(_ scheme: ColorScheme) {
         guard host.environment.colorScheme != scheme || renderEngine.map({ $0.clearColor.a == 0 }) == true else { return }
         host.environment.colorScheme = scheme
-        let background = ShapeStyle.background.resolved(for: scheme).flatColor
+        let background = BackgroundStyle().colors.color(for: scheme)
         renderEngine?.clearColor = (background.red, background.green, background.blue, 1)
         host.invalidate()
         markNeedsRedraw()

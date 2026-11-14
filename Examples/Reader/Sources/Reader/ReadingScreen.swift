@@ -68,7 +68,7 @@ struct ReadingScreen {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.ink)
                         .padding(horizontal: 14, vertical: 6)
-                        .background(ShapeStyle.secondaryBackground)
+                        .background(.secondaryBackground)
                         .cornerRadius(13)
                         .padding(.top, 12)
                         .transition(.opacity)
@@ -149,7 +149,7 @@ struct ReadingScreen {
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(maxWidth: .infinity, minHeight: 52, maxHeight: 52)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
         .overlay(alignment: .top) {
             Rectangle().fill(.separator).frame(height: 1)
         }

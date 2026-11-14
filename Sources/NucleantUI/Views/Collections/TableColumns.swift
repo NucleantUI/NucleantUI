@@ -53,9 +53,9 @@ public struct TableColumnSpec<RowValue> {
     let header: AnyView
     let width: TableColumnWidth
     let sort: TableColumnSort?
-    /// Build the cell for `row`. `owner` is the path of the view building
-    /// the whole row, whose reads of the row's values these are.
-    let cell: @MainActor (_ row: RowValue, _ owner: [Int], _ context: inout BuildContext) -> ViewNode
+    /// Build the cell for `row`. `owner` is the view building the whole
+    /// row, whose reads of the row's values these are.
+    let cell: @MainActor (_ row: RowValue, _ owner: PositionHandle, _ context: inout BuildContext) -> ViewNode
 }
 
 /// A column's sorting, typed away: what a click on its header does to the
@@ -139,7 +139,7 @@ public struct TableColumn<RowValue: Identifiable, Sort: SortComparator, Content:
             cell: { row, owner, context in
                 // The cell's reads of an `@Observable` row belong to the
                 // whole row's view: rebuilding from there runs this again.
-                let view = trackingObservation(at: owner) { content(row) }
+                let view = trackingObservation(for: owner) { content(row) }
                 return buildNode(view, &context)
             }
         ))

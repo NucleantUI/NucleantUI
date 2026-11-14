@@ -3,9 +3,9 @@
 //  NucleantUI
 //
 //  The render nodes that belong to *views*, kept alive across the momentary
-//  view structs. A view pulls its node out of here by the identity its state
-//  is keyed by, every pass it is placed; a node not pulled by the end of a
-//  pass belongs to a view that left the tree, and is retired.
+//  view structs. A view pulls its node out of here by the slot its position
+//  holds for it (`RenderSlot`), every pass it is placed; a node not pulled by
+//  the end of a pass belongs to a view that left the tree, and is retired.
 //
 //  Three kinds of node, all the engine's. A canvas node (`CanvasNode`,
 //  CanvasNode.swift) is a canvas the size of the view's frame that a display
@@ -28,11 +28,46 @@
 import NucleantVulkan
 import Dispatch
 
-/// What a per-view node is keyed by: where the view stands, which view it is
+/// What a view's render nodes are filed under: one per view at its
+/// position (`ViewPosition.renderSlot`), made the first time it is asked
+/// for and dropped with the rest of what the view kept — so a view that
+/// comes back, or another view in its place, gets nodes of its own.
+/// Compared as the object it is, in one step: a table holding a node under
+/// it holds it, so no other slot takes its place meanwhile.
+///
+/// Sendable as a token: what an observation handler files to serve on the
+/// main actor. Its one stored property is set when it is made, and read on
+/// the main actor.
+final class RenderSlot: Hashable, @unchecked Sendable {
+    /// Where the view stands; `nil` for a node no view owns.
+    private let position: PositionHandle?
+
+    init(position: PositionHandle?) {
+        self.position = position
+    }
+
+    /// The path of the view, for a trace line.
+    var pathDescription: String {
+        guard let position else { return "-" }
+        return position.standingPath.map { "\($0)" } ?? "(left)"
+    }
+
+    /// The path of the view while it stands — to dirty it.
+    var standingPath: [Int]? { position?.standingPath }
+
+
+    static func == (a: RenderSlot, b: RenderSlot) -> Bool { a === b }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
+    }
+}
+
+/// What a per-view node is keyed by: the view's slot, which view it is
 /// (type and stamped call site), and — when the author asked to start over —
 /// their own id.
 struct RenderNodeKey: Hashable {
-    let path: [Int]
+    let slot: RenderSlot
     let identity: ViewIdentity
     /// `ThorCanvas(id:)`'s value, hashed; the view's `ViewID` hashed when none is given. A different
     /// value is a different node. For an automatic node, the run index: 0
@@ -40,8 +75,8 @@ struct RenderNodeKey: Hashable {
     /// node when that run needs an image of its own.
     let id: Int
 
-    init(path: [Int], identity: ViewIdentity, id: Int = 0) {
-        self.path = path
+    init(slot: RenderSlot, identity: ViewIdentity, id: Int = 0) {
+        self.slot = slot
         self.identity = identity
         self.id = id
     }

@@ -28,30 +28,35 @@ struct SkiaDisplayRendererTests {
 
     private func rect(
         _ frame: Rect,
-        fill: ShapeStyle? = .color(.init(red: 1, green: 0, blue: 0)),
-        stroke: ShapeStyle? = nil,
+        fill: _ResolvedPaint? = .color(Color(red: 1, green: 0, blue: 0)),
+        stroke: _ResolvedPaint? = nil,
         lineWidth: Double = 1,
         transform: Transform = .identity,
         clip: Rect? = nil,
         clipCornerRadius: Double = 0
-    ) -> DrawCommand {
+    ) -> (command: DrawCommand, state: DrawState) {
         var path = Path()
         path.addRect(frame)
-        return .shape(ShapeDraw(
+        let command = DrawCommand.shape(ShapeDraw(
             path: path,
             bounds: frame,
             fill: fill,
             stroke: stroke,
-            strokeStyle: StrokeStyle(lineWidth: lineWidth),
-            transform: transform,
-            clip: clip,
-            clipCornerRadius: clipCornerRadius
+            strokeStyle: StrokeStyle(lineWidth: lineWidth)
         ))
+        return (command, DrawState(transform: transform, clip: clip, clipCornerRadius: clipCornerRadius))
     }
 
     private func list(_ commands: DrawCommand...) -> DisplayList {
         var list = DisplayList()
         for command in commands { list.append(command) }
+        return list
+    }
+
+    /// A list of one command, under its state.
+    private func list(_ drawn: (command: DrawCommand, state: DrawState)) -> DisplayList {
+        var list = DisplayList()
+        list.append(drawn.command, under: drawn.state)
         return list
     }
 
@@ -114,15 +119,17 @@ struct SkiaDisplayRendererTests {
         // A 40-point square turned 45° about its centre: a diamond.
         var path = Path()
         path.addRect(Rect(x: 0, y: 0, width: 100, height: 100))
-        renderer().render(list(.shape(ShapeDraw(
-            path: path,
-            bounds: Rect(x: 0, y: 0, width: 100, height: 100),
-            fill: .color(.init(red: 1, green: 0, blue: 0)),
-            transformedClips: [TransformedClip(
+        renderer().render(list((
+            .shape(ShapeDraw(
+                path: path,
+                bounds: Rect(x: 0, y: 0, width: 100, height: 100),
+                fill: .color(.init(red: 1, green: 0, blue: 0))
+            )),
+            DrawState(transformedClips: [TransformedClip(
                 rect: Rect(x: 30, y: 30, width: 40, height: 40),
                 transform: .around(Point(x: 50, y: 50), .rotation(.degrees(45)))
-            )]
-        ))))
+            )])
+        )))
         #expect(pixel(50, 50).w == 255)
         #expect(pixel(50, 25).w == 255)   // a tip, above the square unturned
         #expect(pixel(33, 33).w == 0)     // a corner of the square unturned
@@ -138,7 +145,7 @@ struct SkiaDisplayRendererTests {
         renderer().render(list(rect(
             Rect(x: 20, y: 20, width: 60, height: 60),
             fill: nil,
-            stroke: .color(.init(red: 0, green: 0, blue: 1)),
+            stroke: .color(Color(red: 0, green: 0, blue: 1)),
             lineWidth: 4
         )))
         #expect(pixel(20, 50) == SIMD4(0, 0, 255, 255))
@@ -149,7 +156,7 @@ struct SkiaDisplayRendererTests {
         let gradient = Gradient(colors: [.init(red: 1, green: 0, blue: 0), .init(red: 0, green: 0, blue: 1)])
         renderer().render(list(rect(
             Rect(x: 0, y: 0, width: 100, height: 100),
-            fill: .linearGradient(gradient, startPoint: .leading, endPoint: .trailing)
+            fill: LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing).paint(in: EnvironmentValues())
         )))
         let left = pixel(2, 50), right = pixel(97, 50)
         #expect(left.x > 240 && left.z < 15)

@@ -78,7 +78,7 @@ struct MultilineTextArea {
             text: current,
             font: font,
             color: foreground,
-            selectionColor: tint.opacity(editing.isFocused ? 0.3 : 0.15),
+            selectionColor: AnyShapeStyle(tint.opacity(editing.isFocused ? 0.3 : 0.15)),
             caret: resolved.caret,
             anchor: resolved.anchor,
             showsCaret: editing.isFocused,
@@ -631,8 +631,8 @@ final class TextAreaLayout {
 struct TextAreaLines {
     let text: String
     let font: Font
-    let color: ShapeStyle
-    let selectionColor: ShapeStyle
+    let color: AnyShapeStyle
+    let selectionColor: AnyShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -675,11 +675,11 @@ extension TextAreaLines: BuiltinView {
             if row >= lines.count { return characters.count }
             return TextAreaLayout.offset(nearestX: point.x - horizontalInset, on: lines[row], in: characters)
         }
-        return ViewNode(content: TextAreaContent(
+        return ContentNode(content: TextAreaContent(
             text: text,
             font: font,
-            color: color,
-            selectionColor: selectionColor,
+            color: color.paint(in: context.environment),
+            selectionColor: selectionColor.paint(in: context.environment),
             caret: caret,
             anchor: anchor,
             showsCaret: showsCaret,
@@ -692,7 +692,7 @@ extension TextAreaLines: BuiltinView {
             onDrag: { point in onDrag(index(point)) },
             onScroll: onScroll,
             focus: FocusTarget(
-                path: context.path,
+                owner: context.position.handle,
                 isEnabled: isEnabled,
                 onFocusChange: onFocusChange,
                 onKeyDown: onKeyDown,
@@ -708,8 +708,9 @@ extension TextAreaLines: BuiltinView {
 struct TextAreaContent: NodeContent {
     let text: String
     let font: Font
-    let color: ShapeStyle
-    let selectionColor: ShapeStyle
+    /// Resolved where the field was built.
+    let color: _ResolvedPaint
+    let selectionColor: _ResolvedPaint
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -824,10 +825,8 @@ struct TextAreaContent: NodeContent {
                     list.append(.shape(ShapeDraw(
                         path: path,
                         bounds: viewport,
-                        fill: context.resolve(selectionColor),
-                        transform: context.transform,
-                        clip: clip
-                    )))
+                        fill: context.resolve(selectionColor)
+                    )), under: DrawState(transform: context.transform, clip: clip))
                 }
             }
 
@@ -846,10 +845,8 @@ struct TextAreaContent: NodeContent {
                         font: font,
                         color: resolvedColor,
                         lineLimit: 1,
-                        wraps: false,
-                        transform: context.transform,
-                        clip: clip
-                    )))
+                        wraps: false
+                    )), under: DrawState(transform: context.transform, clip: clip))
                 }
                 runStart = runEnd + 1
             }
@@ -864,10 +861,8 @@ struct TextAreaContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: viewport,
-                fill: context.resolve(color),
-                transform: context.transform,
-                clip: clip.insetBy(-1)
-            )))
+                fill: context.resolve(color)
+            )), under: DrawState(transform: context.transform, clip: clip.insetBy(-1)))
         }
     }
 }

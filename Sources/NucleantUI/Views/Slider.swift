@@ -76,7 +76,7 @@ public struct Slider<Label: View, ValueLabel: View> {
             minimumValueLabel
             _SliderTrack(
                 fraction: fraction,
-                fill: isEnabled ? tint : controlTrackColor,
+                fill: isEnabled ? tint : AnyShapeStyle(controlTrackColor),
                 knobDiameter: Self.knobDiameter
             )
             .gesture(
@@ -299,7 +299,7 @@ extension Slider where ValueLabel == EmptyView {
 @View
 struct _SliderTrack {
     let fraction: Double
-    let fill: ShapeStyle
+    let fill: AnyShapeStyle
     let knobDiameter: Double
 
     var body: Never { bodyUnavailable() }
@@ -313,11 +313,11 @@ extension _SliderTrack: BuiltinView {
             buildNode(
                 Circle()
                     .fill(Color.white)
-                    .overlay(Circle().stroke(ShapeStyle.separator, lineWidth: 1)),
+                    .overlay(Circle().stroke(.separator, lineWidth: 1)),
                 &ctx
             )
         }
-        return ViewNode(
+        return ContentNode(
             content: SliderTrackContent(fraction: fraction, knobDiameter: knobDiameter),
             children: [track, filled, knob]
         )

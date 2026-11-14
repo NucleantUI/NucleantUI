@@ -2,37 +2,52 @@
 //  LayoutModifiers.swift
 //  NucleantUI
 //
-//  Every modifier is a `_ModifierView`: one wrapped child plus the node kind
-//  it builds. Writing them this way rather than as a `ViewModifier` each keeps
-//  the type explosion down — `Text().padding().background(…)` is three nested
-//  generics, not three nested `ModifiedContent`s over three modifier types.
+//  Every modifier the framework draws itself is a `_ModifierView`: one
+//  wrapped child, and the modifier — a small value of a type of its own,
+//  one per SwiftUI modifier (`PaddingModifier` for `.padding`,
+//  `FrameModifier` for `.frame(width:height:alignment:)`) — which says
+//  which node it puts over the child and what it changes in the
+//  environment below. `Text().padding().frame()` is
+//  `_ModifierView<_ModifierView<Text, PaddingModifier>, FrameModifier>`:
+//  the type says which modifiers, and two applications of one compare as
+//  values of its type, field by field, resolved when it is compiled.
 //
 
-/// A view that wraps one child and contributes a specific layout node.
-public struct _ModifierView<Content: View>: View {
-    var content: Content
-    let makeContent: @MainActor (inout BuildContext) -> any NodeContent
-    /// A modifier that changes the environment for its subtree does it here,
-    /// before the child is built.
-    let modifyEnvironment: (@MainActor (inout EnvironmentValues) -> Void)?
-    /// What the closures were built from, for telling two applications of
-    /// the same modifier apart — `.padding(16)` is `["padding", insets]`,
-    /// the name first because two different modifiers over the same content
-    /// are the same type. `nil` when the modifier holds something
-    /// incomparable (a gesture's action), which makes it never equivalent,
-    /// and so always rebuilt.
-    let key: AnyHashable?
+/// A modifier the framework draws itself.
+@MainActor
+protocol PrimitiveModifier: ViewInput {
+    associatedtype Content: NodeContent
 
-    init(
-        content: Content,
-        key: AnyHashable? = nil,
-        environment: (@MainActor (inout EnvironmentValues) -> Void)? = nil,
-        node: @escaping @MainActor (inout BuildContext) -> any NodeContent
-    ) {
+    /// The node it puts over the view it wraps — made under the
+    /// environment `modifyEnvironment` left, before the view inside is
+    /// built, so it can also adjust what that view is built with.
+    func makeContent(_ context: inout BuildContext) -> Content
+
+    /// What it changes in the environment for the view it wraps.
+    func modifyEnvironment(_ environment: inout EnvironmentValues)
+}
+
+extension PrimitiveModifier {
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {}
+}
+
+extension PrimitiveModifier where Self: Equatable {
+    /// Plain values: equal fields, the same modifier.
+    func _isEquivalent(to other: Self) -> Bool {
+        if _isPOD(Self.self), _plainBytesEqual(self, other) { return true }
+        return self == other
+    }
+}
+
+/// A view that wraps one child and contributes a specific layout node — the
+/// one `modifier` makes.
+public struct _ModifierView<Content: View, Modifier: ViewInput>: View {
+    var content: Content
+    let modifier: Modifier
+
+    init(content: Content, modifier: Modifier) where Modifier: PrimitiveModifier {
         self.content = content
-        self.key = key
-        self.makeContent = node
-        self.modifyEnvironment = environment
+        self.modifier = modifier
     }
 
     public var body: Never { bodyUnavailable() }
@@ -46,19 +61,18 @@ extension _ModifierView {
         set { content._viewID = newValue }
     }
 
-    public func _isEquivalent(to other: _ModifierView<Content>) -> Bool {
-        guard let key, key == other.key else { return false }
-        return _areEquivalent(content, other.content)
+    public func _isEquivalent(to other: _ModifierView<Content, Modifier>) -> Bool {
+        modifier._isEquivalent(to: other.modifier) && _areEquivalent(content, other.content)
     }
 }
 
-extension _ModifierView: BuiltinView {
+extension _ModifierView: BuiltinView where Modifier: PrimitiveModifier {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         var inner = context
-        modifyEnvironment?(&inner.environment)
-        let nodeContent = makeContent(&inner)
+        inner.environment = writtenEnvironment(over: context)
+        let nodeContent = modifier.makeContent(&inner)
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        let node = ViewNode(content: nodeContent, children: [child])
+        let node = ContentNode(content: nodeContent, children: [child])
         // A `.transition` belongs to the whole modified view, wherever in
         // its chain of modifiers it was written.
         node.transitionTrait = nodeContent.transitionTrait ?? child.transitionTrait
@@ -66,13 +80,60 @@ extension _ModifierView: BuiltinView {
         node.layoutValues = child.layoutValues
         return node
     }
+
+    /// The environment the content is built in: the one coming in, with
+    /// what the modifier writes. Written again over the environment it
+    /// wrote over last time, by an equivalent modifier, it is the
+    /// environment that came out then — the same version, so what was kept
+    /// below agrees with it at once — and what writing read is read again.
+    private func writtenEnvironment(over context: BuildContext) -> EnvironmentValues {
+        let incoming = context.environment
+        let position = context.position
+        if let standing = position.environmentWrite,
+           ObjectIdentifier(type(of: standing)) == ObjectIdentifier(EnvironmentWrite<Modifier>.self) {
+            let last = unsafeDowncast(standing, to: EnvironmentWrite<Modifier>.self)
+            if last.incoming == incoming.version, modifier._isEquivalent(to: last.modifier) {
+                EnvironmentReads.shared.add(last.reads)
+                return last.outgoing
+            }
+        }
+        var outgoing = incoming
+        EnvironmentReads.shared.begin()
+        modifier.modifyEnvironment(&outgoing)
+        let reads = EnvironmentReads.shared.end()
+        if outgoing.version != incoming.version {
+            position.environmentWrite = EnvironmentWrite(
+                incoming: incoming.version,
+                modifier: modifier,
+                reads: reads,
+                outgoing: outgoing
+            )
+        }
+        return outgoing
+    }
+}
+
+/// What a modifier that acts at build time and draws nothing of its own
+/// puts in the tree (see `EnvironmentContent`).
+extension PrimitiveModifier where Content == EnvironmentContent {
+    func environmentContent(_ context: BuildContext) -> EnvironmentContent {
+        EnvironmentContent()
+    }
+}
+
+/// Which side of the content a decoration is painted on.
+enum DecorationOrder: Hashable {
+    /// Painted first, behind the content.
+    case background
+    /// Painted last, over the content.
+    case overlay
 }
 
 /// A view that wraps a child *and* a decoration — background and overlay.
 public struct _DecoratedView<Content: View, Decoration: View>: View {
     var content: Content
     let decoration: Decoration
-    let order: DecorationContent.Order
+    let order: DecorationOrder
     let alignment: Alignment
 
     public var body: Never { bodyUnavailable() }
@@ -92,14 +153,19 @@ public struct _DecoratedView<Content: View, Decoration: View>: View {
 
 extension _DecoratedView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        // Two positional slots — `DecorationContent` reads `children[0]` and
-        // `children[1]` directly and must not see them flattened.
+        // Two positional slots — the decoration's content reads `children[0]`
+        // and `children[1]` directly and must not see them flattened.
         let contentNode = context.child(0) { ctx in buildNode(content, &ctx) }
         let decorationNode = context.child(1) { ctx in buildNode(decoration, &ctx) }
-        let node = ViewNode(
-            content: DecorationContent(order: order, alignment: alignment),
-            children: [contentNode, decorationNode]
-        )
+        let children = [contentNode, decorationNode]
+        // The order is picked here, once: each content places in its own.
+        let node: ViewNode
+        switch order {
+        case .background:
+            node = ContentNode(content: BackgroundContent(alignment: alignment), children: children)
+        case .overlay:
+            node = ContentNode(content: OverlayContent(alignment: alignment), children: children)
+        }
         node.transitionTrait = contentNode.transitionTrait
         node.gridCellTraits = contentNode.gridCellTraits
         node.layoutValues = contentNode.layoutValues
@@ -116,17 +182,7 @@ extension View {
         height: Double? = nil,
         alignment: Alignment = .center
     ) -> some View {
-        _ModifierView(content: self, key: ["frame", width, height, alignment] as [AnyHashable]) { _ in
-            FrameContent(
-                width: width,
-                height: height,
-                minWidth: nil,
-                maxWidth: nil,
-                minHeight: nil,
-                maxHeight: nil,
-                alignment: alignment
-            )
-        }
+        _ModifierView(content: self, modifier: FrameModifier(width: width, height: height, alignment: alignment))
     }
 
     /// A flexible frame. `maxWidth: .infinity` means "take everything offered".
@@ -139,20 +195,53 @@ extension View {
         maxHeight: Double? = nil,
         alignment: Alignment = .center
     ) -> some View {
-        _ModifierView(
-            content: self,
-            key: ["frame", minWidth, idealWidth, maxWidth, minHeight, idealHeight, maxHeight, alignment] as [AnyHashable]
-        ) { _ in
-            FrameContent(
-                width: idealWidth,
-                height: idealHeight,
-                minWidth: minWidth,
-                maxWidth: maxWidth,
-                minHeight: minHeight,
-                maxHeight: maxHeight,
-                alignment: alignment
-            )
-        }
+        _ModifierView(content: self, modifier: FlexibleFrameModifier(
+            minWidth: minWidth, idealWidth: idealWidth, maxWidth: maxWidth,
+            minHeight: minHeight, idealHeight: idealHeight, maxHeight: maxHeight,
+            alignment: alignment
+        ))
+    }
+}
+
+/// `.frame(width:height:alignment:)`.
+struct FrameModifier: PrimitiveModifier, Equatable {
+    let width: Double?
+    let height: Double?
+    let alignment: Alignment
+
+    func makeContent(_ context: inout BuildContext) -> FrameContent {
+        FrameContent(
+            width: width,
+            height: height,
+            minWidth: nil,
+            maxWidth: nil,
+            minHeight: nil,
+            maxHeight: nil,
+            alignment: alignment
+        )
+    }
+}
+
+/// `.frame(minWidth:idealWidth:maxWidth:minHeight:idealHeight:maxHeight:alignment:)`.
+struct FlexibleFrameModifier: PrimitiveModifier, Equatable {
+    let minWidth: Double?
+    let idealWidth: Double?
+    let maxWidth: Double?
+    let minHeight: Double?
+    let idealHeight: Double?
+    let maxHeight: Double?
+    let alignment: Alignment
+
+    func makeContent(_ context: inout BuildContext) -> FrameContent {
+        FrameContent(
+            width: idealWidth,
+            height: idealHeight,
+            minWidth: minWidth,
+            maxWidth: maxWidth,
+            minHeight: minHeight,
+            maxHeight: maxHeight,
+            alignment: alignment
+        )
     }
 }
 
@@ -162,9 +251,17 @@ extension View {
     ///
     /// A `nil` axis is left to the child.
     public func relativeSize(width: Double? = nil, height: Double? = nil) -> some View {
-        _ModifierView(content: self, key: ["relativeSize", width, height] as [AnyHashable]) { _ in
-            RelativeSizeContent(widthFraction: width, heightFraction: height)
-        }
+        _ModifierView(content: self, modifier: RelativeSizeModifier(width: width, height: height))
+    }
+}
+
+/// `.relativeSize(width:height:)`.
+struct RelativeSizeModifier: PrimitiveModifier, Equatable {
+    let width: Double?
+    let height: Double?
+
+    func makeContent(_ context: inout BuildContext) -> RelativeSizeContent {
+        RelativeSizeContent(widthFraction: width, heightFraction: height)
     }
 }
 
@@ -177,9 +274,7 @@ extension View {
     /// The result takes all the space its parent offers — it is the space
     /// the point is measured in — and the view inside keeps its own size.
     public func position(_ position: Point) -> some View {
-        _ModifierView(content: self, key: ["position", position] as [AnyHashable]) { _ in
-            PositionContent(position: position)
-        }
+        _ModifierView(content: self, modifier: PositionModifier(position: position))
     }
 
     /// Positions the center of this view at `x`, `y` in its parent's
@@ -189,11 +284,20 @@ extension View {
     }
 }
 
+/// `.position(_:)`.
+struct PositionModifier: PrimitiveModifier, Equatable {
+    let position: Point
+
+    func makeContent(_ context: inout BuildContext) -> PositionContent {
+        PositionContent(position: position)
+    }
+}
+
 // MARK: - Padding
 
 extension View {
     public func padding(_ insets: EdgeInsets) -> some View {
-        _ModifierView(content: self, key: ["padding", insets] as [AnyHashable]) { _ in PaddingContent(insets: insets) }
+        _ModifierView(content: self, modifier: PaddingModifier(insets: insets))
     }
 
     public func padding(_ edges: Edge.Set = .all, _ amount: Double = 16) -> some View {
@@ -214,8 +318,24 @@ extension View {
     /// while taking it off screen. Used by `NavigationStack` for the screens
     /// beneath the top one.
     public func _parked(_ isParked: Bool) -> some View {
-        _ModifierView(content: self, key: ["parked", isParked] as [AnyHashable]) { _ in
-            ParkedContent(isParked: isParked)
-        }
+        _ModifierView(content: self, modifier: ParkedModifier(isParked: isParked))
+    }
+}
+
+/// `.padding(_:)`.
+struct PaddingModifier: PrimitiveModifier, Equatable {
+    let insets: EdgeInsets
+
+    func makeContent(_ context: inout BuildContext) -> PaddingContent {
+        PaddingContent(insets: insets)
+    }
+}
+
+/// `._parked(_:)`.
+struct ParkedModifier: PrimitiveModifier, Equatable {
+    let isParked: Bool
+
+    func makeContent(_ context: inout BuildContext) -> ParkedContent {
+        ParkedContent(isParked: isParked)
     }
 }

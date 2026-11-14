@@ -21,9 +21,9 @@
 import NucleantUI
 
 enum Theme {
-    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
-    static let bar = ShapeStyle.dynamic(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
-    static let tile = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x22252C))
+    static let sidebar = DynamicShapeStyle(light: Color(hex: 0xEEEEF2), dark: Color(hex: 0x16181D))
+    static let bar = DynamicShapeStyle(light: Color(hex: 0xF7F7F9), dark: Color(hex: 0x1B1D23))
+    static let tile = DynamicShapeStyle(light: Color.white, dark: Color(hex: 0x22252C))
     static let accent = Color(hex: 0x2F7CF6)
     /// What an icon in its own colors — black — is shown on, in either
     /// mode.
@@ -55,7 +55,7 @@ struct IconsView {
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }
@@ -125,7 +125,7 @@ struct SidebarRow {
 
     var body: some View {
         HStack(spacing: 8) {
-            Glyph(image: image, size: 16, ink: .color(Theme.accent))
+            Glyph(image: image, size: 16, ink: AnyShapeStyle(Theme.accent))
             Text(title)
                 .lineLimit(1)
         }
@@ -138,7 +138,7 @@ struct SidebarRow {
 struct Glyph {
     let image: SvgImage?
     let size: Double
-    let ink: ShapeStyle?
+    let ink: AnyShapeStyle?
 
     var body: some View {
         if let image, let ink {

@@ -70,7 +70,7 @@ final class FontFallback {
         let slanted = italic && !found[face].isItalic()
         let key = FontKey(face: face, size: size, slanted: slanted)
         if let font = fonts[key] { return font }
-        let font = SkFont(found[face], size: Float(size * SkiaDisplayRenderer.thorPointScale))
+        let font = SkFont(found[face], size: Float(size * SkiaFonts.pointScale))
         font.setSubpixel(true)
         font.setEdging(.antiAlias)
         // Unhinted, as the family's own font is drawn and measured.

@@ -82,9 +82,9 @@ let events = [
 ]
 
 struct Theme {
-    static let background = ShapeStyle.background
-    static let card = ShapeStyle.secondaryBackground
-    static let grid = ShapeStyle.separator
+    static let background = BackgroundStyle.background
+    static let card = BackgroundStyle.secondaryBackground
+    static let grid = SeparatorShapeStyle.separator
     static let accent = Color(hex: 0x4C8DFF)
 }
 
@@ -107,7 +107,7 @@ struct LineChart {
                     path.move(to: Point(x: 0, y: y))
                     path.addLine(to: Point(x: size.width, y: y))
                 }
-                context.stroke(path, with: Theme.grid, lineWidth: 1)
+                context.stroke(path, with: .style(Theme.grid), lineWidth: 1)
             }
 
             PathShape { size in
@@ -385,7 +385,7 @@ struct DashboardView {
                 ForEach(Period.allCases, id: \.self) { p in
                     Text(p.name)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(period == p ? .color(.white) : .secondary)
+                        .foregroundStyle(period == p ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                         .padding(horizontal: 12, vertical: 6)
                         .background(period == p ? Theme.accent : Color.clear)
                         .cornerRadius(8)

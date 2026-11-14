@@ -20,7 +20,7 @@ extension Spacer: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         // The axis is stamped in by whichever stack builds it — see
         // `HStack`/`VStack`. Outside a stack a spacer just fills.
-        ViewNode(content: SpacerContent(minLength: minLength, axis: context.stackAxis))
+        ContentNode(content: SpacerContent(minLength: minLength, axis: context.stackAxis))
     }
 }
 
@@ -37,8 +37,8 @@ extension Divider: BuiltinView {
         // 1 point thick along the stack's axis, filling the other. Outside a
         // stack it behaves as a horizontal rule, the same default SwiftUI has.
         let axis = context.stackAxis ?? .vertical
-        let color = context.environment.foregroundStyle.opacity(0.25)
-        return ViewNode(content: DividerContent(axis: axis, color: color))
+        let color = context.environment.foregroundStyle.opacity(0.25).paint(in: context.environment)
+        return ContentNode(content: DividerContent(axis: axis, color: color))
     }
 }
 
@@ -46,7 +46,7 @@ extension Divider: BuiltinView {
 /// the cross axis.
 struct DividerContent: NodeContent {
     let axis: Axis
-    let color: ShapeStyle
+    let color: _ResolvedPaint
 
     func flexibility(along axis: Axis, node: ViewNode) -> LayoutPriorityClass {
         axis == self.axis ? .fixed : .content
@@ -65,11 +65,7 @@ struct DividerContent: NodeContent {
         list.append(.shape(ShapeDraw(
             path: path,
             bounds: rect,
-            fill: context.resolve(color),
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            fill: context.resolve(color)
+        )), under: context.drawState)
     }
 }

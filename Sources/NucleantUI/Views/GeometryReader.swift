@@ -58,14 +58,19 @@ extension GeometryReader: BuiltinView {
         // The content is not in a stack of its own; clear any inherited axis
         // so a `Spacer` inside doesn't stretch along the enclosing stack's.
         inner.stackAxis = nil
-        let reader = GeometryReaderContent(content: content, log: log, context: inner)
+        let reader = GeometryReaderContent(
+            content: content,
+            log: log,
+            context: inner.keptPastThisBuild,
+            position: inner.position.handle
+        )
         // Placed before: built now, with where it was, so what stands
         // inside is kept or released by this pass like everything else.
         // Never placed: there is nothing to build it for yet, and nothing
         // standing inside to keep — placement builds it.
         let child = log.current.map { reader.build(at: $0, context: inner) }
-            ?? ViewNode(content: GroupContent())
-        return ViewNode(content: reader, children: [child])
+            ?? ContentNode(content: GroupContent())
+        return ContentNode(content: reader, children: [child])
     }
 }
 
@@ -73,9 +78,12 @@ struct GeometryReaderContent<Content: View>: NodeContent {
     let content: (GeometryProxy) -> Content
     let log: GeometryReadLog
 
-    /// The build the reader was made in: the records, state store and
-    /// environment its content is built with during placement.
+    /// The build the reader was made in: the records and the environment its content is built with during placement.
     let context: BuildContext
+
+    /// Where the reader stands — what `context` builds at again, while it
+    /// does.
+    let position: PositionHandle
 
     /// Takes everything it is offered, on both axes.
     func flexibility(along axis: Axis, node: ViewNode) -> LayoutPriorityClass {
@@ -110,18 +118,20 @@ struct GeometryReaderContent<Content: View>: NodeContent {
 
     /// The content for `placed`, built at the reader's child slot. Its
     /// `@State` and `@Observable` reads are the reader's, as a body's are
-    /// its view's — whoever runs this has the reader's path published.
+    /// its view's — whoever runs this has the reader published.
     func build(at placed: PlacedGeometry, context: BuildContext) -> ViewNode {
         log.builtWith = placed
-        let path = context.path
         let proxy = GeometryProxy(geometry: placed, log: log)
-        let view = trackingObservation(at: path) { content(proxy) }
+        let view = trackingObservation(for: context.position.handle) { content(proxy) }
         return context.child(0) { ctx in buildNode(view, &ctx) }
     }
 
     /// Build the content again during placement, in place of what stands.
     private func rebuild(_ node: ViewNode, at placed: PlacedGeometry) {
+        // A reader that left has nothing to build into.
+        guard let standing = position.position, !standing.hasLeft else { return }
         var context = self.context
+        context.resume(at: standing)
         let path = context.path
         // Whatever this frame serves, not the frame the reader was built in.
         context.transaction = context.animations.transaction
@@ -132,14 +142,13 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         if let entry = context.records.entry(for: path) {
             context.environment = entry.environment
         }
-        context.records.beginRebuild(under: path + [0])
+        context.records.beginRebuild()
 
-        DependencyTracker.shared.push(path)
+        DependencyTracker.shared.push(context.position.handle)
         EnvironmentReads.shared.begin()
         let child = build(at: placed, context: context)
         let environmentReads = EnvironmentReads.shared.end()
-        DependencyTracker.shared.pop()
-        context.records.addReads(DependencyTracker.shared.takeReads(for: path), at: path)
+        context.records.addReads(DependencyTracker.shared.pop(), at: path)
         context.records.addEnvironmentReads(environmentReads, along: path)
         releaseDeparted(context)
 
@@ -161,14 +170,8 @@ struct GeometryReaderContent<Content: View>: NodeContent {
     private func releaseDeparted(_ context: BuildContext) {
         let departed = context.records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed {
-            for storage in entry.reads {
-                storage.readers.removeValue(forKey: path)
-            }
-            context.store.release(entry.stateKeys)
-        }
-        let paths = Set(departed.map { $0.0 })
-        context.effects.forget(paths: paths)
-        context.animations.forget(paths: paths)
+        let paths = Set(departed.entries.map { $0.0 })
+        context.effects.forget(paths: paths, disappearing: departed.disappearing)
+        context.animations.forget(exits: departed.exits)
     }
 }

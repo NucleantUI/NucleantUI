@@ -94,7 +94,7 @@ struct AlbumCard {
                 if let cover = photos.first {
                     PhotoArt(scenery: cover.scenery)
                 } else {
-                    Rectangle().fill(ShapeStyle.fill)
+                    Rectangle().fill(.fill)
                 }
             }
             .frame(width: 150, height: 150)
@@ -123,7 +123,7 @@ struct AlbumRow {
                 if let cover = photos.first {
                     PhotoArt(scenery: cover.scenery)
                 } else {
-                    Rectangle().fill(ShapeStyle.fill)
+                    Rectangle().fill(.fill)
                 }
             }
             .frame(width: 44, height: 44)
@@ -142,6 +142,6 @@ struct AlbumRow {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
     }
 }

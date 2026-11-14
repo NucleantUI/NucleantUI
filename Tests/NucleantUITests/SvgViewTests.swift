@@ -114,10 +114,7 @@ struct SvgViewTests {
         let view = SvgView(Self.square).renderingMode(.template)
             .foregroundStyle(.primary)
             .colorScheme(.dark)
-        guard case .dynamic(_, let dark) = ShapeStyle.primary else {
-            Issue.record("`.primary` is not a light/dark pair")
-            return
-        }
+        let dark = HierarchicalShapeStyle.primary.colors.dark
         #expect(draws(view).map(\.tint) == [.color(dark)])
     }
 

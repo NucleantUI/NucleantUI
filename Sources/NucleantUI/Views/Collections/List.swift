@@ -571,11 +571,11 @@ struct ListLook: Equatable {
         !alternates && kind != .sidebar
     }
 
-    var background: ShapeStyle {
+    var background: AnyShapeStyle {
         switch kind {
-        case .plain, .inset, .bordered: return .secondaryBackground
-        case .sidebar: return .color(.clear)
-        case .grouped, .insetGrouped: return .background
+        case .plain, .inset, .bordered: return AnyShapeStyle(.secondaryBackground)
+        case .sidebar: return AnyShapeStyle(.clear)
+        case .grouped, .insetGrouped: return AnyShapeStyle(.background)
         }
     }
 
@@ -584,9 +584,9 @@ struct ListLook: Equatable {
     /// The chevron's column.
     static let chevronWidth: Double = 12
 
-    func selectionFill(isFocused: Bool, tint: ShapeStyle) -> ShapeStyle {
-        if isSidebar { return isFocused ? SelectionColors.sidebarFocused : SelectionColors.sidebar }
-        return isFocused ? tint : SelectionColors.unfocused
+    func selectionFill(isFocused: Bool, tint: AnyShapeStyle) -> AnyShapeStyle {
+        if isSidebar { return AnyShapeStyle(isFocused ? SelectionColors.sidebarFocused : SelectionColors.sidebar) }
+        return isFocused ? tint : AnyShapeStyle(SelectionColors.unfocused)
     }
 
     /// Whether a selected row's content turns white on the highlight.
@@ -717,7 +717,7 @@ struct _ListBody<SelectionValue: Hashable> {
                 .padding(look.contentInsets)
             }
         }
-        .border(look.kind == .bordered ? .separator : .color(.clear), width: 1)
+        .border(look.kind == .bordered ? AnyShapeStyle(.separator) : AnyShapeStyle(.clear), width: 1)
     }
 }
 
@@ -773,7 +773,7 @@ struct _ListRow<SelectionValue: Hashable> {
             .overlay(alignment: .bottom) {
                 if entry.showsSeparator {
                     Rectangle()
-                        .fill(item.traits.separatorTint.map { .color($0) } ?? .separator)
+                        .fill(item.traits.separatorTint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.separator))
                         .frame(height: 1)
                         .padding(.leading, insets.leading)
                 }
@@ -824,7 +824,7 @@ struct _ListRowContent<SelectionValue: Hashable> {
                 Spacer(minLength: 8)
                 badge
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(inverted ? .color(.white) : .secondary)
+                    .foregroundStyle(inverted ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             }
         }
     }
@@ -837,7 +837,7 @@ struct _ListRowBackground<SelectionValue: Hashable> {
     let item: ListItem<SelectionValue>
     let isSelected: Bool
     let isAlternate: Bool
-    let fill: ShapeStyle
+    let fill: AnyShapeStyle
     let radius: Double
 
     var body: some View {
@@ -864,7 +864,7 @@ struct _ListChevron {
     var body: some View {
         Text("›")
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(inverted ? .color(.white) : .secondary)
+            .foregroundStyle(inverted ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             .rotationEffect(.degrees(isExpanded ? 90 : 0))
             .frame(width: ListLook.chevronWidth)
             .animation(.snappy(duration: 0.2), value: isExpanded)
@@ -974,7 +974,7 @@ struct _GroupedListBody<SelectionValue: Hashable> {
                                         _ListRow(entry: entry, look: look, actions: actions, isFocused: isFocused)
                                     }
                                 }
-                                .background(ShapeStyle.secondaryBackground)
+                                .background(.secondaryBackground)
                                 .cornerRadius(radius)
                             }
                             if let footer = group.footer {
@@ -1062,7 +1062,7 @@ extension _CollectionFocus: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let keys = self.keys
         let target = FocusTarget(
-            path: context.path,
+            owner: context.position.handle,
             isEnabled: keys.isEnabled,
             onFocusChange: { keys.onFocusChange($0) },
             onKeyDown: { keys.onKeyDown($0) },
@@ -1071,7 +1071,7 @@ extension _CollectionFocus: BuiltinView {
             isTabStop: true
         )
         let child = context.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: CollectionFocusContent(focus: target), children: [child])
+        return ContentNode(content: CollectionFocusContent(focus: target), children: [child])
     }
 }
 

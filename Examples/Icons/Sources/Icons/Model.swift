@@ -60,15 +60,15 @@ enum Ink: CaseIterable, Hashable {
         }
     }
 
-    var style: ShapeStyle {
+    var style: AnyShapeStyle {
         switch self {
-        case .primary: return .primary
-        case .blue:    return .color(Color(hex: 0x2F7CF6))
-        case .purple:  return .color(Color(hex: 0x8E5CF7))
-        case .pink:    return .color(Color(hex: 0xF0487A))
-        case .orange:  return .color(Color(hex: 0xF59E0B))
-        case .green:   return .color(Color(hex: 0x22B573))
-        case .sunset:  return .linearGradient(colors: [Color(hex: 0xF59E0B), Color(hex: 0xF0487A), Color(hex: 0x8E5CF7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .primary: return AnyShapeStyle(.primary)
+        case .blue:    return AnyShapeStyle(Color(hex: 0x2F7CF6))
+        case .purple:  return AnyShapeStyle(Color(hex: 0x8E5CF7))
+        case .pink:    return AnyShapeStyle(Color(hex: 0xF0487A))
+        case .orange:  return AnyShapeStyle(Color(hex: 0xF59E0B))
+        case .green:   return AnyShapeStyle(Color(hex: 0x22B573))
+        case .sunset:  return AnyShapeStyle(.linearGradient(colors: [Color(hex: 0xF59E0B), Color(hex: 0xF0487A), Color(hex: 0x8E5CF7)], startPoint: .topLeading, endPoint: .bottomTrailing))
         }
     }
 }
@@ -215,7 +215,7 @@ final class IconLibrary {
     }
 
     /// The ink an icon is painted in, or `nil` for its own colors.
-    var tint: ShapeStyle? { showsOriginalColors ? nil : ink.style }
+    var tint: AnyShapeStyle? { showsOriginalColors ? nil : ink.style }
 
     // MARK: Changing
 

@@ -155,17 +155,17 @@ struct RenderTextures {
     func theViewIsDrawnAtTheTexturesSize() {
         let tex = renderTexture(size: Size(width: 40, height: 20)) { Swatch(level: 3) }
         let key = RenderNodeKey(
-            path: [0],
+            slot: RenderSlot(position: nil),
             identity: ViewIdentity(type: ObjectIdentifier(RenderTextureView.self), viewID: .unknown)
         )
         let fixed = RenderTextureContent(key: key, texture: tex, isResizable: false)
-        let node = ViewNode(content: fixed)
+        let node = ContentNode(content: fixed)
         let offered = ProposedSize(Size(width: 500, height: 500))
         #expect(fixed.sizeThatFits(offered, node: node) == Size(width: 40, height: 20))
         #expect(fixed.flexibility(along: .horizontal, node: node) == .fixed)
 
         let resizable = RenderTextureContent(key: key, texture: tex, isResizable: true)
-        let resizableNode = ViewNode(content: resizable)
+        let resizableNode = ContentNode(content: resizable)
         #expect(resizable.sizeThatFits(offered, node: resizableNode) == Size(width: 500, height: 500))
         #expect(resizable.flexibility(along: .horizontal, node: resizableNode) == .flexible)
         // Unconstrained on an axis, it falls back to the texture's own size.

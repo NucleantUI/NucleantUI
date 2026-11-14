@@ -25,7 +25,7 @@ struct IconGrid {
             Divider()
             if icons.isEmpty {
                 VStack(spacing: 10) {
-                    Glyph(image: library.chrome("action/search"), size: 40, ink: .secondary)
+                    Glyph(image: library.chrome("action/search"), size: 40, ink: AnyShapeStyle(.secondary))
                     Text(library.search.isEmpty ? "No Icons" : "No icons match “\(library.search)”")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -67,10 +67,10 @@ struct GridBar {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
-                Glyph(image: library.chrome("navigation/apps"), size: 12, ink: .secondary)
+                Glyph(image: library.chrome("navigation/apps"), size: 12, ink: AnyShapeStyle(.secondary))
                 Slider(value: $library.tileSize, in: 72...200)
                     .frame(width: 130)
-                Glyph(image: library.chrome("navigation/apps"), size: 20, ink: .secondary)
+                Glyph(image: library.chrome("navigation/apps"), size: 20, ink: AnyShapeStyle(.secondary))
             }
             SearchField(library: library)
                 .frame(width: 240)
@@ -89,7 +89,7 @@ struct SearchField {
     var body: some View {
         let library = self.library
         HStack(spacing: 6) {
-            Glyph(image: library.chrome("action/search"), size: 16, ink: .secondary)
+            Glyph(image: library.chrome("action/search"), size: 16, ink: AnyShapeStyle(.secondary))
             TextField("Search icons", text: $library.search)
                 .textFieldStyle(.plain)
             if !library.search.isEmpty {
@@ -99,12 +99,12 @@ struct SearchField {
                         .renderingMode(.template)
                         .frame(width: 14, height: 14)
                 }
-                .tint(ShapeStyle.secondary)
+                .tint(.secondary)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 7).fill(ShapeStyle.fill))
+        .background(RoundedRectangle(cornerRadius: 7).fill(.fill))
     }
 }
 
@@ -125,7 +125,7 @@ struct IconTile {
                 .frame(maxHeight: .infinity)
             Text(icon.title)
                 .font(.system(size: 11))
-                .foregroundStyle(isSelected ? ShapeStyle.color(Theme.accent) : .secondary)
+                .foregroundStyle(isSelected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
@@ -135,10 +135,10 @@ struct IconTile {
         .padding(.horizontal, 6)
         .frame(height: size)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? ShapeStyle.color(Theme.accent.opacity(0.16)) : Theme.tile))
+        .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? AnyShapeStyle(Theme.accent.opacity(0.16)) : AnyShapeStyle(Theme.tile)))
         .overlay(alignment: .topTrailing) {
             if library.isFavorite(icon) {
-                Glyph(image: library.chrome("toggle/star", .filled), size: 13, ink: .color(Color(hex: 0xF5B400)))
+                Glyph(image: library.chrome("toggle/star", .filled), size: 13, ink: AnyShapeStyle(Color(hex: 0xF5B400)))
                     .padding(6)
             }
         }

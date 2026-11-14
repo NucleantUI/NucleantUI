@@ -50,19 +50,13 @@ public struct Namespace: DynamicProperty, Sendable {
         @MainActor private static var nextValue = 0
     }
 
-    /// The one reference every copy of the wrapper shares, as `@State`'s
-    /// does.
-    @MainActor
-    final class Holder {
-        var storage: StateStorage<ID>?
-    }
-
-    private let holder = Holder()
+    /// The slot, once the view is bound.
+    private var storage: StateStorage<ID>?
 
     public init() {}
 
     public var wrappedValue: ID {
-        guard let storage = holder.storage else {
+        guard let storage else {
             preconditionFailure(
                 "@Namespace read before the view was built. Reading it outside of `body` "
                 + "and the actions it creates is not supported."
@@ -71,7 +65,7 @@ public struct Namespace: DynamicProperty, Sendable {
         return storage.peek()
     }
 
-    public func _bind(to context: BindingContext) {
-        holder.storage = context.store.slot(for: context.key, initialValue: { ID.next() })
+    public mutating func _bind(to context: BindingContext) {
+        storage = context.slot(initialValue: { ID.next() })
     }
 }

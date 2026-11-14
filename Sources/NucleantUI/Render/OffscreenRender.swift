@@ -16,8 +16,7 @@
 //  other time, and its paths are rooted at `rootIndex` — a slot no window tree
 //  can produce — so that nothing it reads can dirty anything.
 //
-//  What it keeps across renders is the tree itself: the same store, the same
-//  records, so a second render reuses the views that are equivalent and the
+//  What it keeps across renders is the tree itself: the same records, so a second render reuses the views that are equivalent and the
 //  `@State` inside them keeps its value. What it does not do is re-run for
 //  that state. See `RenderTexture` for what that means in practice.
 //
@@ -35,7 +34,6 @@ final class OffscreenRender {
     /// Everything a build pass needs, kept for the life of the tree rather
     /// than per render — this is what makes a re-render a rebuild of the same
     /// tree instead of a fresh one.
-    private let store = StateStore()
     private let effects = EffectQueue()
     private let animations = AnimationStore()
     private let records = RebuildRecords()
@@ -78,19 +76,18 @@ final class OffscreenRender {
         animations.beginFrame()
         animations.beginPass(transaction: nil, isCommit: true)
 
-        records.beginRebuild(under: [Self.rootIndex])
+        records.beginRebuild()
         var context = BuildContext(
             environment: environment,
-            store: store,
             effects: effects,
             animations: animations,
             records: records
         )
-        context.path = [Self.rootIndex]
+        context.move(to: [Self.rootIndex])
         let node = buildNode(view, &context)
         releaseDeparted()
 
-        var draw = DrawContext(colorScheme: environment.colorScheme)
+        var draw = DrawContext()
         // The list is the texture: a drawing group inside draws into it.
         draw.flattensRenderNodes = true
         var list = DisplayList()
@@ -110,19 +107,13 @@ final class OffscreenRender {
 
     /// Let go of what a render did not put back — the same bookkeeping
     /// `ViewHost` does after a rebuild, so a texture whose content changed
-    /// shape does not keep the old subtree's state and reader registrations
-    /// alive.
+    /// shape does not keep the old subtree's reader registrations alive.
+    /// Its state went with its positions.
     private func releaseDeparted() {
         let departed = records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed {
-            for storage in entry.reads {
-                storage.readers.removeValue(forKey: path)
-            }
-            store.release(entry.stateKeys)
-        }
-        let paths = Set(departed.map { $0.0 })
-        effects.forget(paths: paths)
-        animations.forget(paths: paths)
+        let paths = Set(departed.entries.map { $0.0 })
+        effects.forget(paths: paths, disappearing: departed.disappearing)
+        animations.forget(exits: departed.exits)
     }
 }

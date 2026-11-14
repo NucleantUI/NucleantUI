@@ -107,19 +107,7 @@ struct ToolbarEntryView {
     var body: some View {
         switch entry.entry.content {
         case .view(let view):
-            _ModifierView(
-                content: view,
-                environment: { [environment = entry.environment] values in
-                    // Where the item was written, except for the menu it
-                    // is a row of: the "…" menu's, when it is in one.
-                    let menu = values.contextMenu
-                    let level = values.menuLevel
-                    values = environment
-                    values.contextMenu = menu
-                    values.menuLevel = level
-                },
-                node: { context in EnvironmentContent(colorScheme: context.environment.colorScheme) }
-            )
+            _ModifierView(content: view, modifier: ToolbarItemEnvironmentModifier(environment: entry.environment))
         case .spacer(.flexible):
             Spacer(minLength: 0)
         case .spacer(.fixed):
@@ -128,4 +116,26 @@ struct ToolbarEntryView {
             Color.clear.frame(width: 0, height: 0)
         }
     }
+}
+
+/// A toolbar item's view built in the environment of the `.toolbar` that
+/// listed it. Built again whenever its parent is.
+struct ToolbarItemEnvironmentModifier: PrimitiveModifier {
+    let environment: EnvironmentValues
+
+    func modifyEnvironment(_ values: inout EnvironmentValues) {
+        // Where the item was written, except for the menu it is a row of:
+        // the "…" menu's, when it is in one.
+        let menu = values.contextMenu
+        let level = values.menuLevel
+        values = environment
+        values.contextMenu = menu
+        values.menuLevel = level
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+
+    func _isEquivalent(to other: ToolbarItemEnvironmentModifier) -> Bool { false }
 }

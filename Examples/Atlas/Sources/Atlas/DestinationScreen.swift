@@ -96,7 +96,7 @@ private struct SaveButton {
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSaved ? ShapeStyle.color(.atlasAccent) : .color(Color.white.opacity(0.15)))
+                .background(isSaved ? .atlasAccent : Color.white.opacity(0.15))
                 .clipShape(Capsule())
         }
     }

@@ -37,8 +37,8 @@ import Observation
 
 struct Theme {
     static let accent = Color(hex: 0x4C6FFF)
-    static let sidebar = ShapeStyle.secondaryBackground
-    static let canvas = ShapeStyle.dynamic(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x101217))
+    static let sidebar = BackgroundStyle.secondaryBackground
+    static let canvas = DynamicShapeStyle(light: Color(hex: 0xE4E6EC), dark: Color(hex: 0x101217))
 }
 
 @View
@@ -59,7 +59,7 @@ struct SlidesView {
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ShapeStyle.background)
+        .background(.background)
         .tint(Theme.accent)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }

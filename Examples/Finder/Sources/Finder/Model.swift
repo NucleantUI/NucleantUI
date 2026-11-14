@@ -35,18 +35,18 @@ enum FileKind: Equatable {
     }
 
     /// The band across the bottom of a document icon, or an app's tile.
-    var color: ShapeStyle {
+    var color: AnyShapeStyle {
         switch self {
-        case .folder:      return Theme.folder
-        case .application: return .color(Color(hex: 0x5E5CE6))
-        case .swift:       return .color(Color(hex: 0xF05138))
-        case .markdown:    return .color(Color(hex: 0x6C7A89))
-        case .image:       return .color(Color(hex: 0x34C759))
-        case .pdf:         return .color(Color(hex: 0xE5484D))
-        case .audio:       return .color(Color(hex: 0xFF2D55))
-        case .archive:     return .color(Color(hex: 0xA2845E))
-        case .text:        return .color(Color(hex: 0x8E8E93))
-        case .font:        return .color(Color(hex: 0x30B0C7))
+        case .folder:      return AnyShapeStyle(Theme.folder)
+        case .application: return AnyShapeStyle(Color(hex: 0x5E5CE6))
+        case .swift:       return AnyShapeStyle(Color(hex: 0xF05138))
+        case .markdown:    return AnyShapeStyle(Color(hex: 0x6C7A89))
+        case .image:       return AnyShapeStyle(Color(hex: 0x34C759))
+        case .pdf:         return AnyShapeStyle(Color(hex: 0xE5484D))
+        case .audio:       return AnyShapeStyle(Color(hex: 0xFF2D55))
+        case .archive:     return AnyShapeStyle(Color(hex: 0xA2845E))
+        case .text:        return AnyShapeStyle(Color(hex: 0x8E8E93))
+        case .font:        return AnyShapeStyle(Color(hex: 0x30B0C7))
         }
     }
 }

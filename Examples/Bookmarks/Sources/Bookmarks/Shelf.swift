@@ -261,7 +261,7 @@ struct BookmarkCard: Animatable {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? .color(Theme.accent) : .separator, lineWidth: isSelected ? 2 : 1)
+                .stroke(isSelected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: isSelected ? 2 : 1)
         )
     }
 
@@ -285,6 +285,7 @@ struct UnreadMark {
                     .frame(width: 7, height: 7)
                 Text("Unread")
                     .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
                     .foregroundColor(Theme.accent)
             }
         }

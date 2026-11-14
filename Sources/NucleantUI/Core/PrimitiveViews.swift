@@ -18,7 +18,7 @@ public struct EmptyView: View, Equatable {
 
 extension EmptyView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: GroupContent(), children: [])
+        ContentNode(content: GroupContent(), children: [])
     }
 }
 
@@ -41,7 +41,7 @@ extension TupleView: BuiltinView {
             children.append(context.child(index) { ctx in buildNode(view, &ctx) })
             index += 1
         }
-        return ViewNode(content: GroupContent(), children: children)
+        return ContentNode(content: GroupContent(), children: children)
     }
 }
 
@@ -63,7 +63,7 @@ extension _ViewArray: BuiltinView {
             let node = context.child(index) { ctx in buildNode(element, &ctx) }
             return (index: index, node: node, isNew: isNew)
         }
-        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
+        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }
 
@@ -111,7 +111,7 @@ extension _ConditionalContent: BuiltinView where TrueContent: View, FalseContent
         // other branch transitions out, the two share a group.
         let children = context.transitionChildren([(index, node, isNew)])
         guard children.count > 1 else { return children.first ?? node }
-        return ViewNode(content: GroupContent(), children: children)
+        return ContentNode(content: GroupContent(), children: children)
     }
 }
 
@@ -132,19 +132,17 @@ extension Optional: BuiltinView where Wrapped: View {
             // slot its transition stands on it in.
             return context.transitionChildren([(0, node, isNew)]).first ?? node
         case .none:
-            return ViewNode(content: GroupContent(), children: context.transitionChildren([]))
+            return ContentNode(content: GroupContent(), children: context.transitionChildren([]))
         }
     }
 }
 
 /// A type-erased view.
 public struct AnyView: View {
-    /// The build closure over the erased value — capturing it is what lets the
-    /// concrete type stay out of `AnyView`'s own signature while the node
-    /// builder still sees it.
-    let makeErasedNode: @MainActor (inout BuildContext) -> ViewNode
-    /// The same, for the erased value's menu rows (see `MenuItems.swift`).
-    let lowerMenuItems: @MainActor (inout MenuLowering) -> [MenuBar.Item]
+    /// The erased view, in one object that knows its type: builds it, lowers
+    /// it into menu rows (see `MenuItems.swift`), and compares it with
+    /// another erased view.
+    let storage: AnyViewStorage
 
     /// The erased view's call site, carried through the erasure.
     ///
@@ -164,6 +162,38 @@ public struct AnyView: View {
     public var _viewID: ViewID
 
     public init<V: View>(_ view: V) {
+        self.storage = AnyViewStorageOf(view)
+        self._viewID = view._viewID
+    }
+
+    public var body: Never { bodyUnavailable() }
+}
+
+extension AnyView: BuiltinView {
+    func makeNode(_ context: inout BuildContext) -> ViewNode {
+        storage.makeNode(&context)
+    }
+}
+
+/// The view an `AnyView` erases, with what is done with it.
+@MainActor
+class AnyViewStorage {
+    func makeNode(_ context: inout BuildContext) -> ViewNode { fatalError("AnyViewStorage is abstract") }
+
+    func lowerMenuItems(_ lowering: inout MenuLowering) -> [MenuBar.Item] { fatalError("AnyViewStorage is abstract") }
+
+    func isEquivalent(to other: AnyViewStorage) -> Bool { fatalError("AnyViewStorage is abstract") }
+}
+
+@MainActor
+final class AnyViewStorageOf<V: View>: AnyViewStorage {
+    let view: V
+
+    init(_ view: V) {
+        self.view = view
+    }
+
+    override func makeNode(_ context: inout BuildContext) -> ViewNode {
         // Slot `[0]`, like every other pass-through wrapper (`Group`,
         // `_ConditionalContent`, `Optional`, `_HostRoot`). Building the
         // erased view at the *same* path as the `AnyView` put two views'
@@ -173,17 +203,18 @@ public struct AnyView: View {
         // erased view was rebuilt from nothing every pass, its `@State`
         // released under it, and an ancestor holding its node could be
         // repointed at a subtree that was never its own.
-        self.makeErasedNode = { context in context.child(0) { ctx in buildNode(view, &ctx) } }
-        self.lowerMenuItems = { lowering in menuItems(of: view, &lowering) }
-        self._viewID = view._viewID
+        context.child(0) { ctx in buildNode(view, &ctx) }
     }
 
-    public var body: Never { bodyUnavailable() }
-}
+    override func lowerMenuItems(_ lowering: inout MenuLowering) -> [MenuBar.Item] {
+        menuItems(of: view, &lowering)
+    }
 
-extension AnyView: BuiltinView {
-    func makeNode(_ context: inout BuildContext) -> ViewNode {
-        makeErasedNode(&context)
+    /// The same view: of the same type, and equivalent as that type's
+    /// values are.
+    override func isEquivalent(to other: AnyViewStorage) -> Bool {
+        guard let other = other as? AnyViewStorageOf<V> else { return false }
+        return _areEquivalent(view, other.view)
     }
 }
 
@@ -236,7 +267,7 @@ extension _HostRoot: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let content = context.child(0) { ctx in buildNode(self.content, &ctx) }
         let overlay = context.child(1) { ctx in buildNode(self.overlay, &ctx) }
-        return ViewNode(content: HostRootContent(capture: capture), children: [content, overlay])
+        return ContentNode(content: HostRootContent(capture: capture), children: [content, overlay])
     }
 }
 

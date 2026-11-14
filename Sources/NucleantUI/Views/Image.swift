@@ -36,7 +36,7 @@ public struct Image {
 
 extension Image: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: ImageContent(image: image, isResizable: isResizable))
+        ContentNode(content: ImageContent(image: image, isResizable: isResizable))
     }
 }
 
@@ -60,12 +60,8 @@ struct ImageContent: NodeContent {
         list.append(.image(ImageDraw(
             image: image,
             frame: rect,
-            opacity: context.opacity,
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            opacity: context.opacity
+        )), under: context.drawState)
     }
 }
 
@@ -85,9 +81,7 @@ extension View {
     /// at the proportions of its own ideal size — sized to fit or fill
     /// what it is offered.
     public func aspectRatio(_ aspectRatio: Double? = nil, contentMode: ContentMode) -> some View {
-        _ModifierView(content: self, key: ["aspectRatio", aspectRatio, contentMode] as [AnyHashable]) { _ in
-            AspectRatioContent(ratio: aspectRatio, contentMode: contentMode)
-        }
+        _ModifierView(content: self, modifier: AspectRatioModifier(ratio: aspectRatio, contentMode: contentMode))
     }
 
     /// `.aspectRatio(contentMode: .fit)`.
@@ -155,5 +149,15 @@ struct AspectRatioContent: NodeContent {
             context: context,
             into: &list
         )
+    }
+}
+
+/// `.aspectRatio(_:contentMode:)`.
+struct AspectRatioModifier: PrimitiveModifier, Equatable {
+    let ratio: Double?
+    let contentMode: ContentMode
+
+    func makeContent(_ context: inout BuildContext) -> AspectRatioContent {
+        AspectRatioContent(ratio: ratio, contentMode: contentMode)
     }
 }

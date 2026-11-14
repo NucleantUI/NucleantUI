@@ -206,9 +206,9 @@ public struct ShaderFunction: Hashable, Sendable {
 /// ```
 ///
 /// Every value reaches the shader as it was given. A color is its red,
-/// green, blue and alpha. A light/dark pair is a `ShapeStyle.dynamic`;
-/// resolve it for the view's scheme and pass its color
-/// (`style.resolved(for: colorScheme).flatColor`).
+/// green, blue and alpha. A light/dark pair is a `DynamicShapeStyle`;
+/// pass the color for the view's scheme
+/// (`style.color(for: colorScheme)`, with `@Environment(\.colorScheme)`).
 ///
 /// Scalars and vectors are plain variables; an array is read through a
 /// function of its index, with its length beside it, because a storage
@@ -495,8 +495,8 @@ extension Shader: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         // Read once per build: compiling is the function's business, and
         // the slot compares the words it is handed every pass.
-        ViewNode(content: ShaderModuleContent(
-            path: context.path,
+        ContentNode(content: ShaderModuleContent(
+            slot: context.position.renderSlot,
             words: function.spirv,
             input: function.input,
             isAnimated: function.isAnimated,

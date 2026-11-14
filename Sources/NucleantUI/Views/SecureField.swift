@@ -59,7 +59,7 @@ public struct SecureField<Label: View> {
                 text: String(repeating: Self.bullet, count: count),
                 font: font,
                 color: foreground,
-                selectionColor: tint.opacity(editing.isFocused ? 0.3 : 0.15),
+                selectionColor: AnyShapeStyle(tint.opacity(editing.isFocused ? 0.3 : 0.15)),
                 caret: min(editing.caret, count),
                 anchor: min(editing.anchor, count),
                 showsCaret: editing.isFocused,

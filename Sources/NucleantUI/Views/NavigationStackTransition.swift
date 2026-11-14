@@ -187,11 +187,14 @@ final class NavigationStackTransition {
 /// The node over each of a stack's screens: draws it as the move under way
 /// has it — or as it is, with no move or no part in it.
 struct NavigationScreenTransitionContent: NodeContent {
-    /// The node's path: where a shader move keeps its module.
-    let path: [Int]
+    /// What a shader move keeps its module under: the modifier's slot.
+    let slot: RenderSlot
     let screen: NavigationScreenID
     let transition: NavigationStackTransition
     let storage: NavigationStackStorage
+    /// The window background a zoom's card is filled with when its style
+    /// names no color, resolved where the stack was built.
+    let windowBackground: _ResolvedPaint
 
     /// How far the lower screen recedes under a zoom: 35 points across, but
     /// never below 80%.
@@ -245,7 +248,7 @@ struct NavigationScreenTransitionContent: NodeContent {
                 content: true
             )
             ShaderEffectContent(
-                path: path,
+                slot: slot,
                 module: (reading.spirv, reading.input, reading.isAnimated),
                 draw: ShaderDraw(vertices: 6, instances: 1),
                 textures: ShaderTextures(),
@@ -285,16 +288,13 @@ struct NavigationScreenTransitionContent: NodeContent {
         )
         let radius = max(0, mix(style.cornerRadius, 0))
         let clipped = context.clipped(to: frame, cornerRadius: radius)
+        let background = style.background.map { _ResolvedPaint.color($0) } ?? windowBackground
 
         list.append(.shape(ShapeDraw(
             path: Path { $0.addRect(frame, cornerRadius: radius) },
             bounds: frame,
-            fill: clipped.resolve(style.background.map { .color($0) } ?? .background),
-            transform: clipped.transform,
-            clip: clipped.clip,
-            clipCornerRadius: clipped.clipCornerRadius,
-            transformedClips: clipped.transformedClips
-        )))
+            fill: clipped.resolve(background)
+        )), under: clipped.drawState)
 
         let scale = rect.width > 0 && rect.height > 0
             ? max(frame.width / rect.width, frame.height / rect.height)
@@ -315,12 +315,8 @@ struct NavigationScreenTransitionContent: NodeContent {
         list.append(.shape(ShapeDraw(
             path: Path { $0.addRect(rect) },
             bounds: rect,
-            fill: shade.resolve(.color(.black)),
-            transform: shade.transform,
-            clip: shade.clip,
-            clipCornerRadius: shade.clipCornerRadius,
-            transformedClips: shade.transformedClips
-        )))
+            fill: shade.resolve(.color(.black))
+        )), under: shade.drawState)
     }
 }
 
@@ -331,8 +327,32 @@ extension View {
         _ transition: NavigationStackTransition,
         storage: NavigationStackStorage
     ) -> some View {
-        _ModifierView(content: self, key: ["navigationScreenTransition", screen] as [AnyHashable]) { context in
-            NavigationScreenTransitionContent(path: context.path, screen: screen, transition: transition, storage: storage)
-        }
+        _ModifierView(content: self, modifier: NavigationScreenTransitionModifier(
+            screen: screen,
+            transition: transition,
+            storage: storage
+        ))
+    }
+}
+
+/// `navigationScreenTransition(_:_:storage:)`: the same screen is the same
+/// modifier — its move and its stack are read as it is placed.
+struct NavigationScreenTransitionModifier: PrimitiveModifier {
+    let screen: NavigationScreenID
+    let transition: NavigationStackTransition
+    let storage: NavigationStackStorage
+
+    func makeContent(_ context: inout BuildContext) -> NavigationScreenTransitionContent {
+        NavigationScreenTransitionContent(
+            slot: context.position.renderSlot,
+            screen: screen,
+            transition: transition,
+            storage: storage,
+            windowBackground: BackgroundStyle().paint(in: context.environment)
+        )
+    }
+
+    func _isEquivalent(to other: NavigationScreenTransitionModifier) -> Bool {
+        screen == other.screen
     }
 }

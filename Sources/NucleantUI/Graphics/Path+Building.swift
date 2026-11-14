@@ -48,7 +48,7 @@ extension Path {
     public var currentPoint: Point? {
         var current: Point?
         var start: Point?
-        for element in elements {
+        for element in elementSequence {
             switch element {
             case .move(let p):
                 current = p
@@ -81,7 +81,7 @@ extension Path {
         }
         var current = Point.zero
         var start = Point.zero
-        for element in elements {
+        for element in elementSequence {
             switch element {
             case .move(let p):
                 include(p)
@@ -136,13 +136,13 @@ extension Path {
 
     /// Calls `body` with each element, in order.
     public func forEach(_ body: (Element) -> Void) {
-        for element in elements { body(element) }
+        for element in elementSequence { body(element) }
     }
 
     // MARK: Lines and curves
 
     public mutating func addQuadCurve(to end: Point, control: Point) {
-        elements.append(.quad(control: control, end: end))
+        append(.quad(control: control, end: end))
     }
 
     /// A polyline: a subpath moving to the first point and running a line to
@@ -295,10 +295,10 @@ extension Path {
     /// `transform`.
     public mutating func addPath(_ path: Path, transform: Transform = .identity) {
         guard !transform.isIdentity else {
-            elements.append(contentsOf: path.elements)
+            append(contentsOf: path)
             return
         }
-        elements.append(contentsOf: path.applying(transform).elements)
+        append(contentsOf: path.applying(transform))
     }
 
     /// The path mapped through `transform`. A rect or ellipse that stays
@@ -309,48 +309,48 @@ extension Path {
         let aligned = transform.e12 == 0 && transform.e21 == 0
         var result = Path()
         func map(_ p: Point) -> Point { transform.apply(to: p) }
-        for element in elements {
+        for element in elementSequence {
             switch element {
             case .move(let p):
-                result.elements.append(.move(map(p)))
+                result.append(.move(map(p)))
             case .line(let p):
-                result.elements.append(.line(map(p)))
+                result.append(.line(map(p)))
             case .quad(let control, let end):
-                result.elements.append(.quad(control: map(control), end: map(end)))
+                result.append(.quad(control: map(control), end: map(end)))
             case .cubic(let c1, let c2, let end):
-                result.elements.append(.cubic(control1: map(c1), control2: map(c2), end: map(end)))
+                result.append(.cubic(control1: map(c1), control2: map(c2), end: map(end)))
             case .close:
-                result.elements.append(.close)
+                result.append(.close)
             case .rect(let rect, let rx, let ry):
                 if aligned {
                     let a = map(Point(x: rect.minX, y: rect.minY))
                     let b = map(Point(x: rect.maxX, y: rect.maxY))
-                    result.elements.append(.rect(
+                    result.append(.rect(
                         Rect(x: Swift.min(a.x, b.x), y: Swift.min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y)),
                         radiusX: rx * abs(transform.e11), radiusY: ry * abs(transform.e22)
                     ))
                 } else {
                     for primitive in Path.primitives(rect: rect, radiusX: rx, radiusY: ry) {
-                        result.elements.append(primitive.mapped(map))
+                        result.append(primitive.mapped(map))
                     }
                 }
             case .ellipse(let center, let rx, let ry):
                 if aligned {
-                    result.elements.append(.ellipse(
+                    result.append(.ellipse(
                         center: map(center),
                         radiusX: rx * abs(transform.e11), radiusY: ry * abs(transform.e22)
                     ))
                 } else {
                     for primitive in Path.primitives(ellipseAt: center, radiusX: rx, radiusY: ry) {
-                        result.elements.append(primitive.mapped(map))
+                        result.append(primitive.mapped(map))
                     }
                 }
             case .text(let string, let origin, let font):
                 // Text stays upright: its anchor moves, and its size follows the scale.
-                result.elements.append(.text(string, origin: map(origin), font: font.size(font.size * abs(transform.e22))))
+                result.append(.text(string, origin: map(origin), font: font.size(font.size * abs(transform.e22))))
             case .image(let image, let rect):
                 // An image stays axis-aligned: the box around the mapped rect.
-                result.elements.append(.image(image, in: rect.applying(transform)))
+                result.append(.image(image, in: rect.applying(transform)))
             }
         }
         return result

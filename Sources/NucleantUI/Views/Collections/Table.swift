@@ -109,7 +109,7 @@ where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
                         look: look
                     )
                     Rectangle()
-                        .fill(ShapeStyle.separator)
+                        .fill(.separator)
                         .frame(height: 1)
                 }
                 ZStack(alignment: .topLeading) {
@@ -128,7 +128,7 @@ where Rows.TableRowValue == Value, Columns.TableRowValue == Value {
             // Columns that can't shrink to fit spill past the edge; they
             // are cut off there rather than drawn over what is beside.
             .clipped()
-            .border(look.kind == .bordered ? .separator : .color(.clear), width: 1)
+            .border(look.kind == .bordered ? AnyShapeStyle(.separator) : AnyShapeStyle(.clear), width: 1)
         }
         .opacity(isEnabled ? 1 : 0.5)
     }
@@ -556,10 +556,10 @@ final class TableColumnLayout {
 /// cells when its value is unchanged.
 @MainActor
 final class TableCells<Value> {
-    let cells: [@MainActor (Value, [Int], inout BuildContext) -> ViewNode]
+    let cells: [@MainActor (Value, PositionHandle, inout BuildContext) -> ViewNode]
     let layout: TableColumnLayout
 
-    init(cells: [@MainActor (Value, [Int], inout BuildContext) -> ViewNode], layout: TableColumnLayout) {
+    init(cells: [@MainActor (Value, PositionHandle, inout BuildContext) -> ViewNode], layout: TableColumnLayout) {
         self.cells = cells
         self.layout = layout
     }
@@ -591,7 +591,7 @@ struct _TableRow<Value: Identifiable> {
         let isSelected = actions.selection.contains(id)
         let inverted = isSelected && isFocused
         let row = _TableRowCells(value: entry.value, cells: cells)
-            .foregroundStyle(inverted ? .color(.white) : .primary)
+            .foregroundStyle(inverted ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .environment(\.backgroundProminence, inverted ? .increased : .standard)
             .background(ZStack {
                 if look.alternates && entry.index % 2 == 1 {
@@ -599,7 +599,7 @@ struct _TableRow<Value: Identifiable> {
                 }
                 if isSelected {
                     RoundedRectangle(cornerRadius: look.selectionRadius)
-                        .fill(isFocused ? tint : SelectionColors.unfocused)
+                        .fill(isFocused ? tint : AnyShapeStyle(SelectionColors.unfocused))
                 }
             })
             ._hitTarget(HitTarget(
@@ -636,11 +636,11 @@ extension _TableRowCells: BuiltinView {
         inner.stackAxis = nil
         // One line per cell, as in a table on the desktop.
         inner.environment.lineLimit = 1
-        let owner = context.path
+        let owner = context.position.handle
         let children = cells.cells.enumerated().map { index, cell in
             inner.child(index) { ctx in cell(value, owner, &ctx) }
         }
-        return ViewNode(
+        return ContentNode(
             content: TableCellsContent(layout: cells.layout, verticalPadding: TableLook.rowPadding, minimumHeight: 22),
             children: children
         )
@@ -724,7 +724,7 @@ struct _TableHeader {
             layout: layout
         )
         .padding(.horizontal, look.horizontalInset)
-        .background(ShapeStyle.secondaryBackground)
+        .background(.secondaryBackground)
     }
 }
 
@@ -750,7 +750,7 @@ extension _TableHeaderCells: BuiltinView {
         let children = cells.enumerated().map { index, cell in
             inner.child(index) { buildNode(cell, &$0) }
         }
-        return ViewNode(
+        return ContentNode(
             content: TableHeaderContent(layout: layout),
             children: children
         )
@@ -847,7 +847,7 @@ struct _TableColumnEdge {
         let start = $dragStart
         ZStack {
             Rectangle()
-                .fill(ShapeStyle.separator)
+                .fill(.separator)
                 .frame(width: 1)
                 .padding(.vertical, 4)
         }

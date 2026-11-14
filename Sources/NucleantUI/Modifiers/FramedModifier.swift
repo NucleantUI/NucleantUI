@@ -18,9 +18,7 @@ extension View {
     /// `alignment`, as in a frame. The result takes all the space its parent
     /// offers — it is the space `rect` is measured in.
     public func framed(_ rect: Rect, alignment: Alignment = .center) -> some View {
-        _ModifierView(content: self, key: ["framed", rect, alignment] as [AnyHashable]) { _ in
-            FramedContent(rect: rect, alignment: alignment)
-        }
+        _ModifierView(content: self, modifier: FramedModifier(rect: rect, alignment: alignment))
     }
 }
 
@@ -60,5 +58,15 @@ struct FramedContent: NodeContent {
             context: context,
             into: &list
         )
+    }
+}
+
+/// `.framed(_:alignment:)`.
+struct FramedModifier: PrimitiveModifier, Equatable {
+    let rect: Rect
+    let alignment: Alignment
+
+    func makeContent(_ context: inout BuildContext) -> FramedContent {
+        FramedContent(rect: rect, alignment: alignment)
     }
 }

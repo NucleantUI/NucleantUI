@@ -30,7 +30,7 @@ extension VStack: BuiltinView {
         var inner = context
         inner.stackAxis = .vertical
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: StackContent(
                 axis: .vertical,
                 spacing: spacing,
@@ -69,7 +69,7 @@ extension HStack: BuiltinView {
         var inner = context
         inner.stackAxis = .horizontal
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(
+        return ContentNode(
             content: StackContent(
                 axis: .horizontal,
                 spacing: spacing,
@@ -107,6 +107,6 @@ extension ZStack: BuiltinView {
         var inner = context
         inner.stackAxis = nil
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: ZStackContent(alignment: alignment), children: [child])
+        return ContentNode(content: ZStackContent(alignment: alignment), children: [child])
     }
 }

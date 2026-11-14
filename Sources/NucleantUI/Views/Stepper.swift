@@ -70,7 +70,7 @@ public struct Stepper<Label: View> {
                     .frame(width: 1, height: 16)
                 button("+", direction: .increment, isAvailable: actions.storage.canIncrement)
             }
-            .background(RoundedRectangle(cornerRadius: 8).fill(ShapeStyle.tertiaryBackground))
+            .background(RoundedRectangle(cornerRadius: 8).fill(.tertiaryBackground))
         }
         .opacity(isEnabled ? 1 : 0.4)
     }
@@ -86,7 +86,7 @@ public struct Stepper<Label: View> {
             .frame(width: 40, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isHeld ? controlTrackColor : .color(.clear))
+                    .fill(isHeld ? AnyShapeStyle(controlTrackColor) : AnyShapeStyle(.clear))
             )
             ._hitTarget(HitTarget(
                 isEnabled: isEnabled && isAvailable,

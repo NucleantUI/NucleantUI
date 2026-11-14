@@ -43,13 +43,29 @@ extension ViewNode {
 
     /// The press chain at `point` (window coordinates).
     func pressChain(at point: Point) -> PressChain {
-        let leaf = hitTest(point) { node -> ViewNode? in
-            if let target = node.content.hitTarget, target.isEnabled, target.handlesPointer { return node }
-            if let attachment = node.content.gestureAttachment, attachment.includesGesture { return node }
-            return nil
+        let leaf = hitTest(point, lookingFor: [.hitTarget, .gestureAttachment]) { node -> ViewNode? in
+            node.startsPressChain ? node : nil
         }
+        return PressChain(from: leaf, at: point)
+    }
+
+    /// Whether a press chain can start here: an enabled press target, or a
+    /// gesture attachment that takes part itself.
+    var startsPressChain: Bool {
+        if let target = content.hitTarget, target.isEnabled, target.handlesPointer { return true }
+        if let attachment = content.gestureAttachment, attachment.includesGesture { return true }
+        return false
+    }
+}
+
+extension PressChain {
+    /// The chain from `leaf`, the frontmost node a press chain can start at
+    /// (`ViewNode.startsPressChain`), up through its ancestors, at `point`.
+    @MainActor
+    init(from leaf: Hit<ViewNode>?, at point: Point) {
         var chain = PressChain()
-        guard let leaf else { return chain }
+        defer { self = chain }
+        guard let leaf else { return }
         var lineage: [ViewNode] = []
         var cursor: ViewNode? = leaf.node
         while let node = cursor {
@@ -58,12 +74,13 @@ extension ViewNode {
         }
         for (index, node) in lineage.enumerated() {
             let depth = lineage.count - 1 - index
-            if chain.press == nil, let target = node.content.hitTarget, target.isEnabled, target.handlesPointer,
+            if chain.press == nil, node.traits.contains(.hitTarget), let target = node.content.hitTarget,
+               target.isEnabled, target.handlesPointer,
                let hit = node.hitRecord(target, at: point) {
                 chain.press = hit
                 chain.pressDepth = depth
             }
-            guard let attachment = node.content.gestureAttachment else { continue }
+            guard node.traits.contains(.gestureAttachment), let attachment = node.content.gestureAttachment else { continue }
             // `including: .gesture` — what is inside does not take part.
             if !attachment.includesSubviews {
                 chain = PressChain()
@@ -72,8 +89,10 @@ extension ViewNode {
                 chain.gestures.append((hit, depth))
             }
         }
-        return chain
     }
+}
+
+extension ViewNode {
 
     /// `value` found on this node at `point`, as a hit test reports it: in
     /// the space its content is drawn in (`contentTransform`).
@@ -89,12 +108,15 @@ extension ViewNode {
         )
     }
 
-    /// The gesture attachment at `path` in this subtree, if that view still
-    /// stands.
-    fileprivate func gestureAttachment(at path: [Int]) -> GestureAttachment? {
-        if let attachment = content.gestureAttachment, attachment.path == path { return attachment }
+    /// The gesture attachment of `owner`'s view in this subtree, if that
+    /// view still stands.
+    fileprivate func gestureAttachment(of owner: PositionHandle) -> GestureAttachment? {
+        guard subtreeTraits.contains(.gestureAttachment) else { return nil }
+        if traits.contains(.gestureAttachment), let attachment = content.gestureAttachment, attachment.owner === owner {
+            return attachment
+        }
         for child in children {
-            if let found = child.gestureAttachment(at: path) { return found }
+            if let found = child.gestureAttachment(of: owner) { return found }
         }
         return nil
     }
@@ -125,7 +147,7 @@ final class GestureArena {
 
     private enum Key: Hashable {
         case press(Int)
-        case gesture([Int])
+        case gesture(PositionHandle)
     }
 
     @MainActor
@@ -264,7 +286,7 @@ final class GestureArena {
 
         var joined: [Participant] = []
         for link in chain.gestures {
-            let key = Key.gesture(link.hit.value.path)
+            let key = Key.gesture(link.hit.value.owner)
             if let existing = participants[key], existing.isAlive {
                 guard accepts(existing) else { continue }
                 existing.attachment = link.hit.value
@@ -540,12 +562,17 @@ final class GestureArena {
         participants.values.contains { $0.isAlive && $0.isDrag && $0.pointers[pointer] != nil }
     }
 
-    /// Point the gestures in flight at the actions of the latest build.
+    /// Point the gestures in flight at the actions of the latest build. The
+    /// view that attached one is found through its record, read off its
+    /// position; the tree is walked only when the node there holds no such
+    /// attachment.
     func refreshAttachments(from root: ViewNode) {
         for participant in participants.values where participant.isAlive && !participant.isPress {
-            guard let path = participant.attachment?.path,
-                  let current = root.gestureAttachment(at: path)
-            else { continue }
+            guard let owner = participant.attachment?.owner else { continue }
+            let recorded = owner.standingRecord.flatMap { entry in
+                entry.node.traits.contains(.gestureAttachment) ? entry.node.content.gestureAttachment : nil
+            }
+            guard let current = recorded?.owner === owner ? recorded : root.gestureAttachment(of: owner) else { continue }
             participant.attachment = current
         }
     }
@@ -572,7 +599,7 @@ final class GestureArena {
                 case (.magnify, .magnify), (.rotate, .rotate): break
                 default: continue
                 }
-                let key = Key.gesture(link.hit.value.path)
+                let key = Key.gesture(link.hit.value.owner)
                 if let existing = participants[key] { cancel(existing) }
                 let participant = Participant(key: key, depth: link.depth, priority: link.hit.value.priority)
                 participant.attachment = link.hit.value

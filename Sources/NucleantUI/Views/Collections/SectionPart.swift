@@ -18,10 +18,10 @@ extension _SectionPart: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         // A section's header and footer sit side by side in its body, so
         // their shared parent path names the section — and pairs them.
-        let section = context.path.dropLast().hashValue
+        let section = context.position.parent.map { ObjectIdentifier($0).hashValue } ?? 0
         let node = context.child(0) { ctx in buildNode(content, &ctx) }
         // An empty header is no node at all; nothing to pin.
-        if !node.content.isTransparent {
+        if !node.isTransparent {
             node.sectionTag = SectionTag(role: role, section: section)
         }
         return node

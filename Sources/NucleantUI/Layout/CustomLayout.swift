@@ -199,6 +199,7 @@ public struct LayoutSubview: Equatable {
         // A subview arriving or leaving asks what the view under its
         // transition asks.
         let view = node.underTransition
+        guard view.traits.contains(.spacingSource) else { return ViewSpacing() }
         return (view.content as? LayoutSpacingSource)?.spacing(node: view) ?? ViewSpacing()
     }
 
@@ -320,14 +321,14 @@ extension View {
 /// The layout values set on one view, by key. Values set further out
 /// replace those set further in.
 struct LayoutValues {
-    private var values: [ObjectIdentifier: OpaqueValue] = [:]
+    private var values: [ObjectIdentifier: AnyBox] = [:]
 
     func value<K: LayoutValueKey>(for key: K.Type) -> K.Value? {
         values[ObjectIdentifier(key)]?.value(as: K.Value.self)
     }
 
     mutating func set<K: LayoutValueKey>(_ value: K.Value, for key: K.Type) {
-        values[ObjectIdentifier(key)] = OpaqueValue(value)
+        values[ObjectIdentifier(key)] = Box(value)
     }
 }
 
@@ -350,7 +351,7 @@ extension _LayoutValueModifier: BuiltinView {
     }
 
     private func mark(_ node: ViewNode) {
-        if node.content.isTransparent {
+        if node.isTransparent {
             for child in node.layoutChildren { mark(child) }
         } else {
             var values = node.layoutValues ?? LayoutValues()
@@ -378,14 +379,14 @@ extension _LayoutView: BuiltinView {
         // are equivalent and stand — each frame until it arrives.
         let animated = layout._animated(in: context)
         if !animated.isFinished {
-            context.animations.rebuildNextFrame(context.path)
+            context.animations.rebuildNextFrame(context.position)
         }
         let layout = animated.value
 
         var inner = context
         inner.stackAxis = layout._stackOrientation
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
-        return ViewNode(content: CustomLayoutContent(layout: layout), children: [child])
+        return ContentNode(content: CustomLayoutContent(layout: layout), children: [child])
     }
 }
 
@@ -397,7 +398,7 @@ extension Layout {
             let result = erased.storage.animated(in: context)
             return (result.layout as! Self, result.isFinished)
         }
-        return context.animations.animated(self, at: context.path, animation: context.transaction.animation)
+        return context.animations.animated(self, at: context.position, animation: context.transaction.animation)
     }
 
     /// The axis `Spacer`s inside it follow. An instance member rather than

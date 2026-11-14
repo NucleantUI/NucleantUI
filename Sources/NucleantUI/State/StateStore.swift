@@ -12,29 +12,103 @@ protocol AnyStateStorage: AnyObject {
     /// Bumped on every write.
     var version: UInt32 { get }
 
-    /// The view that declared this state — the subtree a write invalidates.
-    var ownerPath: [Int] { get }
 
-    /// Every view that read this slot while its `body` ran, by path, with
-    /// the key paths it read through — `[]` for the whole value, `[\.[3],
-    /// \.level]` for a read through `$tracks[3].level`. A write dirties each
-    /// reader whose chain overlaps the written one, which is what stops a
-    /// view whose *inputs* look unchanged from being reused while the state
-    /// behind its binding moved — and what lets the other rows be reused
-    /// when it is only row 3 that moved.
-    var readers: [[Int]: [[AnyKeyPath]]] { get set }
+    /// Every view that read this slot while its `body` ran, with the key
+    /// paths it read through — see `StateReaders`.
+    var readers: StateReaders { get set }
 }
 
-/// One `@State` value, living across rebuilds.
+/// The views that read one state slot, by their positions' handles, with
+/// the key paths each read through — `[]` for the whole value, `[\.[3], \.level]` for a read
+/// through `$tracks[3].level`.
+///
+/// A write dirties each reader whose chain overlaps the written one, which
+/// is what stops a view whose *inputs* look unchanged from being reused
+/// while the state behind its binding moved — and what lets the other rows
+/// be reused when it is only row 3 that moved. Readers of the whole value
+/// are kept apart, and the others are filed by the first key path of their
+/// chain: a write through `[\.[3], \.level]` reaches the readers of the
+/// whole value and looks only among those filed under `\.[3]`, not at the
+/// reader of every other row.
+struct StateReaders {
+
+    /// Readers of the whole value.
+    private var whole: Set<PositionHandle> = []
+
+    /// The other readers, by the first key path of their chain, each with
+    /// the chains it read through.
+    private var byFirstKeyPath: [AnyKeyPath: [PositionHandle: [[AnyKeyPath]]]] = [:]
+
+    /// The first key paths each of those is filed under, to take it out.
+    private var firstKeyPaths: [PositionHandle: [AnyKeyPath]] = [:]
+
+    /// `reader` read the slot through `chain`.
+    mutating func add(_ reader: PositionHandle, via chain: [AnyKeyPath]) {
+        guard let first = chain.first else {
+            whole.insert(reader)
+            return
+        }
+        let known = byFirstKeyPath[first]?[reader]
+        if let known, known.contains(chain) { return }
+        if known == nil {
+            firstKeyPaths[reader, default: []].append(first)
+        }
+        byFirstKeyPath[first, default: [:]][reader, default: []].append(chain)
+    }
+
+    /// `reader` is rebuilt or gone: the reads it made are forgotten.
+    mutating func remove(_ reader: PositionHandle) {
+        whole.remove(reader)
+        guard let firsts = firstKeyPaths.removeValue(forKey: reader) else { return }
+        for first in firsts {
+            byFirstKeyPath[first]?[reader] = nil
+            if byFirstKeyPath[first]?.isEmpty == true {
+                byFirstKeyPath[first] = nil
+            }
+        }
+    }
+
+    /// Each reader a write through `chain` reaches: one whose chain and the
+    /// written one are nested either way. A reader may be handed over more
+    /// than once.
+    func forEachReader(reachedBy chain: [AnyKeyPath], _ body: (PositionHandle) -> Void) {
+        for reader in whole {
+            body(reader)
+        }
+        guard let first = chain.first else {
+            // The whole value: every chain is inside it.
+            for readers in byFirstKeyPath.values {
+                for reader in readers.keys { body(reader) }
+            }
+            return
+        }
+        guard let readers = byFirstKeyPath[first] else { return }
+        for (reader, chains) in readers
+        where chains.contains(where: { $0.starts(with: chain) || chain.starts(with: $0) }) {
+            body(reader)
+        }
+    }
+
+}
+
+/// What a position holds for one piece of a view's state, whatever its
+/// value's type: a `StateStorage`, told apart by its class.
 @MainActor
-final class StateStorage<Value>: AnyStateStorage {
+class StateSlot {}
+
+/// One `@State` value, living across rebuilds — held by the position of the
+/// view that declared it (`ViewPosition.stateSlot`).
+@MainActor
+final class StateStorage<Value>: StateSlot, AnyStateStorage {
 
     private(set) var value: Value
     private(set) var version: UInt32 = 0
 
-    let ownerPath: [Int]
+    /// The view that declared it — dirtied by a write when the value was
+    /// read while the tree was placed.
+    let owner: PositionHandle
 
-    var readers: [[Int]: [[AnyKeyPath]]] = [:]
+    var readers = StateReaders()
 
     /// Read while the tree was laid out or drawn, outside any `body` — a
     /// `ScrollView` placing its content at its offset, a `PathShape` or a
@@ -43,9 +117,13 @@ final class StateStorage<Value>: AnyStateStorage {
     /// state, which builds the node that will be placed again.
     private(set) var isReadDuringPlacement = false
 
-    init(_ value: Value, ownerPath: [Int]) {
+    /// How two values of `Value` compare — see `set(_:via:)`.
+    private let isSameValue: EquivalenceWitness
+
+    init(_ value: Value, owner: PositionHandle) {
         self.value = value
-        self.ownerPath = ownerPath
+        self.owner = owner
+        self.isSameValue = equivalenceWitness(for: Value.self)
     }
 
     /// The single write path — `@State`'s setter and any `Binding` derived from
@@ -64,23 +142,47 @@ final class StateStorage<Value>: AnyStateStorage {
     ///
     /// A write of the value already held is no write: nothing is bumped and
     /// nothing is dirtied, as in SwiftUI. "The same" is decided the way view
-    /// inputs are (`_dynamicallyEquivalent`): `==` for an `Equatable` value,
+    /// inputs are (`equivalenceWitness`): `==` for an `Equatable` value,
     /// identity for an object, the bytes for plain data. A value with no way
     /// to tell counts as changed. A `withAnimation` whose writes were all
     /// equal claims no frame, and its completion runs on the next one, as
     /// for a body that wrote nothing.
     func set(_ newValue: Value, via chain: [AnyKeyPath] = []) {
-        if _dynamicallyEquivalent(value, newValue) { return }
-        value = newValue
-        version &+= 1
-        if isReadDuringPlacement {
-            Invalidator.shared.invalidate(owner: ownerPath)
+        let isSame = withUnsafePointer(to: value) { old in
+            withUnsafePointer(to: newValue) { new in isSameValue(UnsafeRawPointer(old), UnsafeRawPointer(new)) }
         }
-        for (reader, chains) in readers {
-            guard chains.contains(where: { $0.starts(with: chain) || chain.starts(with: $0) }) else {
-                continue
-            }
-            Invalidator.shared.invalidate(owner: reader)
+        if isSame { return }
+        value = newValue
+        didChange(via: chain)
+    }
+
+    /// A write of one part of the value — `$tracks[3].level`'s, through
+    /// `path`, the key paths of `chain` in one. Only that part is compared
+    /// with what it was, and it is written where it lies: the rest of the
+    /// value is not read out, copied or compared.
+    ///
+    /// Into an object, the write changes the object and leaves the slot
+    /// holding the same one: no write to the slot, as before — what reads
+    /// the object's properties is tracked by observation.
+    func set<Part>(_ part: Part, at path: WritableKeyPath<Value, Part>, via chain: [AnyKeyPath]) {
+        if Value.self is AnyClass {
+            var object = value
+            object[keyPath: path] = part
+            return
+        }
+        if _areEquivalent(value[keyPath: path], part) { return }
+        value[keyPath: path] = part
+        didChange(via: chain)
+    }
+
+    private func didChange(via chain: [AnyKeyPath]) {
+        version &+= 1
+        if isReadDuringPlacement, let path = owner.standingPath {
+            Invalidator.shared.invalidate(owner: path)
+        }
+        // A reader no longer standing has nothing to rebuild.
+        readers.forEachReader(reachedBy: chain) { reader in
+            if let path = reader.standingPath { Invalidator.shared.invalidate(owner: path) }
         }
     }
 
@@ -88,50 +190,25 @@ final class StateStorage<Value>: AnyStateStorage {
     /// is currently being built. `chain` is the key path the read came
     /// through, `[]` for the whole value.
     func read(via chain: [AnyKeyPath] = []) -> Value {
+        noteRead(via: chain)
+        return value
+    }
+
+    /// The dependency `read(via:)` records, for a reader that takes only a
+    /// part of the value.
+    func noteRead(via chain: [AnyKeyPath]) {
         if DependencyTracker.shared.isPlacingOutsideABody {
             isReadDuringPlacement = true
+            // What was placed drew from it: not to be kept as it is.
+            PlacementRecorder.shared.noteDisturbance()
         } else {
             DependencyTracker.shared.recordRead(self, via: chain)
         }
-        return value
     }
 
     /// Read with no dependency recorded — for a write's read-modify-write,
     /// which must not make the *writer* a dependent.
     func peek() -> Value { value }
-}
-
-/// All the `@State` in one view tree, keyed by structural identity.
-///
-/// Slots are released by the view that declared them going away — the
-/// builder knows exactly which keys each view bound (`RebuildRecords`), so
-/// there is no end-of-pass sweep to get wrong for a scoped rebuild.
-@MainActor
-public final class StateStore {
-
-    private var slots: [StateKey: any AnyStateStorage] = [:]
-
-    init() {}
-
-    /// The slot for `key`, created from `initialValue` the first time it is
-    /// asked for. A type mismatch (the tree changed shape enough that a
-    /// different view now sits at this position) discards the old slot rather
-    /// than trapping.
-    func slot<Value>(for key: StateKey, initialValue: () -> Value) -> StateStorage<Value> {
-        if let existing = slots[key] as? StateStorage<Value> {
-            return existing
-        }
-        let created = StateStorage(initialValue(), ownerPath: key.path)
-        slots[key] = created
-        return created
-    }
-
-    /// Drop the state a departed view declared.
-    func release(_ keys: [StateKey]) {
-        for key in keys {
-            slots.removeValue(forKey: key)
-        }
-    }
 }
 
 /// Attributes each `@State` read to the view whose `body` is running.
@@ -150,8 +227,15 @@ final class DependencyTracker {
 
     private init() {}
 
-    /// The view identity currently having its `body` evaluated, innermost last.
-    private var stack: [[Int]] = []
+    /// One view having its `body` evaluated, and the slots it read so far —
+    /// each once, in the order first read.
+    private struct Frame {
+        let reader: PositionHandle
+        var reads: [any AnyStateStorage] = []
+    }
+
+    /// The views currently having their `body` evaluated, innermost last.
+    private var stack: [Frame] = []
 
     /// How many layout-and-draw passes are running. A read during one with
     /// no `body` running is a read no view records (see
@@ -169,37 +253,31 @@ final class DependencyTracker {
         placements -= 1
     }
 
-    /// Slots read by each view still being built, collected until the
-    /// builder takes them.
-    private var reads: [[Int]: [ObjectIdentifier: any AnyStateStorage]] = [:]
-
-    func push(_ path: [Int]) {
-        stack.append(path)
+    /// The view at `reader`'s position begins evaluating: the reads from
+    /// here until the matching `pop` are its own.
+    func push(_ reader: PositionHandle) {
+        stack.append(Frame(reader: reader))
     }
 
-    func pop() {
-        stack.removeLast()
+    /// The view at the top is done: the slots it read, handed over once for
+    /// its record.
+    @discardableResult
+    func pop() -> [any AnyStateStorage] {
+        stack.removeLast().reads
     }
 
     func recordRead(_ storage: any AnyStateStorage, via chain: [AnyKeyPath]) {
-        guard let path = stack.last else { return }
-        var chains = storage.readers[path] ?? []
-        if !chains.contains(chain) {
-            chains.append(chain)
-            storage.readers[path] = chains
-        }
-        reads[path, default: [:]][ObjectIdentifier(storage)] = storage
+        guard !stack.isEmpty else { return }
+        let top = stack.count - 1
+        storage.readers.add(stack[top].reader, via: chain)
+        // Read again, most likely the slot read last.
+        for read in stack[top].reads.reversed() where read === storage { return }
+        stack[top].reads.append(storage)
     }
 
-    /// Whether the view at `path` has read any slot so far in its build.
-    func hasReads(for path: [Int]) -> Bool {
-        !(reads[path]?.isEmpty ?? true)
-    }
-
-    /// The slots the view at `path` read, handed over once for its record.
-    func takeReads(for path: [Int]) -> [any AnyStateStorage] {
-        guard let taken = reads.removeValue(forKey: path) else { return [] }
-        return Array(taken.values)
+    /// Whether the view being evaluated has read any slot so far.
+    var currentViewHasReads: Bool {
+        !(stack.last?.reads.isEmpty ?? true)
     }
 }
 

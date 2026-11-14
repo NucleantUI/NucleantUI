@@ -7,7 +7,8 @@
 /// module, at its rect. Emits no draw commands of its own — its pixels arrive
 /// through the engine, not the canvas.
 struct ShaderModuleContent<Input: ShaderInput>: NodeContent {
-    let path: [Int]
+    /// What the shader's slot is filed under: its view's.
+    let slot: RenderSlot
     let words: [UInt32]
     let input: Input
     let isAnimated: Bool
@@ -24,7 +25,7 @@ struct ShaderModuleContent<Input: ShaderInput>: NodeContent {
         // the frame — a stack's slide moves it with the screen.
         let shown = context.compositeFrame(of: rect)
         host.useModule(
-            path: path,
+            slot: slot,
             words: words,
             input: input,
             isAnimated: isAnimated,

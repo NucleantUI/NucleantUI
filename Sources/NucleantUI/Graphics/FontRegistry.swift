@@ -2,11 +2,10 @@
 //  FontRegistry.swift
 //  NucleantUI
 //
-//  ThorVG resolves a text paint's family by a name it was handed at load
-//  time. `tvg_font_load(path)` keys the cache by path and registers whatever
-//  family name is inside the file, which we'd then have to guess; loading the
-//  bytes through `tvg_font_load_data(name:…)` lets us pick the key, so a
-//  `Font` maps to a name deterministically.
+//  Which face a `Font` is drawn in: a name for it, the file it comes from,
+//  and the Skia face loaded from that file (`SkiaFonts` draws and measures
+//  with it). The name is ours, so a `Font` maps to one deterministically;
+//  a face is accepted once Skia has read its file.
 //
 //  Everything here is cached — *including failures*. Resolution sits on the
 //  layout hot path (every text measurement asks for it), and an uncached miss
@@ -16,7 +15,7 @@
 //
 
 import Foundation
-import NucleantThorVG
+import NucleantSkia
 // Apple-only: the system-font lookup below. Everywhere else the bundled
 // Roboto faces are the whole story — on Android they are also what the OS
 // itself ships, so there is nothing a platform query would add.
@@ -39,16 +38,18 @@ public enum FontRegistry {
         let isItalic: Bool
     }
 
-    /// Face names ThorVG has accepted, and ones already proven unusable —
-    /// either not found on disk or rejected by the loader.
+    /// Face names whose file Skia read, and ones already proven unusable —
+    /// either not found on disk or not readable as a face.
     private static var loaded: Set<String> = []
     private static var failed: Set<String> = []
 
     /// Explicit registrations: our family name → file path.
     private static var registeredPaths: [String: String] = [:]
 
-    /// Every face ThorVG accepted: family name → the file it came from.
+    /// Every face accepted: family name → the file it came from, and the
+    /// face read from it.
     private static var loadedPaths: [String: String] = [:]
+    private static var loadedTypefaces: [String: SkTypeface] = [:]
 
     /// Where the built-in designs come from, in preference order. The bundled
     /// faces (`bundledFaces`) lead: they are in the library's resource bundle
@@ -56,8 +57,8 @@ public enum FontRegistry {
     /// ships — iOS has no Helvetica Neue outside a `.ttc`, Linux has none of
     /// these. The system names after them are what an explicit request or a
     /// design without a bundled face (serif) falls through to; ordered so a
-    /// face ThorVG can parse comes first — macOS ships Helvetica and Menlo
-    /// *only* as `.ttc` collections, which its loader rejects (see
+    /// single-face file comes first — macOS ships Helvetica and Menlo *only*
+    /// as `.ttc` collections, which are not looked for (see
     /// `fontExtensions`).
     private static let builtinFaces: [FontDesign: [String]] = [
         .default:    ["Roboto", "Helvetica Neue", "Arial", "Geneva", "Helvetica"],
@@ -91,15 +92,14 @@ public enum FontRegistry {
         NSHomeDirectory() + "/Library/Fonts",
     ]
 
-    /// Extensions worth trying. `.ttc` is deliberately absent: a TrueType
-    /// *Collection* holds several faces in one file and ThorVG's loader
-    /// rejects it outright — every `Helvetica.ttc` / `Menlo.ttc` attempt
-    /// returned a failure after reading the whole ~1MB file. Skipping the
-    /// extension turns that into a cheap `stat` miss.
+    /// Extensions worth trying. `.ttc` is absent: a TrueType *Collection*
+    /// holds several faces in one file, and which of them a name means is
+    /// not in its file name — the faces chosen here are the single-face
+    /// files the names above lead to, as they always were.
     private static let fontExtensions = [".ttf", ".otf"]
 
     /// Register a font file under a family name usable as `Font.custom(_:size:)`.
-    /// Returns false when the file can't be read or ThorVG rejects it.
+    /// Returns false when the file can't be read as a face.
     @discardableResult
     public static func register(path: String, as family: String) -> Bool {
         registeredPaths[family] = path
@@ -109,8 +109,8 @@ public enum FontRegistry {
         return load(family: family, from: path)
     }
 
-    /// The ThorVG family name to hand `tvg_text_set_font` for `font`, loading
-    /// the face on first use. `nil` lets ThorVG pick its own fallback.
+    /// The name of the face `font` is drawn in, its file read on first use.
+    /// `nil` when none was found: the platform's default face draws it.
     static func resolve(_ font: Font) -> String? {
         let key = ResolutionKey(
             family: font.family,
@@ -125,10 +125,14 @@ public enum FontRegistry {
         return resolved
     }
 
-    /// The file behind a name `resolve` returned — for a renderer other than
-    /// ThorVG, which loads the face itself.
+    /// The file behind a name `resolve` returned.
     static func path(ofResolved family: String) -> String? {
         loadedPaths[family]
+    }
+
+    /// The face behind a name `resolve` returned.
+    static func typeface(ofResolved family: String) -> SkTypeface? {
+        loadedTypefaces[family]
     }
 
     private static func search(_ key: ResolutionKey) -> String? {
@@ -176,8 +180,8 @@ public enum FontRegistry {
         return names
     }
 
-    /// Load `name` into ThorVG if it isn't already there. The name doubles as
-    /// the file's basename when it wasn't explicitly registered.
+    /// Read the face `name` if it isn't already read. The name doubles as the
+    /// file's basename when it wasn't explicitly registered.
     private static func ensureLoaded(_ name: String) -> Bool {
         if loaded.contains(name) { return true }
         if failed.contains(name) { return false }
@@ -207,7 +211,7 @@ public enum FontRegistry {
     }
 
     /// The font file CoreText would use for `family` in the given style, if it
-    /// is a single-face file ThorVG can parse. Family and traits are both
+    /// is a single-face file. Family and traits are both
     /// mandatory in the match, so a family without a bold face yields nil
     /// here rather than a silently regular one — the caller then falls back
     /// to the next style itself.
@@ -268,20 +272,10 @@ public enum FontRegistry {
     }
 
     private static func load(family: String, from path: String) -> Bool {
-        guard let data = FileManager.default.contents(atPath: path) else {
-            return false
-        }
-        let mimetype = (path as NSString).pathExtension.lowercased()
-        // copy: true — ThorVG keeps the bytes, and `data` dies with this call.
-        let result = tvg_font_load_from_data(
-            name: family,
-            data: [UInt8](data),
-            mimetype: mimetype,
-            copy: true
-        )
-        guard result == TVG_RESULT_SUCCESS else { return false }
+        guard let typeface = SkFontMgr.makeFromFile(path) else { return false }
         loaded.insert(family)
         loadedPaths[family] = path
+        loadedTypefaces[family] = typeface
         return true
     }
 }

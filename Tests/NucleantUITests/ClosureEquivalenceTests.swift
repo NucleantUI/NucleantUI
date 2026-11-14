@@ -7,6 +7,7 @@
 //  value is built again, and runs the new closure.
 //
 
+import Foundation
 import Testing
 @testable import NucleantUI
 
@@ -25,6 +26,16 @@ private struct Opaque {
 @inline(never) @_optimize(none) private func capturing(_ value: SIMD3<Double>, _ scale: Double, _ label: String) -> () -> String {
     { "\(label) \(value.x * scale)" }
 }
+/// An object, then a value whose layout only the run time knows: a
+/// Foundation `Date` — so is the layout of a closure context holding it.
+private struct Stamped: Equatable {
+    let object: Object
+    let date: Date
+
+    static func == (a: Stamped, b: Stamped) -> Bool { a.object === b.object && a.date == b.date }
+}
+@inline(never) @_optimize(none) private func capturing(_ value: Date) -> () -> Date { { value } }
+@inline(never) @_optimize(none) private func capturing(_ value: Stamped) -> () -> Date { { value.date } }
 @inline(never) @_optimize(none) private func capturingNothing() -> () -> Int { { 42 } }
 @inline(never) @_optimize(none) private func otherCapturingNothing() -> () -> Int { { 7 } }
 @inline(never) @_optimize(none) private func wrapping(_ inner: @escaping () -> Int) -> () -> Int { { inner() + 1 } }
@@ -62,6 +73,10 @@ private struct HoldsMainActor {
     let f: @MainActor () -> Int
 }
 
+private struct HoldsDate {
+    let f: () -> Date
+}
+
 @MainActor @_optimize(none)
 private func same(_ a: @escaping () -> Int, _ b: @escaping () -> Int) -> Bool {
     _areEquivalentClosures(HoldsInt(f: a), HoldsInt(f: b), \.f, name: "f")
@@ -75,6 +90,11 @@ private func same(_ a: @escaping () -> String, _ b: @escaping () -> String) -> B
 @MainActor @_optimize(none)
 private func same(_ a: @escaping () -> ObjectIdentifier, _ b: @escaping () -> ObjectIdentifier) -> Bool {
     _areEquivalentClosures(HoldsIdentifier(f: a), HoldsIdentifier(f: b), \.f, name: "f")
+}
+
+@MainActor @_optimize(none)
+private func same(_ a: @escaping () -> Date, _ b: @escaping () -> Date) -> Bool {
+    _areEquivalentClosures(HoldsDate(f: a), HoldsDate(f: b), \.f, name: "f")
 }
 
 @MainActor
@@ -122,6 +142,21 @@ struct ClosureEquivalenceTests {
         #expect(!otherScale)
         #expect(!otherLabel)
         #expect(!otherPoint)
+    }
+
+    @Test func capturesLaidOutAtRunTimeAreReadWhereTheyLie() {
+        // The context records no offset for its captures: they follow the
+        // header, where the runtime put them — not at the header itself.
+        let date = Date(timeIntervalSince1970: 1_000)
+        let equalDates = same(capturing(date), capturing(date))
+        let otherDates = same(capturing(date), capturing(Date(timeIntervalSince1970: 2_000)))
+        let object = Object()
+        let equalStamps = same(capturing(Stamped(object: object, date: date)), capturing(Stamped(object: object, date: date)))
+        let otherObject = same(capturing(Stamped(object: object, date: date)), capturing(Stamped(object: Object(), date: date)))
+        #expect(equalDates)
+        #expect(!otherDates)
+        #expect(equalStamps)
+        #expect(!otherObject)
     }
 
     @Test func closuresThatCapturedNothingCompareByTheirCode() {

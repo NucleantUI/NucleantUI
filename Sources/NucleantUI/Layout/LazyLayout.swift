@@ -117,12 +117,12 @@ extension ViewNode {
     /// How many layout children this node stands for — what an item built
     /// under a lazy cursor adds to its count.
     var lazyLayoutCount: Int {
-        content.isTransparent ? layoutChildren.count : 1
+        isTransparent ? layoutChildren.count : 1
     }
 
     /// Tag every node `self` flattens into as part of one element.
     func tagLazyElement(_ tag: LazyElementTag) {
-        if content.isTransparent {
+        if isTransparent {
             for child in children where !child.isLeaving {
                 child.tagLazyElement(tag)
             }
@@ -142,7 +142,6 @@ extension ForEach {
         if Content.self is any LazyExpandable.Type {
             return makeExpandedLazyNode(&context, cursor: cursor)
         }
-        let path = context.path
         let count = data.count
         let start = cursor.position
         let lower = min(max(cursor.window.lowerBound - start, 0), count)
@@ -152,48 +151,49 @@ extension ForEach {
         var rows = context
         rows.lazyCursor = nil
 
+        let slots = rows.rowSlots(for: ID.self)
         var built: [(index: Int, node: ViewNode, isNew: Bool)] = []
         built.reserveCapacity(upper - lower)
         var position = data.index(data.startIndex, offsetBy: lower)
         for offset in lower..<upper {
             let element = data[position]
             position = data.index(after: position)
-            let index = rows.childSlot(for: identify(element))
+            let index = slots.slot(for: identify(element))
             let isNew = rows.isNewChild(at: index)
             let node = rows.child(index) { ctx in
-                let row = trackingObservation(at: path) { build(element) }
-                return buildNode(row, &ctx)
+                buildNode(ForEachRow(element: element, build: build), &ctx)
             }
             node.tagLazyElement(LazyElementTag(owner: cursor.owner, unit: start + offset))
             built.append((index: index, node: node, isNew: isNew))
         }
+        slots.forgetGone(from: rows.position, built: built.count)
 
         var children: [ViewNode] = []
         if lower > 0 {
-            children.append(ViewNode(content: LazyGapContent(owner: cursor.owner, start: start, count: lower)))
+            children.append(ContentNode(content: LazyGapContent(owner: cursor.owner, start: start, count: lower)))
         }
         children += rows.transitionChildren(built)
         if upper < count {
-            children.append(ViewNode(content: LazyGapContent(owner: cursor.owner, start: start + upper, count: count - upper)))
+            children.append(ContentNode(content: LazyGapContent(owner: cursor.owner, start: start + upper, count: count - upper)))
         }
         cursor.position = start + count
-        return ViewNode(content: GroupContent(), children: children)
+        return ContentNode(content: GroupContent(), children: children)
     }
 
     /// Every element built, under the cursor: each is a section whose own
     /// rows are what the window is over, and which count their own units.
     private func makeExpandedLazyNode(_ context: inout BuildContext, cursor: LazyBuildCursor) -> ViewNode {
-        let path = context.path
+        let slots = context.rowSlots(for: ID.self)
         let built = data.map { element in
-            let index = context.childSlot(for: identify(element))
+            let index = slots.slot(for: identify(element))
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
-                let row = trackingObservation(at: path) { build(element) }
-                return buildNode(row, &ctx)
+                buildNode(ForEachRow(element: element, build: build), &ctx)
             }
             return (index: index, node: node, isNew: isNew)
         }
-        return ViewNode(content: GroupContent(), children: context.transitionChildren(built))
+        slots.forgetGone(from: context.position, built: built.count)
+        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }
 
@@ -218,7 +218,7 @@ extension ViewNode {
         var items: [LazyItem] = []
         var next = 0
         for child in layoutChildren {
-            if let gap = child.content as? LazyGapContent, gap.owner == owner {
+            if let gap = child.content(as: LazyGapContent.self), gap.owner == owner {
                 items.append(LazyItem(kind: .gap, units: gap.units))
                 next = gap.units.upperBound
             } else if let tag = child.lazyTag, tag.owner == owner {

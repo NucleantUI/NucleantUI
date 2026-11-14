@@ -64,16 +64,26 @@ public struct DragGesture {
 extension View {
     /// Attaches a drag gesture to this view.
     public func gesture(_ gesture: DragGesture) -> some View {
-        _ModifierView(content: self) { context in
-            InteractionContent(target: HitTarget(
-                isEnabled: context.environment.isEnabled,
-                minimumDragDistance: gesture.minimumDistance,
-                // A drag reports on press too, so a click that never moves
-                // still sets the value it landed on — how a fader jumps to
-                // where you tapped it.
-                onDragChanged: gesture.changedAction,
-                onDragEnded: gesture.endedAction
-            ))
-        }
+        _ModifierView(content: self, modifier: DragGestureModifier(gesture: gesture))
     }
+}
+
+/// `.gesture(_:)` with a `DragGesture`. Built again whenever its parent
+/// is, for the latest actions.
+struct DragGestureModifier: PrimitiveModifier {
+    let gesture: DragGesture
+
+    func makeContent(_ context: inout BuildContext) -> InteractionContent {
+        InteractionContent(target: HitTarget(
+            isEnabled: context.environment.isEnabled,
+            minimumDragDistance: gesture.minimumDistance,
+            // A drag reports on press too, so a click that never moves
+            // still sets the value it landed on — how a fader jumps to
+            // where you tapped it.
+            onDragChanged: gesture.changedAction,
+            onDragEnded: gesture.endedAction
+        ))
+    }
+
+    func _isEquivalent(to other: DragGestureModifier) -> Bool { false }
 }

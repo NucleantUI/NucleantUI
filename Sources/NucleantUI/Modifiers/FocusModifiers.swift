@@ -22,15 +22,7 @@ extension View {
     /// when the view takes them, and setting it to `value` gives them to
     /// this view.
     public func focused<Value: Hashable>(_ binding: FocusState<Value>.Binding, equals value: Value) -> some View {
-        _ModifierView(content: self) { _ in
-            FocusBindingContent(record: FocusBindingRecord(
-                group: binding.identity,
-                matches: { binding.peek() == value },
-                take: { binding.wrappedValue = value },
-                clear: { binding.wrappedValue = binding.empty },
-                version: { binding.version }
-            ))
-        }
+        _ModifierView(content: self, modifier: FocusedModifier(binding: binding, value: value))
     }
 
     /// Lets this view take the keys: a press on it gives them, and Tab
@@ -52,15 +44,7 @@ extension View {
         _ isFocusable: Bool = true,
         onFocusChange: @escaping @MainActor (_ isFocused: Bool) -> Void
     ) -> some View {
-        _ModifierView(content: self) { context in
-            FocusableContent(target: FocusTarget(
-                path: context.path,
-                isEnabled: isFocusable && context.environment.isEnabled,
-                onFocusChange: onFocusChange,
-                onKeyDown: { _ in },
-                isTabStop: true
-            ))
-        }
+        _ModifierView(content: self, modifier: FocusableModifier(isFocusable: isFocusable, onFocusChange: onFocusChange))
     }
 
     // MARK: - Keys
@@ -115,7 +99,7 @@ extension View {
     }
 
     private func keyPressModifier(_ handler: KeyPressHandler) -> some View {
-        _ModifierView(content: self) { _ in KeyPressContent(handler: handler) }
+        _ModifierView(content: self, modifier: KeyPressModifier(handler: handler))
     }
 
     // MARK: - Submit
@@ -123,14 +107,72 @@ extension View {
     /// Keeps a submission inside this view — a text field's Return — from
     /// running the `.onSubmit` actions outside it.
     public func submitScope(_ isBlocking: Bool = true) -> some View {
-        _ModifierView(
-            content: self,
-            key: ["submitScope", isBlocking] as [AnyHashable],
-            environment: { environment in
-                if isBlocking { environment.submitActions = [] }
-            },
-            node: { context in EnvironmentContent(colorScheme: context.environment.colorScheme) }
-        )
+        _ModifierView(content: self, modifier: SubmitScopeModifier(isBlocking: isBlocking))
+    }
+}
+
+/// `.focused(_:equals:)`. Built again whenever its parent is, so the mark
+/// reads the binding it was last given.
+struct FocusedModifier<Value: Hashable>: PrimitiveModifier {
+    let binding: FocusState<Value>.Binding
+    let value: Value
+
+    func makeContent(_ context: inout BuildContext) -> FocusBindingContent {
+        let binding = self.binding
+        let value = self.value
+        return FocusBindingContent(record: FocusBindingRecord(
+            group: binding.identity,
+            matches: { binding.peek() == value },
+            take: { binding.wrappedValue = value },
+            clear: { binding.wrappedValue = binding.empty },
+            version: { binding.version }
+        ))
+    }
+
+    func _isEquivalent(to other: FocusedModifier<Value>) -> Bool { false }
+}
+
+/// `.focusable(_:onFocusChange:)`. Built again whenever its parent is, for
+/// the latest action.
+struct FocusableModifier: PrimitiveModifier {
+    let isFocusable: Bool
+    let onFocusChange: @MainActor (Bool) -> Void
+
+    func makeContent(_ context: inout BuildContext) -> FocusableContent {
+        FocusableContent(target: FocusTarget(
+            owner: context.position.handle,
+            isEnabled: isFocusable && context.environment.isEnabled,
+            onFocusChange: onFocusChange,
+            onKeyDown: { _ in },
+            isTabStop: true
+        ))
+    }
+
+    func _isEquivalent(to other: FocusableModifier) -> Bool { false }
+}
+
+/// The `.onKeyPress` modifiers. Built again whenever their parent is, for
+/// the latest action.
+struct KeyPressModifier: PrimitiveModifier {
+    let handler: KeyPressHandler
+
+    func makeContent(_ context: inout BuildContext) -> KeyPressContent {
+        KeyPressContent(handler: handler)
+    }
+
+    func _isEquivalent(to other: KeyPressModifier) -> Bool { false }
+}
+
+/// `.submitScope(_:)`.
+struct SubmitScopeModifier: PrimitiveModifier, Equatable {
+    let isBlocking: Bool
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        if isBlocking { environment.submitActions = [] }
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
     }
 }
 
@@ -282,10 +324,11 @@ extension ViewNode {
 
     /// The node holding the focus target at `path`, if that view still
     /// stands.
-    func focusNode(at path: [Int]) -> ViewNode? {
-        if let target = content.focusTarget, target.path == path { return self }
+    func focusNode(of owner: PositionHandle) -> ViewNode? {
+        guard subtreeTraits.contains(.focusTarget) else { return nil }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.owner === owner { return self }
         for child in children {
-            if let found = child.focusNode(at: path) { return found }
+            if let found = child.focusNode(of: owner) { return found }
         }
         return nil
     }
@@ -300,7 +343,7 @@ extension ViewNode {
         var probe = self
         while true {
             let inner = probe.layoutChildren
-            guard inner.count == 1, inner[0].content.focusTarget == nil else { break }
+            guard inner.count == 1, !inner[0].traits.contains(.focusTarget) else { break }
             probe = inner[0]
             inside.append(probe)
         }
@@ -315,8 +358,8 @@ extension ViewNode {
 
     /// Every `.focused` mark standing in this subtree, with its node.
     func focusBindings(into records: inout [(record: FocusBindingRecord, node: ViewNode)]) {
-        guard !content.isParked, !isLeaving else { return }
-        if let record = content.focusBinding {
+        guard subtreeTraits.contains(.focusBinding), !traits.contains(.parked), !isLeaving else { return }
+        if traits.contains(.focusBinding), let record = content.focusBinding {
             records.append((record, self))
         }
         for child in children {
@@ -327,8 +370,8 @@ extension ViewNode {
     /// The first enabled view under this node that takes keys — where the
     /// keys go when a focus state names this node's view.
     func firstFocusTarget() -> FocusTarget? {
-        guard !content.isParked, !isLeaving else { return nil }
-        if let target = content.focusTarget, target.isEnabled { return target }
+        guard subtreeTraits.contains(.focusTarget), !traits.contains(.parked), !isLeaving else { return nil }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.isEnabled { return target }
         for child in children {
             if let found = child.firstFocusTarget() { return found }
         }

@@ -89,16 +89,16 @@ let sidebar: [PlaceSection] = {
 
 /// Everything here is dynamic, so the window follows light and dark.
 struct Theme {
-    static let content = ShapeStyle.dynamic(light: .white, dark: Color(hex: 0x1E1E1E))
-    static let sidebar = ShapeStyle.dynamic(light: Color(hex: 0xE8E6EA), dark: Color(hex: 0x2B2A2E))
-    static let stripe = ShapeStyle.dynamic(light: Color(hex: 0xF4F5F5), dark: Color(hex: 0x282828))
-    static let selection = ShapeStyle.dynamic(light: Color(hex: 0x0A66E4), dark: Color(hex: 0x0A5CCB))
-    static let sidebarSelection = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.09), dark: Color(white: 1, opacity: 0.12))
-    static let accent = ShapeStyle.dynamic(light: Color(hex: 0x1D7AF2), dark: Color(hex: 0x3D8FF6))
-    static let folder = ShapeStyle.dynamic(light: Color(hex: 0x4BA3EE), dark: Color(hex: 0x3F97E4))
-    static let folderTab = ShapeStyle.dynamic(light: Color(hex: 0x3A8FD9), dark: Color(hex: 0x3284CE))
-    static let page = ShapeStyle.dynamic(light: .white, dark: Color(hex: 0xDADADF))
-    static let separator = ShapeStyle.separator
+    static let content = DynamicShapeStyle(light: .white, dark: Color(hex: 0x1E1E1E))
+    static let sidebar = DynamicShapeStyle(light: Color(hex: 0xE8E6EA), dark: Color(hex: 0x2B2A2E))
+    static let stripe = DynamicShapeStyle(light: Color(hex: 0xF4F5F5), dark: Color(hex: 0x282828))
+    static let selection = DynamicShapeStyle(light: Color(hex: 0x0A66E4), dark: Color(hex: 0x0A5CCB))
+    static let sidebarSelection = DynamicShapeStyle(light: Color(white: 0, opacity: 0.09), dark: Color(white: 1, opacity: 0.12))
+    static let accent = DynamicShapeStyle(light: Color(hex: 0x1D7AF2), dark: Color(hex: 0x3D8FF6))
+    static let folder = DynamicShapeStyle(light: Color(hex: 0x4BA3EE), dark: Color(hex: 0x3F97E4))
+    static let folderTab = DynamicShapeStyle(light: Color(hex: 0x3A8FD9), dark: Color(hex: 0x3284CE))
+    static let page = DynamicShapeStyle(light: .white, dark: Color(hex: 0xDADADF))
+    static let separator = SeparatorShapeStyle.separator
 }
 
 /// Column widths, shared by the header and every row so they line up.
@@ -197,7 +197,7 @@ struct DocumentIcon {
 @View
 struct Chevron {
     let isOpen: Bool
-    let color: ShapeStyle
+    let color: AnyShapeStyle
     var size: Double = 8
     var lineWidth: Double = 1.5
 
@@ -249,8 +249,8 @@ struct FileRow {
 
     var row: some View {
         let isSelected = selection == node.id
-        let text: ShapeStyle = isSelected ? .color(.white) : .primary
-        let secondary: ShapeStyle = isSelected ? .color(.white) : .secondary
+        let text: AnyShapeStyle = isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)
+        let secondary: AnyShapeStyle = isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary)
         return HStack(spacing: 0) {
             // The name cell takes whatever the fixed columns leave, so
             // indenting it never moves them.
@@ -298,7 +298,7 @@ struct FileRow {
                 .frame(width: Columns.gap + Columns.kind, alignment: .leading)
         }
         .frame(height: Columns.rowHeight)
-        .background(isSelected ? Theme.selection : StripedRow.color(index))
+        .background(isSelected ? AnyShapeStyle(Theme.selection) : AnyShapeStyle(StripedRow.color(index)))
         .cornerRadius(5)
         .onTapGesture { selection = node.id }
         .contextMenu { menu }
@@ -371,7 +371,7 @@ struct TagSwatch {
     var body: some View {
         ZStack {
             if isOn {
-                Circle().stroke(ShapeStyle.primary, lineWidth: 1.5)
+                Circle().stroke(.primary, lineWidth: 1.5)
             }
             Circle()
                 .fill(tag.color)
@@ -409,8 +409,8 @@ struct StripedRow {
             .cornerRadius(5)
     }
 
-    static func color(_ index: Int) -> ShapeStyle {
-        index % 2 == 1 ? Theme.stripe : .color(.clear)
+    static func color(_ index: Int) -> AnyShapeStyle {
+        index % 2 == 1 ? AnyShapeStyle(Theme.stripe) : AnyShapeStyle(.clear)
     }
 }
 
@@ -478,7 +478,7 @@ struct SidebarRow {
         }
         .padding(horizontal: 8)
         .frame(height: 24)
-        .background(isSelected ? Theme.sidebarSelection : .color(.clear))
+        .background(isSelected ? AnyShapeStyle(Theme.sidebarSelection) : AnyShapeStyle(.clear))
         .cornerRadius(6)
     }
 }
@@ -545,7 +545,7 @@ struct ColumnHeader {
                 Text("Name")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 // The sort indicator: by name, ascending.
-                Chevron(isOpen: false, color: .secondary, size: 8, lineWidth: 1.3)
+                Chevron(isOpen: false, color: AnyShapeStyle(.secondary), size: 8, lineWidth: 1.3)
                     .rotationEffect(.degrees(-90))
                     .padding(.trailing, 8)
             }
@@ -620,11 +620,11 @@ struct FinderWindow {
         let canGoBack = position > 0
         let canGoForward = position < history.count - 1
         return HStack(spacing: 8) {
-            Chevron(isOpen: false, color: canGoBack ? .primary : .tertiary, size: 14, lineWidth: 1.8)
+            Chevron(isOpen: false, color: canGoBack ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary), size: 14, lineWidth: 1.8)
                 .scaleEffect(x: -1, y: 1)
                 .frame(width: 20, height: 24)
                 .onTapGesture { if canGoBack { position -= 1; selection = nil } }
-            Chevron(isOpen: false, color: canGoForward ? .primary : .tertiary, size: 14, lineWidth: 1.8)
+            Chevron(isOpen: false, color: canGoForward ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary), size: 14, lineWidth: 1.8)
                 .frame(width: 20, height: 24)
                 .onTapGesture { if canGoForward { position += 1; selection = nil } }
             Text(location.title)

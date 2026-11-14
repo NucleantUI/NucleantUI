@@ -71,9 +71,9 @@ public struct ThorCanvas {
 
 extension ThorCanvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: ThorCanvasContent(
-            key: RenderNodeKey(path: context.path, identity: context.viewIdentity, id: nodeID),
-            path: context.path,
+        ContentNode(content: ThorCanvasContent(
+            key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity, id: nodeID),
+            reader: context.position.handle,
             onInit: onInit,
             render: renderer
         ))
@@ -85,7 +85,8 @@ extension ThorCanvas: BuiltinView {
 /// not the enclosing canvas.
 struct ThorCanvasContent: NodeContent {
     let key: RenderNodeKey
-    let path: [Int]
+    /// Whose reads what `render` reads are: the view's.
+    let reader: PositionHandle
     let onInit: (borrowing ThorContext, SIMD2<Float>) -> Void
     let render: (borrowing ThorContext, SIMD2<Float>) -> Void
     /// Which build this content came from. A rebuilt view gets a new
@@ -147,16 +148,15 @@ struct ThorCanvasContent: NodeContent {
         }
         if node.generation != generation || node.renderedSize != rect.size {
             // The reads about to happen replace the last run's.
-            for storage in node.reads {
-                storage.readers.removeValue(forKey: node.readerPath)
+            if let previous = node.reader {
+                for storage in node.reads { storage.readers.remove(previous) }
             }
-            node.readerPath = path
-            DependencyTracker.shared.push(path)
-            trackingObservation(at: path) {
+            node.reader = reader
+            DependencyTracker.shared.push(reader)
+            trackingObservation(for: reader) {
                 render(node.thorContext, size)
             }
-            DependencyTracker.shared.pop()
-            node.reads = DependencyTracker.shared.takeReads(for: path)
+            node.reads = DependencyTracker.shared.pop()
             node.generation = generation
             node.renderedSize = rect.size
             rasterize = true

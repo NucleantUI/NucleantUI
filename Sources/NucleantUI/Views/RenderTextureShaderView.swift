@@ -51,8 +51,8 @@ public struct RenderTextureShaderView<Function: ShaderProtocol> {
 
 extension RenderTextureShaderView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: RenderTextureShaderContent(
-            path: context.path,
+        ContentNode(content: RenderTextureShaderContent(
+            slot: context.position.renderSlot,
             texture: texture,
             words: function.spirv,
             input: function.input,
@@ -67,7 +67,8 @@ extension RenderTextureShaderView: BuiltinView {
 /// Reserves the shader slot and reports where it composites. Emits no draw
 /// commands: the pixels arrive through the engine, not the canvas.
 struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
-    let path: [Int]
+    /// What the shader's slot is filed under: its view's.
+    let slot: RenderSlot
     let texture: RenderTexture
     let words: [UInt32]
     let input: Input
@@ -92,7 +93,7 @@ struct RenderTextureShaderContent<Input: ShaderInput>: NodeContent {
         // the frame — a stack's slide moves it with the screen.
         let shown = context.compositeFrame(of: rect)
         host.useModule(
-            path: path,
+            slot: slot,
             words: words,
             input: input,
             isAnimated: isAnimated,

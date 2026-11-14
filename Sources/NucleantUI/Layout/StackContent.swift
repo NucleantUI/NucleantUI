@@ -28,11 +28,16 @@ struct StackContent: NodeContent {
     /// and must be sized before a sibling `Text`; one holding a `Spacer`
     /// soaks up whatever is left.
     func flexibility(along axis: Axis, node: ViewNode) -> LayoutPriorityClass {
-        node.layoutChildren.map { $0.flexibility(along: axis) }.max() ?? .content
+        var most: LayoutPriorityClass?
+        for child in node.layoutChildren {
+            let flexibility = child.flexibility(along: axis)
+            if most.map({ flexibility > $0 }) ?? true { most = flexibility }
+        }
+        return most ?? .content
     }
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
-        layout(proposal, children: node.layoutChildren).total
+        layout(proposal, node: node, children: node.layoutChildren).total
     }
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
@@ -48,7 +53,7 @@ struct StackContent: NodeContent {
         let crossAxis = axis.cross
         var placing = proposal
         placing[crossAxis] = proposal[crossAxis] ?? rect.size[crossAxis]
-        let result = layout(placing, children: children)
+        let result = layout(placing, node: node, children: children)
 
         // Extra room along the main axis when the children ended up smaller
         // than the rect (a stack of fixed-size views inside a bigger frame).
@@ -92,7 +97,9 @@ struct StackContent: NodeContent {
 
     // MARK: - The measuring pass
 
-    private struct LayoutResult {
+    struct LayoutResult {
+        /// The proposal the stack was laid out under.
+        var proposal: ProposedSize
         var sizes: [Size]
         /// The proposal each child was measured under — carried so placement
         /// can reuse it instead of re-deriving one from the child's own size.
@@ -100,9 +107,28 @@ struct StackContent: NodeContent {
         var total: Size
     }
 
-    private func layout(_ proposal: ProposedSize, children: [ViewNode]) -> LayoutResult {
+    /// The run under `proposal`: the last one, when it was laid out under
+    /// the same — `place` lays the stack out again under the proposal it
+    /// was just measured with — or worked out and kept.
+    private func layout(_ proposal: ProposedSize, node: ViewNode, children: [ViewNode]) -> LayoutResult {
+        let cache: StackRunCache
+        if let existing = node.layoutCache as? StackRunCache {
+            cache = existing
+            if let last = cache.run, last.proposal == proposal, last.sizes.count == children.count {
+                return last
+            }
+        } else {
+            cache = StackRunCache()
+            node.layoutCache = cache
+        }
+        let result = layout(proposal, children: children, cache: cache)
+        cache.run = result
+        return result
+    }
+
+    private func layout(_ proposal: ProposedSize, children: [ViewNode], cache: StackRunCache) -> LayoutResult {
         guard !children.isEmpty else {
-            return LayoutResult(sizes: [], proposals: [], total: .zero)
+            return LayoutResult(proposal: proposal, sizes: [], proposals: [], total: .zero)
         }
 
         let crossAxis = axis.cross
@@ -115,7 +141,7 @@ struct StackContent: NodeContent {
             // Least flexible first, each offered an equal share of what the
             // ones before it left — not the whole of it, or the first child
             // that takes all it is offered leaves nothing for the rest.
-            for (position, index) in fittingOrder(children, proposal: proposal).enumerated() {
+            for (position, index) in fittingOrder(children, proposal: proposal, cache: cache).enumerated() {
                 var childProposal = proposal
                 childProposal[axis] = remaining / Double(children.count - position)
                 let size = children[index].sizeThatFits(childProposal)
@@ -143,7 +169,7 @@ struct StackContent: NodeContent {
         if let limit = proposal[axis], !isFixedRun { total[axis] = min(total[axis], max(limit, 0)) }
         if let limit = proposal[crossAxis] { total[crossAxis] = min(total[crossAxis], max(limit, 0)) }
 
-        return LayoutResult(sizes: sizes, proposals: proposals, total: total)
+        return LayoutResult(proposal: proposal, sizes: sizes, proposals: proposals, total: total)
     }
 
     /// The order the children are offered space in, as SwiftUI's stacks
@@ -152,14 +178,28 @@ struct StackContent: NodeContent {
     /// length when offered all there is; among those that stretch without
     /// end, the one that needs more goes first. Ties keep the children's
     /// own order.
-    private func fittingOrder(_ children: [ViewNode], proposal: ProposedSize) -> [Int] {
-        var least = proposal
-        least[axis] = 0
-        var most = proposal
-        most[axis] = .infinity
-        let ranges = children.map { child -> (min: Double, span: Double) in
-            let min = child.sizeThatFits(least)[axis]
-            return (min, child.sizeThatFits(most)[axis] - min)
+    ///
+    /// One child has no order to find. How far a child stretches depends
+    /// on what is proposed across the axis, not along it, so the ranges are
+    /// kept for that proposal: a stack measured again at another length —
+    /// probed by the stack around it, or a window resized along it — sorts
+    /// its children without asking them again.
+    private func fittingOrder(_ children: [ViewNode], proposal: ProposedSize, cache: StackRunCache) -> [Int] {
+        guard children.count > 1 else { return Array(children.indices) }
+        let cross = proposal[axis.cross]
+        let ranges: [(min: Double, span: Double)]
+        if let kept = cache.stretch, kept.cross == cross, kept.ranges.count == children.count {
+            ranges = kept.ranges
+        } else {
+            var least = proposal
+            least[axis] = 0
+            var most = proposal
+            most[axis] = .infinity
+            ranges = children.map { child -> (min: Double, span: Double) in
+                let min = child.sizeThatFits(least)[axis]
+                return (min, child.sizeThatFits(most)[axis] - min)
+            }
+            cache.stretch = (cross, ranges)
         }
         func precedes(_ a: Int, _ b: Int) -> Bool {
             guard ranges[a].span == ranges[b].span else { return ranges[a].span < ranges[b].span }
@@ -176,6 +216,16 @@ struct StackContent: NodeContent {
         }
         return order
     }
+}
+
+/// What a stack's node keeps between questions, until the node's
+/// measurements are dropped or its children change: the last run it laid
+/// out, and how far each child stretches along the axis under the last
+/// cross-axis proposal.
+@MainActor
+final class StackRunCache {
+    var run: StackContent.LayoutResult?
+    var stretch: (cross: Double?, ranges: [(min: Double, span: Double)])?
 }
 
 /// Depth-stacked children, all sharing one rect.

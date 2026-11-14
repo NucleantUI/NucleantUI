@@ -55,7 +55,10 @@ public func _areEquivalent<T: Equatable & ViewInput>(_ a: T, _ b: T) -> Bool {
 @MainActor
 public func _areEquivalent<T>(_ a: T, _ b: T) -> Bool {
     if _isPOD(T.self), _plainBytesEqual(a, b) { return true }
-    return _dynamicallyEquivalent(a, b)
+    let isEquivalent = equivalenceWitness(for: T.self)
+    return withUnsafePointer(to: a) { a in
+        withUnsafePointer(to: b) { b in isEquivalent(UnsafeRawPointer(a), UnsafeRawPointer(b)) }
+    }
 }
 
 /// Whether two values have the same bytes — a word at a time, then the
@@ -81,11 +84,104 @@ nonisolated func _plainBytesEqual<T>(_ a: T, _ b: T) -> Bool {
     }
 }
 
+// MARK: - Comparing by type
+
+/// How two values of one type compare as view inputs, given pointers to
+/// them. Chosen once per type by the same rules as `_dynamicallyEquivalent`
+/// — `ViewInput`, then the same object, then `Equatable`, then the bytes of
+/// plain data — so a value whose type is known is compared where it lies,
+/// without being boxed as `Any`. A state slot takes its value type's when
+/// it is made.
+typealias EquivalenceWitness = @MainActor (UnsafeRawPointer, UnsafeRawPointer) -> Bool
+
+/// The witness for values of type `T`, made the first time it is asked for.
+@MainActor
+func equivalenceWitness<T>(for type: T.Type) -> EquivalenceWitness {
+    let id = ObjectIdentifier(type)
+    if let known = witnesses[id] { return known }
+    let made = makeWitness(type)
+    witnesses[id] = made
+    return made
+}
+
+@MainActor
+private var witnesses: [ObjectIdentifier: EquivalenceWitness] = [:]
+
+@MainActor
+private func makeWitness<T>(_: T.Type) -> EquivalenceWitness {
+    if let input = T.self as? any ViewInput.Type {
+        return viewInputWitness(input)
+    }
+    if let optional = T.self as? any _OptionalValue.Type {
+        return optionalWitness(optional)
+    }
+    if T.self is AnyClass {
+        return { a, b in
+            (a.assumingMemoryBound(to: T.self).pointee as AnyObject)
+                === (b.assumingMemoryBound(to: T.self).pointee as AnyObject)
+        }
+    }
+    if let equatable = T.self as? any Equatable.Type {
+        return equatableWitness(equatable)
+    }
+    if _isPOD(T.self) {
+        return { a, b in
+            _plainBytesEqual(a.assumingMemoryBound(to: T.self).pointee, b.assumingMemoryBound(to: T.self).pointee)
+        }
+    }
+    // Nothing the static type says. An existential's does not say what it
+    // holds, which the values themselves do: asked as they are, as before.
+    return { a, b in
+        _dynamicallyEquivalent(a.assumingMemoryBound(to: T.self).pointee, b.assumingMemoryBound(to: T.self).pointee)
+    }
+}
+
+/// Two optionals: both empty is the same, one empty is not, and two
+/// values compare as their wrapped type's do — an object by identity, as
+/// it is unwrapped.
+@MainActor
+private func optionalWitness<O: _OptionalValue>(_: O.Type) -> EquivalenceWitness {
+    let isEquivalent = equivalenceWitness(for: O.Wrapped.self)
+    return { a, b in
+        switch (a.assumingMemoryBound(to: O.self).pointee._wrapped, b.assumingMemoryBound(to: O.self).pointee._wrapped) {
+        case (nil, nil):
+            return true
+        case (let x?, let y?):
+            return withUnsafePointer(to: x) { x in
+                withUnsafePointer(to: y) { y in isEquivalent(UnsafeRawPointer(x), UnsafeRawPointer(y)) }
+            }
+        default:
+            return false
+        }
+    }
+}
+
+/// `Optional`, for the comparing rules to see through.
+protocol _OptionalValue {
+    associatedtype Wrapped
+    var _wrapped: Wrapped? { get }
+}
+
+extension Optional: _OptionalValue {
+    var _wrapped: Wrapped? { self }
+}
+
+@MainActor
+private func viewInputWitness<T: ViewInput>(_: T.Type) -> EquivalenceWitness {
+    { a, b in a.assumingMemoryBound(to: T.self).pointee._isEquivalent(to: b.assumingMemoryBound(to: T.self).pointee) }
+}
+
+@MainActor
+private func equatableWitness<T: Equatable>(_: T.Type) -> EquivalenceWitness {
+    { a, b in _areEquivalent(a.assumingMemoryBound(to: T.self).pointee, b.assumingMemoryBound(to: T.self).pointee) }
+}
+
 /// The runtime answer for a value whose static type says nothing.
 ///
 /// Order matters: `ViewInput` first, so a `Binding` compares by source and
 /// not through its `Equatable` conformance (which reads the value — and two
 /// bindings onto the same slot always read the same value, changed or not).
+/// An `Optional` next, compared by what it wraps.
 ///
 /// Which of those applies depends only on the type, and asking costs a
 /// protocol conformance lookup per question; so it is asked once per type,
@@ -114,6 +210,9 @@ private func comparator(for value: Any) -> @MainActor (Any, Any) -> Bool {
     if let value = value as? any ViewInput {
         return viewInputComparator(value)
     }
+    if let value = value as? any _OptionalValue {
+        return optionalComparator(value)
+    }
     // The same object is the same input: what a view reads *from* it is
     // tracked by observation, so a change inside it dirties the readers
     // without the reference having to look different. A different object
@@ -139,6 +238,17 @@ private func comparator(for value: Any) -> @MainActor (Any, Any) -> Bool {
 private nonisolated func plainDataComparator<T>(_: T) -> (@MainActor (Any, Any) -> Bool)? {
     guard _isPOD(T.self) else { return nil }
     return { a, b in _plainBytesEqual(a as! T, b as! T) }
+}
+
+@MainActor
+private func optionalComparator<O: _OptionalValue>(_: O) -> @MainActor (Any, Any) -> Bool {
+    { a, b in
+        switch ((a as! O)._wrapped, (b as! O)._wrapped) {
+        case (nil, nil): return true
+        case (let x?, let y?): return _dynamicallyEquivalent(x, y)
+        default: return false
+        }
+    }
 }
 
 @MainActor
@@ -223,12 +333,23 @@ extension Optional where Wrapped: View {
     }
 }
 
-// The rest carry closures, so there is nothing to compare.
-
+/// The same erased view: the same storage, or a view of the same type,
+/// equivalent as that type's are.
 extension AnyView {
-    public func _isEquivalent(to other: AnyView) -> Bool { false }
+    public func _isEquivalent(to other: AnyView) -> Bool {
+        storage === other.storage || storage.isEquivalent(to: other.storage)
+    }
 }
 
+/// The same rows: the same data, read for its ids the same way, and a row
+/// closure running the same code over equivalent captures — the way a view
+/// compares its stored closures. Then not one row closure has to run for a
+/// parent that ran again. Data that can't be compared, or a closure whose
+/// captures can't be read, makes it a new one each time, as it always was.
 extension ForEach {
-    public func _isEquivalent(to other: ForEach<Data, ID, Content>) -> Bool { false }
+    public func _isEquivalent(to other: ForEach<Data, ID, Content>) -> Bool {
+        id == other.id
+            && _areEquivalent(data, other.data)
+            && _areEquivalentClosures(self, other, \.build, name: "build")
+    }
 }

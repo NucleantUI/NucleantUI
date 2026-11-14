@@ -135,7 +135,7 @@ public struct TextField<Label: View> {
                 text: current,
                 font: font,
                 color: foreground,
-                selectionColor: tint.opacity(editing.isFocused ? 0.3 : 0.15),
+                selectionColor: AnyShapeStyle(tint.opacity(editing.isFocused ? 0.3 : 0.15)),
                 caret: resolved.caret,
                 anchor: resolved.anchor,
                 showsCaret: editing.isFocused,
@@ -1042,12 +1042,7 @@ extension View {
     /// Runs `action` when a text field inside this view is submitted — its
     /// Return pressed. Actions set further out run too, outermost first.
     public func onSubmit(of triggers: SubmitTriggers = .text, _ action: @escaping @MainActor () -> Void) -> some View {
-        _ModifierView(
-            content: self,
-            key: nil,
-            environment: { $0.submitActions.append(SubmitAction(triggers: triggers, perform: action)) },
-            node: { context in EnvironmentContent(colorScheme: context.environment.colorScheme) }
-        )
+        _ModifierView(content: self, modifier: OnSubmitModifier(triggers: triggers, action: action))
     }
 }
 
@@ -1082,8 +1077,8 @@ enum TextFieldPasteboard {
 struct TextFieldLine {
     let text: String
     let font: Font
-    let color: ShapeStyle
-    let selectionColor: ShapeStyle
+    let color: AnyShapeStyle
+    let selectionColor: AnyShapeStyle
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -1125,18 +1120,18 @@ extension TextFieldLine: BuiltinView {
             }
             return offset
         }
-        return ViewNode(content: TextFieldLineContent(
+        return ContentNode(content: TextFieldLineContent(
             text: text,
             font: font,
-            color: color,
-            selectionColor: selectionColor,
+            color: color.paint(in: context.environment),
+            selectionColor: selectionColor.paint(in: context.environment),
             caret: caret,
             anchor: anchor,
             showsCaret: showsCaret,
             scroll: scroll,
             inset: inset,
             focus: FocusTarget(
-                path: context.path,
+                owner: context.position.handle,
                 isEnabled: isEnabled,
                 onFocusChange: onFocusChange,
                 onKeyDown: onKeyDown,
@@ -1169,8 +1164,9 @@ extension TextFieldLine: BuiltinView {
 struct TextFieldLineContent: NodeContent {
     let text: String
     let font: Font
-    let color: ShapeStyle
-    let selectionColor: ShapeStyle
+    /// Resolved where the field was built.
+    let color: _ResolvedPaint
+    let selectionColor: _ResolvedPaint
     let caret: Int
     let anchor: Int
     let showsCaret: Bool
@@ -1222,10 +1218,8 @@ struct TextFieldLineContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: lineRect,
-                fill: context.resolve(selectionColor),
-                transform: context.transform,
-                clip: clip
-            )))
+                fill: context.resolve(selectionColor)
+            )), under: DrawState(transform: context.transform, clip: clip))
         }
         if !text.isEmpty {
             list.append(.text(TextDraw(
@@ -1234,10 +1228,8 @@ struct TextFieldLineContent: NodeContent {
                 font: font,
                 color: context.resolve(color).flatColor,
                 lineLimit: 1,
-                wraps: false,
-                transform: context.transform,
-                clip: clip
-            )))
+                wraps: false
+            )), under: DrawState(transform: context.transform, clip: clip))
         }
         if showsCaret {
             var path = Path()
@@ -1245,10 +1237,25 @@ struct TextFieldLineContent: NodeContent {
             list.append(.shape(ShapeDraw(
                 path: path,
                 bounds: lineRect,
-                fill: context.resolve(color),
-                transform: context.transform,
-                clip: clip.insetBy(-1)
-            )))
+                fill: context.resolve(color)
+            )), under: DrawState(transform: context.transform, clip: clip.insetBy(-1)))
         }
     }
+}
+
+/// `.onSubmit(of:_:)`. Built again whenever its parent is, for the latest
+/// action.
+struct OnSubmitModifier: PrimitiveModifier {
+    let triggers: SubmitTriggers
+    let action: @MainActor () -> Void
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment.submitActions.append(SubmitAction(triggers: triggers, perform: action))
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+
+    func _isEquivalent(to other: OnSubmitModifier) -> Bool { false }
 }

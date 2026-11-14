@@ -83,10 +83,7 @@ extension HostedViews {
         }
 
         @Test func itIsThePrimaryLabelColorNotTheAccent() {
-            guard case .dynamic(let light, let dark) = ShapeStyle.primary else {
-                Issue.record("`.primary` is not a light/dark pair")
-                return
-            }
+            let (light, dark) = (HierarchicalShapeStyle.primary.colors.light, HierarchicalShapeStyle.primary.colors.dark)
             #expect(chevrons(list(pushed: [1])).map(\.tint) == [.color(light)])
             #expect(chevrons(list(pushed: [1], dark: true)).map(\.tint) == [.color(dark)])
         }

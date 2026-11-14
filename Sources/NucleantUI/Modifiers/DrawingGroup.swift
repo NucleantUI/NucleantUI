@@ -34,9 +34,7 @@ extension View {
     /// `RenderBoundaryContent`); a group is for a subtree that should be
     /// one image regardless, and owns a canvas for it.
     public func drawingGroup() -> some View {
-        _ModifierView(content: self, key: ["drawingGroup"] as [AnyHashable]) { context in
-            DrawingGroupContent(key: RenderNodeKey(path: context.path, identity: context.viewIdentity))
-        }
+        _ModifierView(content: self, modifier: DrawingGroupModifier())
     }
 }
 
@@ -92,6 +90,13 @@ struct DrawingGroupContent: NodeContent {
         host.boundaries.noteNested(at: list.commands.count, rect: clip.map { visible.intersection($0) } ?? visible)
         // Local to the image, so a view that merely moved compares equal to
         // what its node already holds.
-        node.render(content.translated(dx: -visible.minX, dy: -visible.minY), at: key.path)
+        node.render(content.translated(dx: -visible.minX, dy: -visible.minY), at: key.slot.pathDescription)
+    }
+}
+
+/// `.drawingGroup()`.
+struct DrawingGroupModifier: PrimitiveModifier, Equatable {
+    func makeContent(_ context: inout BuildContext) -> DrawingGroupContent {
+        DrawingGroupContent(key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity))
     }
 }

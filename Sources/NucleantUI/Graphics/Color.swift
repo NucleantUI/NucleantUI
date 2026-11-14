@@ -6,10 +6,10 @@
 /// Light or dark appearance — `@Environment(\.colorScheme)`.
 ///
 /// The window seeds it from the system appearance and follows it as it
-/// changes; `.colorScheme(_:)` fixes it for a subtree. Dynamic styles
-/// (`ShapeStyle.dynamic(light:dark:)`, and the semantic ones — `.primary`,
-/// `.background`, …) resolve against whichever scheme is in effect where
-/// they are drawn.
+/// changes; `.colorScheme(_:)` fixes it for a subtree. Light and dark
+/// styles (`DynamicShapeStyle`, and the semantic ones — `.primary`,
+/// `.background`, …) resolve against the scheme in the environment of the
+/// view they paint.
 public enum ColorScheme: Hashable, Sendable {
     case light
     case dark

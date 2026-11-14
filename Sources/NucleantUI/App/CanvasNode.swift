@@ -80,10 +80,10 @@ extension RenderNodeManager {
 
         /// Draw `list` into the canvas — unless it is what the canvas already
         /// holds — for the engine to rasterize at the frame.
-        func render(_ list: DisplayList, at path: [Int]) {
+        func render(_ list: DisplayList, at place: @autoclosure () -> String) {
             guard content != list else { return }
             if PerfTrace.isEnabled { PerfTrace.nodesDrawn += 1 }
-            PerfTrace.trace("node \(width)x\(height) at \(path): \(list.commands.count) commands drawn")
+            PerfTrace.trace("node \(width)x\(height) at \(place()): \(list.commands.count) commands drawn")
             renderer.render(list)
             content = list
             markDirty()

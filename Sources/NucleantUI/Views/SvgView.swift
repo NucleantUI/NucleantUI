@@ -62,10 +62,10 @@ extension SvgView {
 
 extension SvgView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: SvgContent(
+        ContentNode(content: SvgContent(
             image: image,
             isResizable: isResizable,
-            tint: renderingMode == .template ? context.environment.foregroundStyle : nil
+            tint: renderingMode == .template ? context.environment.foregroundStyle.paint(in: context.environment) : nil
         ))
     }
 }
@@ -76,7 +76,7 @@ struct SvgContent: NodeContent {
     let isResizable: Bool
     /// The style a template is painted in; `nil` for the document's own
     /// colors.
-    let tint: ShapeStyle?
+    let tint: _ResolvedPaint?
 
     /// Fixed at the document's size; resizable, it takes what it is offered
     /// and the document's size on an axis nobody constrained.
@@ -93,12 +93,8 @@ struct SvgContent: NodeContent {
         list.append(.svg(SvgDraw(
             image: image,
             frame: rect,
-            tint: tint?.resolved(for: context.colorScheme),
-            opacity: context.opacity,
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips
-        )))
+            tint: tint,
+            opacity: context.opacity
+        )), under: context.drawState)
     }
 }

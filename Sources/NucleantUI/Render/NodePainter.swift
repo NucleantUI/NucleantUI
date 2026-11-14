@@ -96,21 +96,21 @@ final class NodePainter<N: NucleantContainerNode> {
     /// damaged area, which the partial paint's rectangular clip could not
     /// reproduce.
     private func damage(from old: DisplayList, to new: DisplayList, in entry: ImageEntry) -> Rect? {
-        let before = old.commands, after = new.commands
-        let shorter = min(before.count, after.count)
+        let before = old.commands.count, after = new.commands.count
+        let shorter = min(before, after)
         var prefix = 0
-        while prefix < shorter, before[prefix] == after[prefix] { prefix += 1 }
+        while prefix < shorter, new.draws(prefix, as: prefix, in: old) { prefix += 1 }
         var suffix = 0
-        while suffix < shorter - prefix, before[before.count - 1 - suffix] == after[after.count - 1 - suffix] {
+        while suffix < shorter - prefix, new.draws(after - 1 - suffix, as: before - 1 - suffix, in: old) {
             suffix += 1
         }
         var damage: Rect?
-        for command in before[prefix..<(before.count - suffix)] {
-            guard let bounds = command.paintBounds else { continue }
+        for index in prefix..<(before - suffix) {
+            guard let bounds = old.paintBounds(at: index) else { continue }
             damage = damage.map { $0.union(bounds) } ?? bounds
         }
-        for command in after[prefix..<(after.count - suffix)] {
-            guard let bounds = command.paintBounds else { continue }
+        for index in prefix..<(after - suffix) {
+            guard let bounds = new.paintBounds(at: index) else { continue }
             damage = damage.map { $0.union(bounds) } ?? bounds
         }
         guard var damage else {
@@ -128,18 +128,9 @@ final class NodePainter<N: NucleantContainerNode> {
         damage = Rect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
         // Not worth a partial paint if it is nearly the whole image.
         if damage.width * damage.height > image.width * image.height * 0.6 { return nil }
-        for command in after {
-            guard let bounds = command.paintBounds, bounds.intersects(damage) else { continue }
-            let radius: Double
-            let clip: Rect?
-            switch command {
-            case .shape(let draw): radius = draw.clipCornerRadius; clip = draw.clip
-            case .text(let draw): radius = draw.clipCornerRadius; clip = draw.clip
-            case .image(let draw): radius = draw.clipCornerRadius; clip = draw.clip
-            case .svg(let draw): radius = draw.clipCornerRadius; clip = draw.clip
-            case .canvas(let draw): radius = draw.clipCornerRadius; clip = draw.clip
-            }
-            if radius > 0, let clip, !clip.insetBy(radius).contains(damage) { return nil }
+        for index in 0..<after {
+            guard let bounds = new.paintBounds(at: index), bounds.intersects(damage) else { continue }
+            if new.state(at: index).roundedClipCrosses(damage) { return nil }
         }
         return damage
     }
@@ -171,20 +162,39 @@ final class NodePainter<N: NucleantContainerNode> {
         guard let damage = entry.damage else {
             let size = paintSize(of: entry)
             let region = Rect(x: 0, y: 0, width: Double(size.width) / scale, height: Double(size.height) / scale)
-            var commands: [DrawCommand] = []
-            commands.reserveCapacity(pending.commands.count)
-            for command in pending.commands {
-                guard let bounds = command.paintBounds else { continue }
-                commands.append(region.contains(bounds) ? command : command.clipped(to: region))
+            // Usually everything lies inside, and the list is drawn as it is.
+            var spills = false
+            for index in pending.commands.indices {
+                if let bounds = pending.paintBounds(at: index), !region.contains(bounds) {
+                    spills = true
+                    break
+                }
             }
-            return DisplayList(commands: commands)
+            guard spills else { return pending }
+            var list = DisplayList()
+            // A run's state cut once, for every command under it.
+            var cut = (index: -1, state: DrawState())
+            for index in pending.commands.indices {
+                guard let bounds = pending.paintBounds(at: index) else { continue }
+                if region.contains(bounds) {
+                    list.append(index, of: pending)
+                } else {
+                    let state = pending.stateIndex(at: index)
+                    if cut.index != state { cut = (state, pending.states[state].clipped(to: region)) }
+                    list.append(pending.commands[index], under: cut.state)
+                }
+            }
+            return list
         }
-        var commands: [DrawCommand] = []
-        for command in pending.commands {
-            guard let bounds = command.paintBounds, bounds.intersects(damage) else { continue }
-            commands.append(command.clipped(to: damage))
+        var list = DisplayList()
+        var cut = (index: -1, state: DrawState())
+        for index in pending.commands.indices {
+            guard let bounds = pending.paintBounds(at: index), bounds.intersects(damage) else { continue }
+            let state = pending.stateIndex(at: index)
+            if cut.index != state { cut = (state, pending.states[state].clipped(to: damage)) }
+            list.append(pending.commands[index], under: cut.state)
         }
-        return DisplayList(commands: commands).translated(dx: -damage.minX, dy: -damage.minY)
+        return list.translated(dx: -damage.minX, dy: -damage.minY)
     }
 
     // MARK: - The pass

@@ -181,14 +181,14 @@ struct ShaderFunctionAsAModule {
     }
 
     /// A color reaches the shader as it was given. A light/dark pair is a
-    /// `ShapeStyle`; the caller resolves it for its scheme and passes the
-    /// color.
+    /// `DynamicShapeStyle`; the caller takes its scheme's color and passes
+    /// that.
     @Test
     func aColorIsPackedAsItWasGiven() {
-        let tint = ShapeStyle.dynamic(light: Color(red: 1, green: 0, blue: 0), dark: Color(red: 0, green: 0, blue: 1, opacity: 0.5))
+        let tint = DynamicShapeStyle(light: Color(red: 1, green: 0, blue: 0), dark: Color(red: 0, green: 0, blue: 1, opacity: 0.5))
         let given = ShaderFunction("fragColor = tint;").reading([.color("tint", Color(red: 1, green: 0, blue: 0))], textures: [], content: false)
         #expect(Array(floats(packed(given)).suffix(4)) == [1, 0, 0, 1])
-        let resolved = ShaderFunction("fragColor = tint;").reading([.color("tint", tint.resolved(for: .dark).flatColor)], textures: [], content: false)
+        let resolved = ShaderFunction("fragColor = tint;").reading([.color("tint", tint.color(for: .dark))], textures: [], content: false)
         #expect(Array(floats(packed(resolved)).suffix(4)) == [0, 0, 1, 0.5])
     }
 

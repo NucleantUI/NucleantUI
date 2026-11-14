@@ -51,15 +51,15 @@ extension TextureView: BuiltinView where Source.Node == NucleantRenderNode {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let source = self.source
         let send: @MainActor (TextureInputEvent) -> Void = { source.textureInput($0) }
-        return ViewNode(content: TextureContent(
-            key: RenderNodeKey(path: context.path, identity: context.viewIdentity, id: nodeID),
+        return ContentNode(content: TextureContent(
+            key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity, id: nodeID),
             sourceID: ObjectIdentifier(source),
             didChange: { source.textureDidChange($0) },
             didMove: { source.textureDidMove($0) },
             didDisappear: { source.textureDidDisappear($0) },
-            input: TextureInputTarget(path: context.path, send: send),
+            input: TextureInputTarget(owner: context.position.handle, send: send),
             focus: FocusTarget(
-                path: context.path,
+                owner: context.position.handle,
                 isEnabled: context.environment.isEnabled,
                 onFocusChange: { send(.focusChanged($0)) },
                 onKeyDown: { send(.keyDown(keyCode: $0.keyCode, characters: $0.characters, modifiers: $0.modifiers)) },
@@ -84,11 +84,12 @@ extension TextureView: BuiltinView where Source.Node == NucleantRenderNode {
 /// rebuild replaces the object. (Keys come through its `FocusTarget`.)
 @MainActor
 final class TextureInputTarget {
-    let path: [Int]
+    /// The view it belongs to, by its position.
+    let owner: PositionHandle
     let send: @MainActor (TextureInputEvent) -> Void
 
-    init(path: [Int], send: @escaping @MainActor (TextureInputEvent) -> Void) {
-        self.path = path
+    init(owner: PositionHandle, send: @escaping @MainActor (TextureInputEvent) -> Void) {
+        self.owner = owner
         self.send = send
     }
 }

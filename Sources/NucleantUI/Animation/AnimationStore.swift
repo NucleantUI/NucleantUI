@@ -12,11 +12,12 @@
 //  (a commit pass) and only followed by the passes after:
 //
 //  * values — a modifier's own parameters (opacity, scale, rotation, a
-//    fill color), filed here by path so a rebuild picks up where the last
-//    build's value was;
+//    fill color), kept on the view's position (`ViewPosition`) so a
+//    rebuild picks up where the last build's value was;
 //  * animatable data — an `Animatable` view's, shape's or modifier's own
-//    `animatableData` (Animatable.swift): a shape redraws at each value, a
-//    view is rebuilt at each, its path dirtied frame by frame until done;
+//    `animatableData` (Animatable.swift), kept there too: a shape redraws
+//    at each value, a view is rebuilt at each, its path dirtied frame by
+//    frame until done;
 //  * geometry — a node placed somewhere other than where it last stood
 //    (`ViewNode.animate`, in NodeMotion.swift);
 //  * transitions — a view inserted into, or removed from, an `if`, a
@@ -78,6 +79,9 @@ final class AnimationStore {
     /// Called by whatever is still between two values as it is placed.
     func requestFrame() {
         movedThisPass = true
+        // Whatever asked is on its way: what it is part of draws something
+        // else next frame, and is not kept (`PlacementCache.swift`).
+        PlacementRecorder.shared.noteDisturbance()
     }
 
     /// An animation began in this pass: whichever `withAnimation`
@@ -145,52 +149,89 @@ final class AnimationStore {
     // MARK: - Values
 
     /// Which of a node's parameters a value is — one node, one modifier,
-    /// so the kinds never collide at a path.
+    /// so the kinds never collide at a position.
     enum Slot: Hashable {
         case opacity, rotation, scale, offset, move, fill, stroke, textColor
     }
 
-    private var values: [[Int]: [Slot: AnimatedVector]] = [:]
+    /// The value for `slot` of the view at `position`, of a type of its own
+    /// — an opacity, an offset — moved to `target`: at once, or over
+    /// `animation` from wherever it is now.
+    func state<Data: VectorArithmetic>(
+        at position: ViewPosition,
+        slot: Slot,
+        target: Data,
+        animation: Animation?
+    ) -> AnimatableDataState<Data> {
+        let type = ObjectIdentifier(AnimatableDataState<Data>.self)
+        for index in position.animatedStates.indices where position.animatedStates[index].slot == slot {
+            let standing = position.animatedStates[index].state
+            if ObjectIdentifier(Swift.type(of: standing)) == type {
+                let existing = unsafeDowncast(standing, to: AnimatableDataState<Data>.self)
+                existing.update(to: target, animation: animation, in: self)
+                return existing
+            }
+            // A value of another type in the slot: starts where it is.
+            let created = AnimatableDataState(target)
+            position.animatedStates[index].state = created
+            return created
+        }
+        let created = AnimatableDataState(target)
+        position.animatedStates.append((slot, created))
+        return created
+    }
 
-    /// The value for `slot` of the view at `path`, moved to `target` — at
-    /// once, or over `animation` from wherever it is now.
-    func value(at path: [Int], slot: Slot, target: [Double], animation: Animation?) -> AnimatedVector {
-        if let existing = values[path]?[slot] {
-            existing.update(to: target, animation: animation, in: self)
-            return existing
+    /// The value for `slot` of the view at `position`, as numbers, moved to
+    /// `target` — at once, or over `animation` from wherever it is now.
+    func value(at position: ViewPosition, slot: Slot, target: [Double], animation: Animation?) -> AnimatedVector {
+        for entry in position.animatedVectors where entry.slot == slot {
+            entry.value.update(to: target, animation: animation, in: self)
+            return entry.value
         }
         let created = AnimatedVector(target)
-        values[path, default: [:]][slot] = created
+        position.animatedVectors.append((slot, created))
         return created
     }
 
     // MARK: - Implicit animation values
 
-    /// The last value `.animation(_:value:)` saw at each path.
-    private var observed: [[Int]: OpaqueValue] = [:]
-
-    /// Whether `value` differs from the one last seen at `path`. The first
-    /// sighting — or a value of another type, a different view now standing
-    /// there — is not a change.
-    func valueChanged<V: Equatable>(_ value: V, at path: [Int]) -> Bool {
-        let previous = observed[path]?.value(as: V.self)
+    /// Whether `value` differs from the one the `.animation(_:value:)` at
+    /// `position` last saw. The first sighting is not a change.
+    func valueChanged<V: Equatable>(_ value: V, at position: ViewPosition) -> Bool {
+        let previous = position.observed?.value(as: V.self)
         guard previous != value else { return false }
-        observed[path] = OpaqueValue(value)
+        position.observed = Box(value)
         return previous != nil
     }
 
     // MARK: - Animatable data
 
-    /// Each `Animatable` view's or shape's data on its way somewhere, by
-    /// path — an `AnimatableDataState` of the type's own data.
-    var animatableData: [[Int]: OpaqueReference] = [:]
+    /// The `animatableData` of the view at `position`, moved to `target` —
+    /// at once, or over `animation` from wherever it is now.
+    func animatableData<Data: VectorArithmetic>(
+        at position: ViewPosition,
+        target: Data,
+        animation: Animation?
+    ) -> AnimatableDataState<Data> {
+        if let standing = position.animatableData,
+           ObjectIdentifier(Swift.type(of: standing)) == ObjectIdentifier(AnimatableDataState<Data>.self) {
+            let existing = unsafeDowncast(standing, to: AnimatableDataState<Data>.self)
+            existing.update(to: target, animation: animation, in: self)
+            return existing
+        }
+        let created = AnimatableDataState(target)
+        position.animatableData = created
+        return created
+    }
 
     /// `Animatable` views still between values: rebuilt next frame, at the
-    /// value that frame shows.
-    private var animating: Set<[Int]> = []
+    /// value that frame shows. Each is marked, so it is listed once.
+    private var rebuilds: [ViewPosition] = []
 
-    func rebuildNextFrame(_ path: [Int]) {
-        animating.insert(path)
+    func rebuildNextFrame(_ position: ViewPosition) {
+        guard !position.rebuildsNextFrame else { return }
+        position.rebuildsNextFrame = true
+        rebuilds.append(position)
     }
 
     // MARK: - Transitions
@@ -200,19 +241,8 @@ final class AnimationStore {
     /// simply there or not.
     var runsTransitions = true
 
-    /// The child slots with a transition standing on them, by the path of
-    /// their container and their slot in it.
-    private var transitionSlots: [[Int]: [Int: TransitionSlot]] = [:]
-
-    func transitionSlots(in container: [Int]) -> [Int: TransitionSlot] {
-        transitionSlots[container] ?? [:]
-    }
-
-    func setTransitionSlots(_ slots: [Int: TransitionSlot], in container: [Int]) {
-        transitionSlots[container] = slots.isEmpty ? nil : slots
-    }
-
-    /// The slot nodes on their way out.
+    /// The slot nodes on their way out. The slots themselves are on their
+    /// containers' positions (`ViewPosition.transitionSlots`).
     private var leaving: Set<ObjectIdentifier> = []
 
     /// Whether any slot is on its way out — what makes every node placed
@@ -230,58 +260,59 @@ final class AnimationStore {
 
     /// Containers whose exits played out this frame, rebuilt the next so
     /// what was left of the views goes.
-    private var finishedExits: Set<[Int]> = []
+    private var finishedExits: [ViewPosition] = []
 
-    func exitFinished(_ node: ViewNode, container: [Int]) {
+    func exitFinished(_ node: ViewNode, container: ViewPosition?) {
         exitEnded(node)
-        finishedExits.insert(container)
+        if let container { finishedExits.append(container) }
     }
 
     // MARK: - Timelines
 
-    /// When each `TimelineView` wants its content rebuilt next.
-    private var timelines: [[Int]: Date] = [:]
+    /// The `TimelineView`s with a moment to come — the moment on each one's
+    /// position. One that has another listed once more is harmless: the
+    /// first to come up takes the moment.
+    private var timelines: [ViewPosition] = []
 
-    func schedule(timelineAt path: [Int], next: Date?) {
-        timelines[path] = next
+    func schedule(timelineAt position: ViewPosition, next: Date?) {
+        if position.nextTimelineDate == nil, next != nil { timelines.append(position) }
+        position.nextTimelineDate = next
     }
 
     /// Dirty every view that asked to be rebuilt this frame: a timeline
-    /// whose moment has come, an `Animatable` view still on its way.
-    /// Outside any transaction — each redraws; nothing new starts moving.
+    /// whose moment has come, an `Animatable` view still on its way — and
+    /// still there, the same view. Outside any transaction — each redraws;
+    /// nothing new starts moving.
     func invalidateScheduledRebuilds() {
-        for path in animating {
-            Invalidator.shared.invalidate(owner: path)
+        for position in rebuilds where position.rebuildsNextFrame && !position.hasLeft {
+            position.rebuildsNextFrame = false
+            Invalidator.shared.invalidate(owner: position.path)
         }
-        animating.removeAll(keepingCapacity: true)
+        rebuilds.removeAll(keepingCapacity: true)
         // A container whose exit is over, still standing.
-        for path in finishedExits where transitionSlots[path] != nil {
-            Invalidator.shared.invalidate(owner: path)
+        for position in finishedExits where !position.hasLeft && !position.transitionSlots.isEmpty {
+            Invalidator.shared.invalidate(owner: position.path)
         }
         finishedExits.removeAll()
         guard !timelines.isEmpty else { return }
         let date = Date()
-        for (path, due) in timelines where due <= date {
-            timelines[path] = nil
-            Invalidator.shared.invalidate(owner: path)
+        timelines.removeAll { position in
+            guard !position.hasLeft, let due = position.nextTimelineDate else { return true }
+            guard due <= date else { return false }
+            position.nextTimelineDate = nil
+            Invalidator.shared.invalidate(owner: position.path)
+            return true
         }
     }
 
     // MARK: - Departure
 
-    /// Drop what the views at `paths` held here — they left the tree.
-    func forget(paths: Set<[Int]>) {
-        for path in paths {
-            values[path] = nil
-            observed[path] = nil
-            animatableData[path] = nil
-            animating.remove(path)
-            timelines[path] = nil
-            if let slots = transitionSlots.removeValue(forKey: path) {
-                for slot in slots.values where slot.isLeaving {
-                    exitEnded(slot.node)
-                }
-            }
+    /// End `exits`, the exits that the containers which left, or which
+    /// another view took the place of, were playing. Everything else the
+    /// views kept for their animations went with their positions.
+    func forget(exits: [ViewNode]) {
+        for node in exits {
+            exitEnded(node)
         }
     }
 }
@@ -354,25 +385,16 @@ final class AnimatedVector {
 
 // MARK: - Vectors for the animatable kinds
 
-extension ShapeStyle {
-    /// Both appearances' components, so a flat color and a dynamic one
-    /// animate into each other; a gradient changes at once.
+extension _ResolvedPaint {
+    /// A color's components; a gradient changes at once.
     var animatableVector: [Double] {
-        switch self {
-        case .color(let color):
-            return [color, color].flatMap { [$0.red, $0.green, $0.blue, $0.alpha].map { Double($0) } }
-        case .dynamic(let light, let dark):
-            return [light, dark].flatMap { [$0.red, $0.green, $0.blue, $0.alpha].map { Double($0) } }
-        case .linearGradient, .radialGradient:
-            return []
-        }
+        guard case .color(let color) = kind else { return [] }
+        return [Double(color.red), Double(color.green), Double(color.blue), Double(color.alpha)]
     }
 
     init(animatableVector v: [Double]) {
         func clamp(_ x: Double) -> Float { Float(Swift.min(Swift.max(x, 0), 1)) }
-        let light = Color(red: clamp(v[0]), green: clamp(v[1]), blue: clamp(v[2]), opacity: clamp(v[3]))
-        let dark = Color(red: clamp(v[4]), green: clamp(v[5]), blue: clamp(v[6]), opacity: clamp(v[7]))
-        self = light == dark ? .color(light) : .dynamic(light: light, dark: dark)
+        self = .color(Color(red: clamp(v[0]), green: clamp(v[1]), blue: clamp(v[2]), opacity: clamp(v[3])))
     }
 }
 
@@ -380,26 +402,28 @@ extension BuildContext {
     /// The animated value for `slot` of the view being built, moving to
     /// `target` under this build's transaction.
     func animatedValue(_ slot: AnimationStore.Slot, _ target: [Double]) -> AnimatedVector {
-        animations.value(at: path, slot: slot, target: target, animation: transaction.animation)
+        animations.value(at: position, slot: slot, target: target, animation: transaction.animation)
     }
 
-    /// The same for a paint: only a flat or dynamic color has anything to
-    /// animate.
-    func animatedStyle(_ slot: AnimationStore.Slot, _ style: ShapeStyle?) -> AnimatedVector? {
-        guard let style else { return nil }
-        return animatedValue(slot, style.animatableVector)
+    /// The animated value for `slot` of the view being built, of a type of
+    /// its own, moving to `target` under this build's transaction.
+    func animatedState<Data: VectorArithmetic>(_ slot: AnimationStore.Slot, _ target: Data) -> AnimatableDataState<Data> {
+        animations.state(at: position, slot: slot, target: target, animation: transaction.animation)
+    }
+
+    /// The same for a paint: only a color has anything to animate.
+    func animatedPaint(_ slot: AnimationStore.Slot, _ paint: _ResolvedPaint?) -> AnimatedVector? {
+        guard let paint else { return nil }
+        return animatedValue(slot, paint.animatableVector)
     }
 }
 
 extension AnimatedVector {
-    /// `style` as drawn this pass: its color where one is animating.
-    func current(of style: ShapeStyle) -> ShapeStyle {
-        switch style {
-        case .color, .dynamic: break
-        case .linearGradient, .radialGradient: return style
-        }
+    /// `paint` as drawn this pass: its color where one is animating.
+    func current(of paint: _ResolvedPaint) -> _ResolvedPaint {
+        guard case .color = paint.kind else { return paint }
         let vector = current()
-        guard vector.count == 8 else { return style }
-        return ShapeStyle(animatableVector: vector)
+        guard vector.count == 4 else { return paint }
+        return _ResolvedPaint(animatableVector: vector)
     }
 }

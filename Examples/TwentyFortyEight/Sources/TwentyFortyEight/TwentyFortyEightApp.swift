@@ -101,31 +101,33 @@ struct Board: Equatable {
 /// ones are the game's classic beige — while the warm high tiles are the
 /// same in both.
 struct Theme {
-    static let background = ShapeStyle.background
-    static let board = ShapeStyle.dynamic(light: Color(hex: 0xBBADA0), dark: Color(hex: 0x2A2E38))
-    static let empty = ShapeStyle.dynamic(light: Color(hex: 0xCDC1B4), dark: Color(hex: 0x363B47))
+    static let background = BackgroundStyle.background
+    static let board = DynamicShapeStyle(light: Color(hex: 0xBBADA0), dark: Color(hex: 0x2A2E38))
+    static let empty = DynamicShapeStyle(light: Color(hex: 0xCDC1B4), dark: Color(hex: 0x363B47))
     static let accent = Color(hex: 0xFF9F0A)
-    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let muted = DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3))
 
-    static func tile(_ value: Int) -> ShapeStyle {
+    static func tile(_ value: Int) -> AnyShapeStyle {
         switch value {
-        case 2:    return ShapeStyle.dynamic(light: Color(hex: 0xEEE4DA), dark: Color(hex: 0x4A5568))
-        case 4:    return ShapeStyle.dynamic(light: Color(hex: 0xEDE0C8), dark: Color(hex: 0x5A6A85))
-        case 8:    return .color(Color(hex: 0xF2B179))
-        case 16:   return .color(Color(hex: 0xF59563))
-        case 32:   return .color(Color(hex: 0xF67C5F))
-        case 64:   return .color(Color(hex: 0xF65E3B))
-        case 128:  return .color(Color(hex: 0xEDCF72))
-        case 256:  return .color(Color(hex: 0xEDCC61))
-        case 512:  return .color(Color(hex: 0xEDC850))
-        case 1024: return .color(Color(hex: 0xEDC53F))
-        case 2048: return .color(Color(hex: 0xEDC22E))
-        default:   return .color(Color(hex: 0x3C3A32))
+        case 2:    return AnyShapeStyle(DynamicShapeStyle(light: Color(hex: 0xEEE4DA), dark: Color(hex: 0x4A5568)))
+        case 4:    return AnyShapeStyle(DynamicShapeStyle(light: Color(hex: 0xEDE0C8), dark: Color(hex: 0x5A6A85)))
+        case 8:    return AnyShapeStyle(Color(hex: 0xF2B179))
+        case 16:   return AnyShapeStyle(Color(hex: 0xF59563))
+        case 32:   return AnyShapeStyle(Color(hex: 0xF67C5F))
+        case 64:   return AnyShapeStyle(Color(hex: 0xF65E3B))
+        case 128:  return AnyShapeStyle(Color(hex: 0xEDCF72))
+        case 256:  return AnyShapeStyle(Color(hex: 0xEDCC61))
+        case 512:  return AnyShapeStyle(Color(hex: 0xEDC850))
+        case 1024: return AnyShapeStyle(Color(hex: 0xEDC53F))
+        case 2048: return AnyShapeStyle(Color(hex: 0xEDC22E))
+        default:   return AnyShapeStyle(Color(hex: 0x3C3A32))
         }
     }
 
-    static func tileText(_ value: Int) -> ShapeStyle {
-        value <= 4 ? ShapeStyle.dynamic(light: Color(hex: 0x776E65), dark: Color(hex: 0xE6E9EF)) : .color(Color(hex: 0x1C1F26))
+    static func tileText(_ value: Int) -> AnyShapeStyle {
+        value <= 4
+            ? AnyShapeStyle(DynamicShapeStyle(light: Color(hex: 0x776E65), dark: Color(hex: 0xE6E9EF)))
+            : AnyShapeStyle(Color(hex: 0x1C1F26))
     }
 }
 
@@ -136,7 +138,7 @@ struct Tile {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(value == 0 ? Theme.empty : Theme.tile(value))
+                .fill(value == 0 ? AnyShapeStyle(Theme.empty) : AnyShapeStyle(Theme.tile(value)))
             if value != 0 {
                 Text("\(value)")
                     .font(.system(size: value < 100 ? 30 : (value < 1000 ? 26 : 22), weight: .bold))

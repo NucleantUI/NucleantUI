@@ -107,18 +107,18 @@ final class StudySession {
 }
 
 struct Theme {
-    static let background = ShapeStyle.background
-    static let panel = ShapeStyle.secondaryBackground
-    static let card = ShapeStyle.dynamic(light: Color.white, dark: Color(hex: 0x262B35))
-    static let cardBehind = ShapeStyle.dynamic(light: Color(hex: 0xDADDE4), dark: Color(hex: 0x1D2129))
+    static let background = BackgroundStyle.background
+    static let panel = BackgroundStyle.secondaryBackground
+    static let card = DynamicShapeStyle(light: Color.white, dark: Color(hex: 0x262B35))
+    static let cardBehind = DynamicShapeStyle(light: Color(hex: 0xDADDE4), dark: Color(hex: 0x1D2129))
     static let answerCard = Color(hex: 0x4C6FFF)
     static let onAnswer = Color.white
     static let good = Color(hex: 0x2FBF71)
     static let bad = Color(hex: 0xFF5C5C)
     static let hot = Color(hex: 0xFFA41B)
-    static let muted = ShapeStyle.dynamic(light: Color(white: 0.55), dark: Color(white: 0.3))
+    static let muted = DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3))
     /// A card not reached yet — a dot, a ring's track.
-    static let pending = ShapeStyle.dynamic(light: Color(white: 0, opacity: 0.18), dark: Color(white: 1, opacity: 0.2))
+    static let pending = DynamicShapeStyle(light: Color(white: 0, opacity: 0.18), dark: Color(white: 1, opacity: 0.2))
 }
 
 // MARK: - Studying
@@ -191,9 +191,9 @@ struct StudyView {
         let isHot = session.streak >= 3
         return Text("\(session.streak) in a row")
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(isHot ? .color(.white) : .secondary)
+            .foregroundStyle(isHot ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             .padding(horizontal: 12, vertical: 6)
-            .background(isHot ? .color(Theme.hot) : .fill)
+            .background(isHot ? AnyShapeStyle(Theme.hot) : AnyShapeStyle(.fill))
             .cornerRadius(14)
             .scaleEffect(1 + Double(min(session.streak, 5)) * 0.05)
     }
@@ -284,11 +284,11 @@ struct StudyView {
         .frame(height: 16)
     }
 
-    func dotColor(_ card: Card) -> ShapeStyle {
+    func dotColor(_ card: Card) -> AnyShapeStyle {
         switch session.grades[card.id] {
-        case .knew: return .color(Theme.good)
-        case .missed: return .color(Theme.bad)
-        case nil: return card.id == session.current?.id ? .color(Theme.answerCard) : Theme.pending
+        case .knew: return AnyShapeStyle(Theme.good)
+        case .missed: return AnyShapeStyle(Theme.bad)
+        case nil: return AnyShapeStyle(card.id == session.current?.id ? AnyShapeStyle(Theme.answerCard) : AnyShapeStyle(Theme.pending))
         }
     }
 

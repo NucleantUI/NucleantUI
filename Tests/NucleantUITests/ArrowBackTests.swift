@@ -15,8 +15,8 @@ import Testing
 /// its own back button: `ArrowBack` filled with `style`, where the stack
 /// would have drawn its chevron.
 @View
-struct ArrowBackStack {
-    let style: ShapeStyle
+struct ArrowBackStack<Style: ShapeStyle> {
+    let style: Style
     @State private var path = NavigationPath([1])
 
     var body: some View {
@@ -31,8 +31,8 @@ struct ArrowBackStack {
 }
 
 @View
-struct ArrowBackScreen {
-    let style: ShapeStyle
+struct ArrowBackScreen<Style: ShapeStyle> {
+    let style: Style
     @Environment(\.navigationRouter) private var router
 
     var body: some View {
@@ -128,7 +128,7 @@ extension HostedViews {
         }
 
         @Test func itTakesAnyColor() {
-            let image = renderImage(size: Self.size, content: ArrowBackStack(style: .color(Color(hex: 0xE0457B))))
+            let image = renderImage(size: Self.size, content: ArrowBackStack(style: Color(hex: 0xE0457B)))
             // The chevron's point, where the stack's chevron is dark.
             let word = image.pixels[22 * image.width + 26]
             let (r, g, b) = (Int((word >> 16) & 0xFF), Int((word >> 8) & 0xFF), Int(word & 0xFF))

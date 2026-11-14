@@ -70,7 +70,7 @@ struct TransitionTraitView<Content: View> {
 extension TransitionTraitView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let child = context.child(0) { ctx in buildNode(content, &ctx) }
-        let node = ViewNode(content: TransitionTraitContent(), children: [child])
+        let node = ContentNode(content: TransitionTraitContent(), children: [child])
         // The outermost `.transition` of a view is the one it has.
         node.transitionTrait = transition
         node.gridCellTraits = child.gridCellTraits
@@ -99,7 +99,7 @@ struct TypedTransitionTraitView<Content: View, T: Transition> {
 extension TypedTransitionTraitView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let child = context.child(0) { ctx in buildNode(content, &ctx) }
-        let node = ViewNode(content: TransitionTraitContent(), children: [child])
+        let node = ContentNode(content: TransitionTraitContent(), children: [child])
         node.transitionTrait = AnyTransition(transition)
         node.gridCellTraits = child.gridCellTraits
         node.layoutValues = child.layoutValues

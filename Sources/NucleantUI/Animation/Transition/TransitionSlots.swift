@@ -50,8 +50,8 @@ final class TransitionSlot {
 
     /// The path component a container's transition bodies are built under:
     /// child slot `i` of the container at `C` has its body at
-    /// `C + [bodies, i]`. No container builds a child in this slot — see
-    /// `BuildContext.childSlot(for:)` for the one that could.
+    /// `C + [bodies, i]`. No container builds a child in this slot: a
+    /// `ForEach` numbers its rows from 0 (`RowSlots`).
     static let bodies = Int.min + 1
 
     /// The child's slot in its container.
@@ -84,7 +84,7 @@ final class TransitionSlot {
         self.index = index
         self.content = content
         effects = TransitionEffects([])
-        self.node = ViewNode(content: TransitionSlotContent(content: content, effects: effects), children: [body])
+        self.node = ContentNode(content: TransitionSlotContent(content: content, effects: effects), children: [body])
         self.transition = transition
     }
 
@@ -94,7 +94,7 @@ final class TransitionSlot {
         self.index = index
         self.content = content
         self.effects = TransitionEffects(effects)
-        self.node = ViewNode(content: TransitionSlotContent(content: content, effects: self.effects), children: [content])
+        self.node = ContentNode(content: TransitionSlotContent(content: content, effects: self.effects), children: [content])
         self.transition = transition
     }
 
@@ -144,8 +144,9 @@ final class TransitionSlot {
 /// A child slot on its way out: where it stood, and what its exit is
 /// waiting on.
 struct NodeRemoval {
-    /// The container it is leaving, rebuilt once the exit is over.
-    let container: [Int]
+    /// The container it is leaving, rebuilt once the exit is over. Held
+    /// weakly: the container's position holds the slot, and so this.
+    weak var container: ViewPosition?
     /// Where, how and under what transform the slot last stood.
     let frame: Rect
     let proposal: ProposedSize
@@ -200,7 +201,8 @@ extension ViewNode {
     /// node itself otherwise. What a container that looks at what kind of
     /// children it has — a `Grid` finding its rows — looks at.
     var underTransition: ViewNode {
-        guard let slot = content as? TransitionSlotContent, let child = slot.content.singleChild else {
+        guard traits.contains(.transitionSlot),
+              let slot = content(as: TransitionSlotContent.self), let child = slot.content.singleChild else {
             return self
         }
         return child.underTransition
@@ -211,16 +213,10 @@ extension ViewNode {
 
 extension BuildContext {
 
-    /// Whether the child about to be built in slot `index` is new here.
-    func isNewChild(at index: Int) -> Bool {
-        records.candidate(at: path + [index]) == nil
-    }
-
-    /// The slot a `ForEach` builds an element in: the hash of its id — any
-    /// `Int` but the one transition bodies are built under.
-    func childSlot<ID: Hashable>(for id: ID) -> Int {
-        let hash = id.hashValue
-        return hash == TransitionSlot.bodies ? hash &+ 1 : hash
+    /// The table the `ForEach` being built gives its rows their slots from,
+    /// by id — on its position.
+    func rowSlots<ID: Hashable>(for _: ID.Type) -> RowSlots<ID> {
+        position.rowSlots(ID.self)
     }
 
     /// The children of an `if`, a `switch`, a `ForEach` or a `for`, with
@@ -230,7 +226,8 @@ extension BuildContext {
     /// it — with the children still leaving back where they stood.
     func transitionChildren(_ built: [(index: Int, node: ViewNode, isNew: Bool)]) -> [ViewNode] {
         let stood = isReplacingStandingView && animations.runsTransitions
-        let previous = animations.transitionSlots(in: path)
+        let container = position
+        let previous = container.transitionSlots
         var slots: [Int: TransitionSlot] = [:]
         var children: [ViewNode] = []
         children.reserveCapacity(built.count)
@@ -240,7 +237,7 @@ extension BuildContext {
         }
         // What stood here and was not built again has been removed.
         if stood {
-            for (index, node) in records.leftoverChildren(under: path) {
+            for (index, node) in leftoverChildren {
                 beginExit(index: index, child: node, standing: previous[index], built: built, into: &slots)
             }
         }
@@ -256,7 +253,7 @@ extension BuildContext {
                 children.insert(slot.node, at: min(slot.exitPosition, children.count))
             }
         }
-        animations.setTransitionSlots(slots, in: path)
+        container.transitionSlots = slots
         return children
     }
 
@@ -271,7 +268,7 @@ extension BuildContext {
         let node = child.node
         // A group dissolves into the container's layout: there is no one
         // view to move.
-        guard !node.content.isTransparent else { return node }
+        guard !node.isTransparent else { return node }
         let transition = node.transitionTrait ?? .opacity
         let box = transition.box
         guard !box.isIdentity else { return node }
@@ -321,7 +318,7 @@ extension BuildContext {
         built: [(index: Int, node: ViewNode, isNew: Bool)],
         into slots: inout [Int: TransitionSlot]
     ) {
-        guard !child.content.isTransparent else { return }
+        guard !child.isTransparent else { return }
         let transition = child.transitionTrait ?? .opacity
         let box = transition.box
         guard !box.isIdentity, transaction.animation != nil || box.animatesRemoval else { return }
@@ -345,7 +342,7 @@ extension BuildContext {
         }
         let runs = collectingRuns { show(slot, in: .didDisappear, animation: transaction.animation) }
         slot.node.removal = NodeRemoval(
-            container: path,
+            container: self.position,
             frame: shown.frame,
             proposal: shown.proposal,
             transform: shown.transform,
@@ -369,7 +366,7 @@ extension BuildContext {
         inSlot index: Int,
         among built: [(index: Int, node: ViewNode, isNew: Bool)]
     ) -> Int {
-        if let parent = node.parent, parent.ownerPath == path,
+        if let parent = node.parent, parent.owner === self.position.handle,
            parent.children.indices.contains(node.indexInParent),
            parent.children[node.indexInParent] === node {
             var position = 0
@@ -389,7 +386,7 @@ extension BuildContext {
         transition: AnyTransition,
         phase: TransitionPhase
     ) -> TransitionSlot {
-        let content = ViewNode(content: TransitionContentContent(), children: [child])
+        let content = ContentNode(content: TransitionContentContent(), children: [child])
         if let effects = transition.box.effects(in: phase) {
             return TransitionSlot(index: index, content: content, effects: effects, transition: transition)
         }
@@ -417,7 +414,8 @@ extension BuildContext {
         animation: Animation?
     ) -> ViewNode {
         var context = self
-        context.path = path + [TransitionSlot.bodies, index]
+        context.step(into: TransitionSlot.bodies)
+        context.step(into: index)
         // Not one of a lazy container's items: the child it stands on was
         // counted as one.
         context.lazyCursor = nil
@@ -465,7 +463,7 @@ extension ViewNode {
         for child in children {
             if child.isLeaving {
                 child.placeLeaving(context: context, store: store, into: &list)
-            } else if child.content.isTransparent {
+            } else if child.isTransparent {
                 child.placeLeavingChildren(context: context, store: store, into: &list)
             }
         }

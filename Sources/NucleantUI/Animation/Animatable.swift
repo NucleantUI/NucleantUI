@@ -206,11 +206,17 @@ extension EdgeInsets: Animatable {
 
 // MARK: - Driving animatable data
 
+/// What `AnimationStore.animatableData` holds for a view or shape of any
+/// animatable type: an `AnimatableDataState` of that type's data, taken back
+/// out as what it is.
+@MainActor
+class AnyAnimatableDataState {}
+
 /// One path's `animatableData` on its way to `target`. Shared by every
 /// build of the view at that path, so a change mid-flight turns from where
 /// the value is showing, and as fast as it is going (Motion.swift).
 @MainActor
-final class AnimatableDataState<Data: VectorArithmetic> {
+final class AnimatableDataState<Data: VectorArithmetic>: AnyAnimatableDataState {
     private(set) var target: Data
     private var motion: Motion<Data>?
     /// How fast it moves while changed without animating, for a spring
@@ -246,6 +252,15 @@ final class AnimatableDataState<Data: VectorArithmetic> {
         target = newTarget
     }
 
+    /// The value to draw in the pass under way, asking for another frame
+    /// while it is still on its way.
+    func current() -> Data {
+        guard let store = AnimationStore.current else { return target }
+        let sample = sample(at: store.now)
+        if !sample.isFinished { store.requestFrame() }
+        return sample.value
+    }
+
     /// The value showing at `now`, and whether it has arrived.
     func sample(at now: Double) -> (value: Data, isFinished: Bool) {
         guard let motion else { return (target, true) }
@@ -265,19 +280,11 @@ extension AnimationStore {
     /// `isFinished` is false while it is still on its way.
     func animated<A: Animatable>(
         _ value: A,
-        at path: [Int],
+        at position: ViewPosition,
         animation: Animation?
     ) -> (value: A, isFinished: Bool) {
         guard A.AnimatableData.self != EmptyAnimatableData.self else { return (value, true) }
-        let target = value.animatableData
-        let state: AnimatableDataState<A.AnimatableData>
-        if let existing = animatableData[path]?.object(as: AnimatableDataState<A.AnimatableData>.self) {
-            state = existing
-            state.update(to: target, animation: animation, in: self)
-        } else {
-            state = AnimatableDataState(target)
-            animatableData[path] = OpaqueReference(state)
-        }
+        let state = animatableData(at: position, target: value.animatableData, animation: animation)
         let sample = state.sample(at: now)
         var shown = value
         shown.animatableData = sample.value
@@ -304,23 +311,27 @@ extension BuildContext {
     }
 
     private func showing<A: Animatable>(animatable: A) -> A {
-        let result = animations.animated(animatable, at: path, animation: transaction.animation)
+        let position = self.position
+        let result = animations.animated(animatable, at: position, animation: transaction.animation)
         if !result.isFinished {
-            animations.rebuildNextFrame(path)
+            animations.rebuildNextFrame(position)
         }
         return result.value
     }
 
-    /// A shape's paint for the node being built: the shape itself, or — an
-    /// animatable one on its way somewhere — the shape as it stands at the
-    /// moment of drawing. No rebuild: the path is simply made again at each
-    /// frame's value, and the node asks for the frames it needs.
-    func drawnShape<S: Shape>(_ shape: S) -> @MainActor () -> S {
-        guard S.AnimatableData.self != EmptyAnimatableData.self else { return { shape } }
-        let result = animations.animated(shape, at: path, animation: transaction.animation)
-        guard !result.isFinished,
-              let state = animations.animatableData[path]?.object(as: AnimatableDataState<S.AnimatableData>.self)
-        else { return { shape } }
+    /// A shape's paint for the node being built, when it is an animatable
+    /// one on its way somewhere: the shape as it stands at the moment of
+    /// drawing. No rebuild: the path is simply made again at each frame's
+    /// value, and the node asks for the frames it needs. `nil` for a shape
+    /// that is where it was built — drawn as it is.
+    func drawnShape<S: Shape>(_ shape: S) -> (@MainActor () -> S)? {
+        guard S.AnimatableData.self != EmptyAnimatableData.self else { return nil }
+        let state = animations.animatableData(
+            at: position,
+            target: shape.animatableData,
+            animation: transaction.animation
+        )
+        guard !state.sample(at: animations.now).isFinished else { return nil }
         return {
             guard let store = AnimationStore.current else { return shape }
             let sample = state.sample(at: store.now)
@@ -340,56 +351,21 @@ enum _AnimatableTypes {
 
 // MARK: - Type-erased storage
 
-/// A class instance held behind a raw pointer, with its type kept alongside
-/// so it can only be taken back out as what it is. How the store keeps
-/// values whose type only the call site knows.
-@MainActor
-final class OpaqueReference {
-    private let type: ObjectIdentifier
-    private let pointer: UnsafeMutableRawPointer
-    private let release: (UnsafeMutableRawPointer) -> Void
-
-    init<T: AnyObject>(_ object: T) {
-        type = ObjectIdentifier(T.self)
-        pointer = Unmanaged.passRetained(object).toOpaque()
-        release = { Unmanaged<T>.fromOpaque($0).release() }
-    }
-
-    func object<T: AnyObject>(as _: T.Type) -> T? {
-        guard type == ObjectIdentifier(T.self) else { return nil }
-        return Unmanaged<T>.fromOpaque(pointer).takeUnretainedValue()
-    }
-
-    isolated deinit {
-        release(pointer)
+/// A value of a type only the call site knows, in an object of its own —
+/// one allocation, the value stored in it — taken back out only as the
+/// type it is. How the effect queue, the preference cache and the stores
+/// keep values of many types side by side.
+class AnyBox: @unchecked Sendable {
+    /// The value, if it is a `T`.
+    final func value<T>(as _: T.Type) -> T? {
+        (self as? Box<T>)?.value
     }
 }
 
-/// A value of any type held in its own allocation, with its type kept
-/// alongside. The value-type counterpart of `OpaqueReference`.
-final class OpaqueValue: @unchecked Sendable {
-    private let type: ObjectIdentifier
-    private let pointer: UnsafeMutableRawPointer
-    private let destroy: @Sendable (UnsafeMutableRawPointer) -> Void
+final class Box<T>: AnyBox, @unchecked Sendable {
+    let value: T
 
-    init<T>(_ value: T) {
-        type = ObjectIdentifier(T.self)
-        let typed = UnsafeMutablePointer<T>.allocate(capacity: 1)
-        typed.initialize(to: value)
-        pointer = UnsafeMutableRawPointer(typed)
-        destroy = { raw in
-            let typed = raw.assumingMemoryBound(to: T.self)
-            typed.deinitialize(count: 1)
-            typed.deallocate()
-        }
-    }
-
-    func value<T>(as _: T.Type) -> T? {
-        guard type == ObjectIdentifier(T.self) else { return nil }
-        return pointer.assumingMemoryBound(to: T.self).pointee
-    }
-
-    deinit {
-        destroy(pointer)
+    init(_ value: T) {
+        self.value = value
     }
 }

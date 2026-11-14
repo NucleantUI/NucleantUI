@@ -16,7 +16,6 @@ public final class ViewHost {
 
     private let root: AnyView
 
-    private let store = StateStore()
     private let effects = EffectQueue()
     private let animations = AnimationStore()
 
@@ -145,8 +144,9 @@ public final class ViewHost {
     private var textureHovered: Hit<TextureInputTarget>?
 
     /// The view keys go to — a `TextField`, a `TextureView` — known by its
-    /// path: the last one pressed. A press anywhere else takes the keys away.
-    private var focusedPath: [Int]?
+    /// position: the last one pressed. A press anywhere else takes the keys
+    /// away.
+    private var focused: PositionHandle?
 
     /// The frame of the control most recently released — where a `Menu`
     /// pressed as a button opens its items.
@@ -272,7 +272,7 @@ public final class ViewHost {
 
         // A hovered node the rebuild removed (a menu that closed under the
         // pointer) is forgotten without being told: its view is gone.
-        if let hovered, records.entry(for: hovered.value.path) == nil {
+        if let hovered, hovered.value.owner.standingRecord == nil {
             self.hovered = nil
         }
 
@@ -290,6 +290,8 @@ public final class ViewHost {
                 + "measured=\(PerfTrace.sizeCalls) text=\(PerfTrace.textMeasures)"
                 + (PerfTrace.layersDrawn > 0 ? " layers=\(PerfTrace.layersDrawn)" : "")
                 + (PerfTrace.nodesDrawn > 0 ? " nodes=\(PerfTrace.nodesDrawn)" : "")
+                + (PerfTrace.placementsKept > 0 ? " kept=\(PerfTrace.placementsKept)" : "")
+                + (PerfTrace.placementsMoved > 0 ? " moved=\(PerfTrace.placementsMoved)" : "")
                 + (windowRedrawn ? " window" : ""))
         }
 
@@ -351,6 +353,7 @@ public final class ViewHost {
     public func invalidate() {
         needsFullRebuild = true
         needsWindowRedraw = true
+        PlacementRecorder.shared.invalidateAll()
         Invalidator.shared.invalidate()
     }
 
@@ -361,10 +364,9 @@ public final class ViewHost {
     /// compared against what stood there, and kept if equivalent — which is
     /// why a resize, whose views are all unchanged, mostly reuses.
     private func rebuildAll(dirty: Set<[Int]>, transaction: Transaction) {
-        records.beginRebuild(under: [])
+        records.beginRebuild()
         var context = BuildContext(
             environment: environment,
-            store: store,
             effects: effects,
             animations: animations,
             records: records,
@@ -395,7 +397,12 @@ public final class ViewHost {
         // being rebuilt — that rebuild subsumes it. Subsumed, not ignored:
         // the whole set travels down as `dirtyPaths`, so a view at one of
         // those paths can't be reused by the ancestor's rebuild either.
-        let ordered = paths.sorted { $0.count < $1.count }
+        // Views as deep as each other in the order of the tree, so what
+        // their rebuilds queue — `onChange`s, a `ForEach`'s rows' — runs in
+        // that order.
+        let ordered = paths.sorted { a, b in
+            a.count != b.count ? a.count < b.count : a.lexicographicallyPrecedes(b)
+        }
         var rebuilt: [[Int]] = []
 
         for path in ordered {
@@ -414,20 +421,19 @@ public final class ViewHost {
             // over whatever is first among its siblings.
             let slot = old.indexInParent
 
-            records.beginRebuild(under: path)
+            records.beginRebuild()
 
             // The environment is the one captured when this view was first
             // built: nothing above it re-ran, so nothing above it changed.
             var context = BuildContext(
                 environment: record.environment,
-                store: store,
-                effects: effects,
+                    effects: effects,
                 animations: animations,
                 records: records,
                 dirtyPaths: paths
             )
             context.transaction = transaction
-            context.path = path
+            context.move(to: path)
             context.stackAxis = record.stackAxis
             // A view inside a lazy container rebuilds under the window it
             // was built under, not eagerly.
@@ -445,28 +451,29 @@ public final class ViewHost {
             parent.replaceChild(at: slot, with: replacement)
             records.replaceNode(old, with: replacement, above: path)
             // Every ancestor cached a size computed from the subtree just
-            // replaced.
-            parent.invalidateMeasurementsUpwards()
+            // replaced — sizes that still hold when the new one measures as
+            // the old one did: a label changed to one as wide, a toggle
+            // flipped, a color changed.
+            if replacement.measuresLike(old) {
+                parent.invalidatePreferencesUpwards()
+            } else {
+                parent.invalidateMeasurementsUpwards()
+            }
             rebuilt.append(path)
         }
         return true
     }
 
     /// Let go of everything held by views that a rebuild did not put back:
-    /// their `@State`, their `onAppear` marks, and the reader registrations
-    /// that would otherwise keep dirtying paths no longer in the tree.
+    /// their preference observers — and run their `onDisappear` actions.
+    /// Their `@State`, what their effects kept and their reader
+    /// registrations went with their positions.
     private func releaseDeparted() {
         let departed = records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed {
-            for storage in entry.reads {
-                storage.readers.removeValue(forKey: path)
-            }
-            store.release(entry.stateKeys)
-        }
-        let paths = Set(departed.map { $0.0 })
-        effects.forget(paths: paths)
-        animations.forget(paths: paths)
+        let paths = Set(departed.entries.map { $0.0 })
+        effects.forget(paths: paths, disappearing: departed.disappearing)
+        animations.forget(exits: departed.exits)
     }
 
     /// Lay the tree out and paint it. Returns whether the window canvas was
@@ -492,7 +499,7 @@ public final class ViewHost {
         var list = DisplayList()
         overlay.list = DisplayList()
         overlay.order = nil
-        var context = DrawContext(colorScheme: environment.colorScheme)
+        var context = DrawContext()
         // What moved in the frame that built it moves the way the change
         // said; in the frames after, it only follows.
         if animations.isCommitPass {
@@ -506,7 +513,7 @@ public final class ViewHost {
         )
         // Over everything, and outside the tree: the preview is drawn, never
         // hit tested, so the destination under it is found through it.
-        dragSession?.draw(into: &overlay.list, colorScheme: environment.colorScheme)
+        dragSession?.draw(into: &overlay.list)
         if let shaderSlots {
             // The overlay slot and the preview are the last thing painted,
             // so they are a node of their own, over every other node; an
@@ -537,30 +544,36 @@ public final class ViewHost {
         return true
     }
 
-    /// The overlay node's identity: slot `[1]` of the root, whatever it holds.
+    /// The overlay node's identity: the root's second slot, whatever it
+    /// holds.
     private static let overlayKey = RenderNodeKey(
-        path: [1],
+        slot: RenderSlot(position: nil),
         identity: ViewIdentity(type: ObjectIdentifier(_HostOverlay.self), viewID: .unknown)
     )
 
     // MARK: - Input
 
     public func pointerDown(id: Int = 0, at point: Point, modifiers: EventModifiers = []) {
+        // The press chain's start, found with the rest for the first pointer.
+        var pressLeaf: Hit<ViewNode>??
         if primaryPointer == nil {
             primaryPointer = id
             pointerLocation = point
             PointerPress.modifiers = modifiers
-            updateFocus(at: point)
+            // What the press looks for under the point — the focus target,
+            // the scroll target, the drag and menu sources, where the press
+            // chain starts — found in one walk.
+            let hits = rootNode?.pointerDownHits(
+                at: point, scroll: scrollsOnDrag, contextMenu: opensContextMenuOnLongPress
+            )
+            updateFocus(to: hits?.focus?.value)
             touchStart = point
             isScrolling = false
             pressSerial += 1
-            scrollTarget = scrollsOnDrag
-                ? rootNode?.hitTest(point, matching: { $0.handlesScroll })
-                : nil
-            dragSourceHit = rootNode?.hitTest(point) { $0.content.dragSource }
-            contextMenuHit = opensContextMenuOnLongPress
-                ? rootNode?.hitTest(point) { $0.content.contextMenuSource }
-                : nil
+            scrollTarget = hits?.scroll
+            dragSourceHit = hits?.dragSource
+            contextMenuHit = hits?.contextMenu
+            pressLeaf = .some(hits?.pressLeaf)
             if contextMenuHit != nil || (dragSourceHit != nil && scrollTarget != nil) {
                 // A finger resting on a view with a menu opens it; on a
                 // draggable row of a list, moving scrolls and resting drags.
@@ -573,7 +586,12 @@ public final class ViewHost {
         }
         // The frontmost pointer target, as always — and the gestures
         // attached around it, which compete for the press in the arena.
-        let chain = rootNode?.pressChain(at: point) ?? PressChain()
+        let chain: PressChain
+        if let pressLeaf {
+            chain = PressChain(from: pressLeaf, at: point)
+        } else {
+            chain = rootNode?.pressChain(at: point) ?? PressChain()
+        }
         if !chain.gestures.isEmpty, id == primaryPointer, arena.timesHoldAhead(of: chain) {
             // A long press gesture is what a held press means here.
             contextMenuHit = nil
@@ -812,7 +830,7 @@ public final class ViewHost {
         let session = DragSession(
             source: source,
             origin: touchStart,
-            environment: records.entry(for: source.value.path)?.environment ?? environment
+            environment: source.value.owner.standingRecord?.environment ?? environment
         )
         dragSession = session
         session.move(to: pointerLocation, in: rootNode)
@@ -842,11 +860,11 @@ public final class ViewHost {
     }
 
     /// Tell the `.onHover` node under `point` it is hovered, and the one
-    /// that was, that it no longer is. Same path, same node — the object
+    /// that was, that it no longer is. Same owner, same view — the object
     /// is refreshed so the closure called is the current one.
     private func updateHover(at point: Point) {
-        let found = rootNode?.hitTest(point) { $0.content.hoverTarget }
-        guard found?.value.path != hovered?.value.path else {
+        let found = rootNode?.hitTest(point, lookingFor: .hoverTarget) { $0.content.hoverTarget }
+        guard found?.value.owner !== hovered?.value.owner else {
             hovered = found
             return
         }
@@ -858,8 +876,8 @@ public final class ViewHost {
     /// Tell the `TextureView` under `point` where the pointer is, and the
     /// one it was over, if another, that it left.
     private func updateTextureHover(at point: Point) {
-        let found = rootNode?.hitTest(point) { $0.content.textureInput }
-        if let previous = textureHovered, previous.value.path != found?.value.path {
+        let found = rootNode?.hitTest(point, lookingFor: .textureInput) { $0.content.textureInput }
+        if let previous = textureHovered, previous.value.owner !== found?.value.owner {
             previous.value.send(.pointerExited)
         }
         textureHovered = found
@@ -870,25 +888,41 @@ public final class ViewHost {
 
     /// A press at `point`: the view under it that takes keys, if any, gets
     /// them; the one that had them is told it lost them.
-    private func updateFocus(at point: Point) {
-        let found = rootNode?.hitTest(point) { node in
-            node.content.focusTarget.flatMap { $0.isEnabled ? $0 : nil }
-        }?.value
-        guard found?.path != focusedPath else { return }
-        if let path = focusedPath {
-            rootNode?.focusTarget(at: path)?.onFocusChange(false)
+    /// Focus `found`, the frontmost enabled focus target under a pointer
+    /// going down, or nothing.
+    private func updateFocus(to found: FocusTarget?) {
+        guard found?.owner !== focused else { return }
+        if let focused {
+            focusTarget(of: focused)?.onFocusChange(false)
         }
-        focusedPath = found?.path
+        focused = found?.owner
         found?.onFocusChange(true)
         syncFocusBindings()
+    }
+
+    /// The node holding the focus target of `owner`'s view, if that view
+    /// still stands. Its record names its node, read off its position; the
+    /// tree is walked only when that node holds no such target — the view
+    /// is on its way out.
+    private func focusNode(of owner: PositionHandle) -> ViewNode? {
+        if let node = owner.standingRecord?.node, node.traits.contains(.focusTarget),
+           node.content.focusTarget?.owner === owner {
+            return node
+        }
+        return rootNode?.focusNode(of: owner)
+    }
+
+    /// The focus target of `owner`'s view, if that view still stands.
+    private func focusTarget(of owner: PositionHandle) -> FocusTarget? {
+        focusNode(of: owner)?.content.focusTarget
     }
 
     /// The focused view's current target — `nil`, and the focus dropped,
     /// once that view has left the tree.
     private func focusedTarget() -> FocusTarget? {
-        guard let path = focusedPath else { return nil }
-        guard let target = rootNode?.focusTarget(at: path) else {
-            focusedPath = nil
+        guard let owner = focused else { return nil }
+        guard let target = focusTarget(of: owner) else {
+            focused = nil
             return nil
         }
         return target
@@ -909,7 +943,7 @@ public final class ViewHost {
     /// pointer, or one a press there gives the keys to.
     func takesPress(at point: Point) -> Bool {
         if takesPointer(at: point) { return true }
-        return rootNode?.hitTest(point) { node in
+        return rootNode?.hitTest(point, lookingFor: .focusTarget) { node in
             node.content.focusTarget.flatMap { $0.isEnabled ? $0 : nil }
         } != nil
     }
@@ -955,7 +989,7 @@ public final class ViewHost {
         var stops: [FocusTarget] = []
         rootNode?.tabStops(into: &stops)
         guard !stops.isEmpty else { return false }
-        let current = focusedPath.flatMap { path in stops.firstIndex { $0.path == path } }
+        let current = focused.flatMap { owner in stops.firstIndex { $0.owner === owner } }
         let next: Int
         if let current {
             next = (current + (backward ? stops.count - 1 : 1)) % stops.count
@@ -963,11 +997,11 @@ public final class ViewHost {
             next = backward ? stops.count - 1 : 0
         }
         let target = stops[next]
-        guard target.path != focusedPath else { return true }
-        if let path = focusedPath {
-            rootNode?.focusTarget(at: path)?.onFocusChange(false)
+        guard target.owner !== focused else { return true }
+        if let focused {
+            focusTarget(of: focused)?.onFocusChange(false)
         }
-        focusedPath = target.path
+        focused = target.owner
         target.onFocusChange(true)
         syncFocusBindings()
         return true
@@ -982,11 +1016,13 @@ public final class ViewHost {
     /// Offer `press` to the `.onKeyPress` actions around the view that has
     /// the keys, innermost first; whether one used it.
     private func offerKeyPress(_ press: KeyPress) -> Bool {
-        guard focusedTarget() != nil, let path = focusedPath, let node = rootNode?.focusNode(at: path) else {
+        guard focusedTarget() != nil, let focused, let node = focusNode(of: focused) else {
             return false
         }
         for scope in node.focusScope {
-            if let handler = scope.content.keyPressHandler, handler.handle(press) { return true }
+            if scope.traits.contains(.keyPressHandler), let handler = scope.content.keyPressHandler, handler.handle(press) {
+                return true
+            }
         }
         return false
     }
@@ -996,11 +1032,11 @@ public final class ViewHost {
     /// Give the keys to `target` — or take them away, for `nil` — and
     /// bring the focus states up to date.
     private func setFocus(_ target: FocusTarget?) {
-        guard target?.path != focusedPath else { return }
-        if let path = focusedPath {
-            rootNode?.focusTarget(at: path)?.onFocusChange(false)
+        guard target?.owner !== focused else { return }
+        if let focused {
+            focusTarget(of: focused)?.onFocusChange(false)
         }
-        focusedPath = target?.path
+        focused = target?.owner
         target?.onFocusChange(true)
         syncFocusBindings()
     }
@@ -1015,9 +1051,9 @@ public final class ViewHost {
         guard !marks.isEmpty else { return }
 
         var holding: [ObjectIdentifier: FocusBindingRecord] = [:]
-        if let path = focusedPath, let node = root.focusNode(at: path) {
+        if let focused, let node = focusNode(of: focused) {
             for scope in node.focusScope {
-                if let record = scope.content.focusBinding, holding[record.group] == nil {
+                if scope.traits.contains(.focusBinding), let record = scope.content.focusBinding, holding[record.group] == nil {
                     holding[record.group] = record
                 }
             }
@@ -1040,8 +1076,8 @@ public final class ViewHost {
     /// the keys up.
     private func applyFocusRequests() {
         guard let root = rootNode else { return }
-        if let path = focusedPath, root.focusTarget(at: path) == nil {
-            focusedPath = nil
+        if let owner = focused, focusTarget(of: owner) == nil {
+            focused = nil
             syncFocusBindings()
         }
         var marks: [(record: FocusBindingRecord, node: ViewNode)] = []
@@ -1051,7 +1087,7 @@ public final class ViewHost {
             return
         }
 
-        let focusedNode = focusedPath.flatMap { root.focusNode(at: $0) }
+        let focusedNode = focused.flatMap { focusNode(of: $0) }
         let focusedScope = focusedNode?.focusScope ?? []
         var done: Set<ObjectIdentifier> = []
         for mark in marks where done.insert(mark.record.group).inserted {
@@ -1098,7 +1134,7 @@ public final class ViewHost {
         if contextMenu != nil {
             dismissContextMenu()
         }
-        guard let hit = rootNode?.hitTest(point, select: { $0.content.contextMenuSource }) else {
+        guard let hit = rootNode?.hitTest(point, lookingFor: .contextMenuSource, select: { $0.content.contextMenuSource }) else {
             InputTrace.log("right click \(point) — no menu")
             return
         }
@@ -1190,9 +1226,11 @@ enum LayoutTrace {
         for (index, command) in list.commands.enumerated() {
             switch command {
             case .shape(let draw):
+                // Where it lands: a path in its own space is at its origin.
+                let at = draw.bounds.origin + (draw.origin ?? .zero)
                 nucleantLogError(String(
                     format: "[layout] %3d shape   x=%7.2f y=%7.2f w=%7.2f h=%7.2f\n",
-                    index, draw.bounds.minX, draw.bounds.minY, draw.bounds.width, draw.bounds.height
+                    index, at.x, at.y, draw.bounds.width, draw.bounds.height
                 ))
             case .text(let draw):
                 nucleantLogError(String(
@@ -1280,6 +1318,11 @@ enum PerfTrace {
     /// `ThorCanvas`, the overlay — painted again this pass, because what
     /// they hold changed.
     static var nodesDrawn = 0
+    /// Subtrees not placed this pass: what they drew the pass before was
+    /// appended — counted at their root (`PlacementCache.swift`).
+    static var placementsKept = 0
+    /// Of them, the ones placed at another origin: what they drew, moved.
+    static var placementsMoved = 0
 
     static func reset() {
         textMeasures = 0
@@ -1288,6 +1331,8 @@ enum PerfTrace {
         sizeCalls = 0
         layersDrawn = 0
         nodesDrawn = 0
+        placementsKept = 0
+        placementsMoved = 0
     }
 
     static func log(_ message: @autoclosure () -> String) {

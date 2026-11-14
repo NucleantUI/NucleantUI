@@ -2,17 +2,87 @@
 //  TextMeasurer.swift
 //  NucleantUI
 //
-//  Text sizing, done through ThorVG's own font metrics so layout and drawing
-//  agree. Widths come from summing per-glyph advances
-//  (`tvg_text_get_glyph_metrics`) rather than from a paint's AABB: the AABB is
-//  only valid once a canvas has updated the paint, and layout runs before
-//  anything is on a canvas. A character the face has no glyph for is
-//  measured in the face it falls back to (`FontFallback`), which is the face
-//  it draws in.
+//  Text sizing, done with the very Skia font the text is drawn with
+//  (`SkiaFonts`), so layout and drawing agree. Widths come from summing
+//  per-glyph advances, line heights from the font's metrics. A character the
+//  face has no glyph for is measured in the face it falls back to
+//  (`FontFallback`), which is the face it draws in.
 //
 
 import NucleantSkia
 import NucleantThorVG
+
+/// The Skia faces and fonts text is measured and drawn with: one face per
+/// family `FontRegistry` resolved, from the file it resolved, and one font
+/// per face, size and synthetic slant. `TextMeasurer` and
+/// `SkiaDisplayRenderer` take theirs from here, so a text is measured with
+/// the font that draws it.
+@MainActor
+final class SkiaFonts {
+    static let shared = SkiaFonts()
+
+    /// A text size is points at 96 DPI, drawn `size × 96/72` units tall —
+    /// the size the text boxes of every view are made for; Skia's size is
+    /// the em height itself, so it is given the factor.
+    static let pointScale = 96.0 / 72.0
+
+    private struct Key: Hashable {
+        let family: String?
+        let size: Double
+        let slanted: Bool
+    }
+
+    private var fonts: [Key: SkFont] = [:]
+    /// Faces loaded into Skia, by the family name `FontRegistry` resolved.
+    private var typefaces: [String: SkTypeface] = [:]
+    /// The platform's default face, for a font nothing resolved for.
+    private var defaultTypeface: SkTypeface?
+
+    private init() {}
+
+    /// The font for `family` at `size` points — sheared, `slanted`, where
+    /// there is no italic face.
+    func font(family: String?, size: Double, slanted: Bool) -> SkFont {
+        let key = Key(family: family, size: size, slanted: slanted)
+        if let font = fonts[key] { return font }
+        let font = SkFont(typeface(for: family), size: Float(size * Self.pointScale))
+        font.setSubpixel(true)
+        font.setEdging(.antiAlias)
+        // Unhinted. Where Skia reads glyphs through FreeType (the browser,
+        // Linux, Android) its default hinting rounds every advance to a
+        // whole pixel, and a word drifts off its measured width a pixel
+        // every few letters.
+        font.setHinting(.none)
+        if slanted { font.setSkewX(-0.2) }
+        fonts[key] = font
+        return font
+    }
+
+    /// The font `font` draws with, resolved.
+    func font(for font: Font) -> SkFont {
+        let family = FontRegistry.resolve(font)
+        return self.font(family: family, size: font.size, slanted: Self.isSlanted(font, family: family))
+    }
+
+    /// Whether `font` is drawn sheared: italic with no italic face found.
+    static func isSlanted(_ font: Font, family: String?) -> Bool {
+        font.isItalic && !(family?.contains("Italic") ?? false)
+    }
+
+    private func typeface(for family: String?) -> SkTypeface? {
+        if let family {
+            if let loaded = typefaces[family] { return loaded }
+            if let made = FontRegistry.typeface(ofResolved: family) {
+                typefaces[family] = made
+                return made
+            }
+        }
+        if defaultTypeface == nil {
+            defaultTypeface = SkFontMgr.matchFamilyStyle(nil)
+        }
+        return defaultTypeface
+    }
+}
 
 @MainActor
 enum TextMeasurer {
@@ -35,11 +105,8 @@ enum TextMeasurer {
     /// family name and the character.
     private struct Face {
         let key: FaceKey
-        /// One reusable `Tvg_Paint`, so measuring a string doesn't allocate a
-        /// text object per call. Never added to a canvas — released only
-        /// when the process ends, which is the same lifetime as the table.
-        var probe: Tvg_Paint?
-        var hasProbe = false
+        /// The font it draws with, made the first time it is measured.
+        var font: SkFont?
         /// Advances of the single-byte ASCII characters, by code; NaN until
         /// measured.
         var ascii = [Double](repeating: .nan, count: 128)
@@ -53,6 +120,12 @@ enum TextMeasurer {
 
     static func face(for font: Font, spacing: Double = 0) -> Int {
         if PerfTrace.isEnabled { PerfTrace.textMeasures += 1 }
+        return face(resolving: font, spacing: spacing)
+    }
+
+    /// `face(for:spacing:)` without counting a measurement: a font resolved
+    /// to draw with.
+    static func face(resolving font: Font, spacing: Double = 0) -> Int {
         let key = FaceKey(
             family: FontRegistry.resolve(font),
             size: font.size,
@@ -66,20 +139,19 @@ enum TextMeasurer {
         return faces.count - 1
     }
 
-    private static func probe(_ face: Int) -> Tvg_Paint? {
-        if faces[face].hasProbe { return faces[face].probe }
-        faces[face].hasProbe = true
-        ThorEngine.ensureInitialized()
-        guard let paint = tvg_text_new() else { return nil }
+    /// The family name `face` was resolved to.
+    static func family(of face: Int) -> String? {
+        faces[face].key.family
+    }
+
+    /// The Skia font `face` is measured — and drawn — with.
+    static func font(_ face: Int) -> SkFont {
+        if let font = faces[face].font { return font }
         let key = faces[face].key
-        if let family = key.family {
-            _ = family.withCString { tvg_text_set_font(paint, $0) }
-        } else {
-            _ = tvg_text_set_font(paint, nil)
-        }
-        _ = tvg_text_set_size(paint, Float(key.size))
-        faces[face].probe = paint
-        return paint
+        let slanted = key.italic && !(key.family?.contains("Italic") ?? false)
+        let font = SkiaFonts.shared.font(family: key.family, size: key.size, slanted: slanted)
+        faces[face].font = font
+        return font
     }
 
     /// Ascent / descent / line height for a font, in points.
@@ -92,15 +164,10 @@ enum TextMeasurer {
 
         let size = faces[face].key.size
         var result = (ascent: size * 0.8, descent: size * 0.2, lineHeight: size * 1.2)
-        if let paint = probe(face) {
-            var metrics = Tvg_Text_Metrics()
-            if tvg_text_get_text_metrics(paint, &metrics) == TVG_RESULT_SUCCESS, metrics.advance > 0 {
-                result = (
-                    ascent: Double(metrics.ascent),
-                    descent: Double(-metrics.descent),
-                    lineHeight: Double(metrics.advance)
-                )
-            }
+        let metrics = font(face).getMetrics()
+        let lineHeight = Double(metrics.descent - metrics.ascent + metrics.leading)
+        if lineHeight > 0 {
+            result = (ascent: Double(-metrics.ascent), descent: Double(metrics.descent), lineHeight: lineHeight)
         }
         faces[face].lineMetrics = result
         return result
@@ -133,18 +200,11 @@ enum TextMeasurer {
         ) {
             return Double(fallback.measureText(String(character))) + key.spacing
         }
-        // Fallback ratio for a face ThorVG can't measure — roughly the average
-        // advance of a proportional Latin face at a given em size.
-        var width = faces[face].key.size * 0.5
-        if let paint = probe(face) {
-            var metrics = Tvg_Glyph_Metrics()
-            let result = String(character).withCString {
-                tvg_text_get_glyph_metrics(paint, $0, &metrics)
-            }
-            if result == TVG_RESULT_SUCCESS, metrics.advance > 0 {
-                width = Double(metrics.advance)
-            }
-        }
+        let skiaFont = font(face)
+        let measured = Double(skiaFont.getWidths(skiaFont.textToGlyphs(String(character))).reduce(0, +))
+        // A face with nothing to say about it: roughly the average advance
+        // of a proportional Latin face at a given em size.
+        let width = measured > 0 || character.isWhitespace && character != " " ? measured : faces[face].key.size * 0.5
         return width + faces[face].key.spacing
     }
 

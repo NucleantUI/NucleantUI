@@ -207,10 +207,10 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// Swift reference rather than the pass.
     let renderTextures: RenderTextureManager<N>
 
-    /// Keyed by the view's structural path — the same identity `@State` uses,
-    /// so a shader keeps its pipeline across rebuilds and loses it only when
-    /// the view itself goes away.
-    private var slots: [[Int]: Slot] = [:]
+    /// By the view's render slot — held by its position as its `@State` is
+    /// — so a shader keeps its pipeline across rebuilds and loses it only
+    /// when the view itself goes away.
+    private var slots: [RenderSlot: Slot] = [:]
 
     /// Backing-store pixels per point.
     var scale: Double = 1 {
@@ -223,9 +223,9 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// Slots detached from the engine but not yet freed — see `endPass`.
     private var pendingDestroy: [Slot] = []
 
-    /// Paths whose `ShaderProtocol` input changed since it was last packed,
-    /// set by observation and served by `tick`.
-    private var changedInputs: Set<[Int]> = []
+    /// The slots whose `ShaderProtocol` input changed since it was last
+    /// packed, set by observation and served by `tick`.
+    private var changedInputs: Set<RenderSlot> = []
 
     /// What renders a shader into a `RenderTexture`, per texture — see
     /// `renderPendingShaders`.
@@ -271,7 +271,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// (`DrawContext.compositeFrame(of:)`), which the image is composited
     /// into — moved with it, and stretched when the transform scales it.
     func useModule<Input: ShaderInput>(
-        path: [Int],
+        slot key: RenderSlot,
         words: [UInt32],
         input: Input,
         isAnimated: Bool,
@@ -286,7 +286,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         texture: RenderTexture? = nil
     ) {
         let stages = SpirvEntryPoints(words)
-        let existing = slots[path]
+        let existing = slots[key]
         let inputID = ObjectIdentifier(input)
         let pack = {
             var bytes: [UInt8] = []
@@ -296,13 +296,13 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         var bytes = existing?.packedBytes ?? []
         let repack = existing == nil || existing?.inputID != inputID
             || existing?.words != words
-            || changedInputs.contains(path)
+            || changedInputs.contains(key)
         if repack {
-            changedInputs.remove(path)
-            bytes = track(pack, at: path)
+            changedInputs.remove(key)
+            bytes = track(pack, at: key)
         }
         guard let slot = slot(
-            at: path,
+            at: key,
             request: Request(
                 words: words, stages: stages, draw: draw, isAnimated: isAnimated,
                 withLayer: content != nil || canvas != nil || texture != nil
@@ -334,12 +334,12 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     }
 
     /// Run `pack` under observation: the first change to anything it read
-    /// files `path` for the next `tick`. The handler runs on whichever
+    /// files `key` for the next `tick`. The handler runs on whichever
     /// thread wrote, so it hops to the main queue the frames are served on.
-    private func track(_ pack: () -> [UInt8], at path: [Int]) -> [UInt8] {
+    private func track(_ pack: () -> [UInt8], at key: RenderSlot) -> [UInt8] {
         withObservationTracking(pack) { [weak self] in
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { _ = self?.changedInputs.insert(path) }
+                MainActor.assumeIsolated { _ = self?.changedInputs.insert(key) }
             }
         }
     }
@@ -409,7 +409,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// either way. `canvas` is the canvas node it samples instead of a layer
     /// of its own.
     private func slot(
-        at path: [Int],
+        at key: RenderSlot,
         request: Request,
         inputBytes: Int,
         textures: ShaderTextures,
@@ -433,7 +433,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         textureInput?.prepareImage()
         guard let textureInputs = textures.imageInputs else {
             nucleantLogError(
-                "NucleantUI: shader at \(path) samples \(textures.signature) — "
+                "NucleantUI: shader at \(key.pathDescription) samples \(textures.signature) — "
                 + "no image for one of them, so nothing is drawn this frame\n"
             )
             return nil
@@ -444,7 +444,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         let order = renderNodes.nextPaintOrder()
         var previous: Slot?
         var canvas: Layer?
-        if let existing = slots[path] {
+        if let existing = slots[key] {
             existing.used = true
             // Both rects are read fresh by the engine every frame, so moving or
             // re-clipping a shader view is free; only a *resize*, a different
@@ -493,7 +493,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
                 canvas = existing.layer
                 existing.layer = nil
             }
-            slots[path] = nil
+            slots[key] = nil
             previous = existing
         }
 
@@ -517,7 +517,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
         }
         place(slot, rect: rect, shown: shown, clip: clip)
         composite(slot, at: order)
-        slots[path] = slot
+        slots[key] = slot
         return slot
     }
 
@@ -604,10 +604,10 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     func endPass() {
         let started = PerfTrace.isVerbose ? DispatchTime.now().uptimeNanoseconds : 0
         var retired = 0
-        for (path, slot) in slots where !slot.used {
+        for (key, slot) in slots where !slot.used {
             retire(slot)
-            slots[path] = nil
-            changedInputs.remove(path)
+            slots[key] = nil
+            changedInputs.remove(key)
             retired += 1
         }
         if retired > 0 {
@@ -713,20 +713,20 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
     /// Pack again every `ShaderProtocol` input observation said changed, and
     /// upload it — the whole of what a changed input costs, with no pass
     /// and no view rebuilt. One that outgrew its buffer waits for a pass
-    /// over its path instead, which rebuilds the slot with room for it.
+    /// over its view instead, which rebuilds the slot with room for it.
     private func uploadChangedInputs() {
         guard !changedInputs.isEmpty else { return }
-        for path in changedInputs {
-            guard let slot = slots[path], let pack = slot.pack else {
-                changedInputs.remove(path)
+        for key in changedInputs {
+            guard let slot = slots[key], let pack = slot.pack else {
+                changedInputs.remove(key)
                 continue
             }
-            let bytes = track(pack, at: path)
+            let bytes = track(pack, at: key)
             guard (bytes.count + 3) / 4 <= slot.backend.argumentCapacity else {
-                Invalidator.shared.invalidate(owner: path)
+                if let path = key.standingPath { Invalidator.shared.invalidate(owner: path) }
                 continue
             }
-            changedInputs.remove(path)
+            changedInputs.remove(key)
             upload(bytes, to: slot)
         }
     }

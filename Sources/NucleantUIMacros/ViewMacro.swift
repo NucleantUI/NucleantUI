@@ -257,11 +257,11 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
     private static func bindingFunction(access: String, properties: [StoredProperty]) -> DeclSyntax {
         let binds = properties.enumerated().compactMap { index, property -> String? in
             guard property.wrapper != nil else { return nil }
-            return "binder.bind(self._\(property.name), index: \(index))"
+            return "binder.bind(&self._\(property.name), index: \(index))"
         }
         let body = binds.isEmpty ? "" : "\n    " + binds.joined(separator: "\n    ")
         return """
-            @MainActor \(raw: access)func _bindDynamicProperties(_ binder: DynamicPropertyBinder) {\(raw: body)
+            @MainActor \(raw: access)mutating func _bindDynamicProperties(_ binder: DynamicPropertyBinder) {\(raw: body)
             }
             """
     }

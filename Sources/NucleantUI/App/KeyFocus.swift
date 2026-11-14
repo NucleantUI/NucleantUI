@@ -28,13 +28,14 @@ struct KeyEvent {
 
 /// A node that can hold the keys.
 ///
-/// Compared by path, as `HoverTarget` is: the focused view usually rebuilds
-/// as it takes keys (a text field's text changes), which replaces this
-/// object, and the focus must stay with the view. `ViewHost` looks the
-/// current object up by path before each delivery.
+/// Compared by its owner, as `HoverTarget` is: the focused view usually
+/// rebuilds as it takes keys (a text field's text changes), which replaces
+/// this object, and the focus must stay with the view. `ViewHost` looks the
+/// current object up through its owner before each delivery.
 @MainActor
 final class FocusTarget {
-    let path: [Int]
+    /// The view it belongs to, by its position.
+    let owner: PositionHandle
     let isEnabled: Bool
     let onFocusChange: @MainActor (Bool) -> Void
     let onKeyDown: @MainActor (KeyEvent) -> Void
@@ -52,7 +53,7 @@ final class FocusTarget {
     let insertsTab: Bool
 
     init(
-        path: [Int],
+        owner: PositionHandle,
         isEnabled: Bool,
         onFocusChange: @escaping @MainActor (Bool) -> Void,
         onKeyDown: @escaping @MainActor (KeyEvent) -> Void,
@@ -62,7 +63,7 @@ final class FocusTarget {
         isTabStop: Bool = false,
         insertsTab: Bool = false
     ) {
-        self.path = path
+        self.owner = owner
         self.isEnabled = isEnabled
         self.onFocusChange = onFocusChange
         self.onKeyDown = onKeyDown
@@ -75,20 +76,11 @@ final class FocusTarget {
 }
 
 extension ViewNode {
-    /// The focus target at `path` in this subtree, if that view still stands.
-    func focusTarget(at path: [Int]) -> FocusTarget? {
-        if let target = content.focusTarget, target.path == path { return target }
-        for child in children {
-            if let found = child.focusTarget(at: path) { return found }
-        }
-        return nil
-    }
-
     /// Every enabled tab stop in this subtree, in the order they are laid
     /// out — what Tab walks through.
     func tabStops(into stops: inout [FocusTarget]) {
-        guard !content.isParked, removal == nil else { return }
-        if let target = content.focusTarget, target.isTabStop, target.isEnabled {
+        guard subtreeTraits.contains(.focusTarget), !traits.contains(.parked), removal == nil else { return }
+        if traits.contains(.focusTarget), let target = content.focusTarget, target.isTabStop, target.isEnabled {
             stops.append(target)
         }
         for child in children {

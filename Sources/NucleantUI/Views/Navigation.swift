@@ -665,7 +665,7 @@ private struct NavigationBar {
             .padding(horizontal: 12, vertical: 0)
             // A fixed height: the screens are inset by exactly this much.
             .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
-            .background(ShapeStyle.secondaryBackground)
+            .background(.secondaryBackground)
             .overlay(alignment: .bottom) {
                 Rectangle().fill(.separator).frame(height: 1)
             }
@@ -742,7 +742,7 @@ private struct NavigationBottomBar {
             }
             .padding(horizontal: 12, vertical: 0)
             .frame(maxWidth: .infinity, minHeight: NavigationBar.height, maxHeight: NavigationBar.height)
-            .background(ShapeStyle.secondaryBackground)
+            .background(.secondaryBackground)
             .overlay(alignment: .top) {
                 Rectangle().fill(.separator).frame(height: 1)
             }

@@ -59,17 +59,15 @@ extension View {
     /// This view drawn one of its own widths or heights towards `edge`, or
     /// where it is for `nil`. Animates its own amount.
     func moveEffect(towards edge: Edge?) -> some View {
-        _ModifierView(content: self, key: ["moveEffect", edge] as [AnyHashable]) { context in
-            MoveEffectContent(fraction: context.animatedValue(.move, MoveEffectContent.fraction(towards: edge)))
-        }
+        _ModifierView(content: self, modifier: MoveEffectModifier(edge: edge))
     }
 }
 
 /// How far a view is drawn from where it is placed, as a fraction of its
 /// own size along each axis — (-1, 0) is one width to the left.
 struct MoveEffectContent: NodeContent {
-    /// `[x, y]`, animated.
-    let fraction: AnimatedVector
+    /// x and y, animated.
+    let fraction: AnimatableDataState<AnimatablePair<Double, Double>>
 
     static func fraction(towards edge: Edge?) -> [Double] {
         switch edge {
@@ -84,11 +82,21 @@ struct MoveEffectContent: NodeContent {
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         let xy = fraction.current()
         var inner = context
-        let dx = xy[0] * rect.width
-        let dy = xy[1] * rect.height
+        let dx = xy.first * rect.width
+        let dy = xy.second * rect.height
         if dx != 0 || dy != 0 {
             inner.transform = context.transform.concatenating(.translation(x: dx, y: dy))
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
+    }
+}
+
+/// `moveEffect(towards:)`, animated.
+struct MoveEffectModifier: PrimitiveModifier, Equatable {
+    let edge: Edge?
+
+    func makeContent(_ context: inout BuildContext) -> MoveEffectContent {
+        let xy = MoveEffectContent.fraction(towards: edge)
+        return MoveEffectContent(fraction: context.animatedState(.move, AnimatablePair(xy[0], xy[1])))
     }
 }

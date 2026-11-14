@@ -65,14 +65,26 @@ public struct Canvas {
 
 extension Canvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        ViewNode(content: CanvasContent(path: context.path, renderer: renderer))
+        // What the drawing reads of the environment is read when it is
+        // drawn, outside this build; the color scheme, which every style
+        // drawn with depends on, is read here, so a change of appearance
+        // builds the canvas again and it draws again.
+        _ = context.environment.colorScheme
+        return ContentNode(content: CanvasContent(
+            reader: context.position.handle,
+            environment: context.environment,
+            renderer: renderer
+        ))
     }
 }
 
 /// Puts a `.canvas` command in the list at `place`; the node's renderer runs
 /// the author's closure when it reaches it.
 struct CanvasContent: NodeContent {
-    let path: [Int]
+    /// Whose reads what the drawing reads are: the view's.
+    let reader: PositionHandle
+    /// What the drawing's styles resolve in.
+    let environment: EnvironmentValues
     let renderer: (inout GraphicsContext, Size) -> Void
     /// Which build this content came from. A rebuilt view gets a new
     /// content and so a new generation, which is what makes its command
@@ -92,31 +104,26 @@ struct CanvasContent: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0 else { return }
-        let path = self.path
+        let reader = self.reader
         let renderer = self.renderer
         let size = rect.size
-        let scheme = context.colorScheme
+        let environment = self.environment
         list.append(.canvas(CanvasDraw(
             frame: rect,
             opacity: context.opacity,
-            transform: context.transform,
-            clip: context.clip,
-            clipCornerRadius: context.clipCornerRadius,
-            transformedClips: context.transformedClips,
             generation: generation,
             drawing: CanvasDrawing { pointer in
-                var graphics = GraphicsContext(canvas: SkCanvas(base: pointer), size: size, colorScheme: scheme)
+                var graphics = GraphicsContext(canvas: SkCanvas(base: pointer), size: size, environment: environment)
                 // Reads inside the renderer belong to this view: a change
                 // to one dirties it alone, which rebuilds it, which draws
                 // the node again.
-                DependencyTracker.shared.push(path)
-                trackingObservation(at: path) {
+                DependencyTracker.shared.push(reader)
+                trackingObservation(for: reader) {
                     renderer(&graphics, size)
                 }
                 DependencyTracker.shared.pop()
-                _ = DependencyTracker.shared.takeReads(for: path)
             }
-        )))
+        )), under: context.drawState)
     }
 }
 

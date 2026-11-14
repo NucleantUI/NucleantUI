@@ -13,16 +13,25 @@ so only compare runs against each other.
 
     uv run --no-project python Scripts/bench_animations.py run <scenario> <label> [--rounds N] [--runs N]
     uv run --no-project python Scripts/bench_animations.py compare <label-a> <label-b>
+    uv run --no-project python Scripts/bench_animations.py record <label-a> <label-b> --what "…" [--load "…"]
+    uv run --no-project python Scripts/bench_animations.py tables
     uv run --no-project python Scripts/bench_animations.py list
 
 A run launches the app `--runs` times (3) for `--rounds` rounds each (5)
 and writes `.build/bench/<label>/<scenario>.json`. To compare two commits:
 check out the first, `run` every scenario under one label, check out the
 second, `run` them under another, then `compare`.
+
+`record` keeps a comparison: it adds the launches of both labels, with
+what the change was (`--what`), to the record committed with the plan
+(`plans/fable-optimizations/measurements.json`), and writes the tables
+again. `tables` writes the tables from the record into the plan's files,
+between their `<!-- measurements:… -->` markers: never edit them by hand.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -36,17 +45,27 @@ ROOT = Path(__file__).resolve().parent.parent
 DRIVER = ROOT / ".claude/skills/run-nucleantui/driver.sh"
 RUN_DIR = ROOT / ".build/run"
 BENCH_DIR = ROOT / ".build/bench"
+PLAN_DIR = ROOT / "plans/fable-optimizations"
+RECORD = PLAN_DIR / "measurements.json"
+# The plan's files the tables are written into, between their markers.
+TABLE_FILES = [PLAN_DIR / "progress.md", PLAN_DIR / "README.md"]
 
 # Seconds left after each input for its animation to finish before the next.
 SETTLE = 1.5
 
-# Each scenario: the app, and one round of driver commands. Points are window
-# points (title bar included), from the apps at their launch size.
+# Each scenario: the app, the driver commands that get it there once after
+# launch (`setup`, not measured), and one round of driver commands. Points are
+# window points (title bar included), from the apps at their launch size.
 SCENARIOS: dict[str, dict] = {
     "bookmarks-layout": {
         "app": "Bookmarks",
         "about": "Cards ⇄ List: every card moves and resizes to its row (geometry motion)",
         "round": [["click", "353", "132"], ["click", "294", "132"]],
+    },
+    "bookmarks-scroll": {
+        "app": "Bookmarks",
+        "about": "the cards scrolled down and back up (content moving, nothing resized)",
+        "round": [["scroll", "600", "500", "-600"], ["scroll", "600", "500", "600"]],
     },
     "bookmarks-tags": {
         "app": "Bookmarks",
@@ -58,6 +77,12 @@ SCENARIOS: dict[str, dict] = {
         "about": "a card revealed and graded: thrown off, the next dealt in (transitions: asymmetric scale+opacity, opacity)",
         "round": [["click", "320", "300"], ["click", "450", "510"]],
     },
+    "reader-scroll": {
+        "app": "Reader",
+        "about": "the first chapter scrolled down and back up (content moving, nothing resized)",
+        "setup": [["click", "280", "330"], ["click", "280", "508"]],
+        "round": [["scroll", "280", "400", "-600"], ["scroll", "280", "400", "600"]],
+    },
     "flashcards-card": {
         "app": "Flashcards",
         "about": "the card flipped and back (animatableData), then dragged short and let go (spring-back)",
@@ -68,6 +93,8 @@ SCENARIOS: dict[str, dict] = {
         ],
     },
 }
+
+KEPT = re.compile(r"\bkept=(\d+)")
 
 PERF = re.compile(
     r"\[perf\] (\S+) ([\d.]+)ms \(build ([\d.]+)ms\) built=(\d+) reused=(\d+) measured=(\d+) text=(\d+)"
@@ -103,9 +130,11 @@ def summarize(lines: list[str]) -> dict:
         match = PERF.search(line)
         if match:
             kind, ms, build, built, reused, measured, text = match.groups()
+            kept = KEPT.search(line)
             passes.append({
                 "kind": kind, "ms": float(ms), "build": float(build),
                 "built": int(built), "measured": int(measured), "text": int(text),
+                "kept": int(kept.group(1)) if kept else 0,
             })
     times = sorted(p["ms"] for p in passes)
     kinds: dict[str, int] = {}
@@ -123,6 +152,7 @@ def summarize(lines: list[str]) -> dict:
         "built": sum(p["built"] for p in passes),
         "measured": sum(p["measured"] for p in passes),
         "text": sum(p["text"] for p in passes),
+        "kept": sum(p["kept"] for p in passes),
     }
 
 
@@ -151,8 +181,12 @@ def run_once(scenario: str, rounds: int) -> dict:
     pid = int(found.group(1))
     log = RUN_DIR / f"{app}.log"
     time.sleep(2)  # let launch passes finish
+    for step in spec.get("setup", []):
+        driver(*step, settle=SETTLE)
 
     start_bytes = log.stat().st_size
+    # How busy the machine was: a loaded one makes every pass slower.
+    load_start = os.getloadavg()[0]
     cpu_before = cpu_seconds(pid)
     wall_before = time.monotonic()
     for _ in range(rounds):
@@ -165,7 +199,12 @@ def run_once(scenario: str, rounds: int) -> dict:
         handle.seek(start_bytes)
         lines = handle.read().splitlines()
     driver("quit")
-    result = {"cpu_s": round(cpu, 2), "wall_s": round(wall, 1), **summarize(lines)}
+    result = {
+        "cpu_s": round(cpu, 2),
+        "wall_s": round(wall, 1),
+        "load": round((load_start + os.getloadavg()[0]) / 2, 1),
+        **summarize(lines),
+    }
     result["cpu_per_pass_ms"] = round(cpu * 1000 / result["passes"], 2) if result["passes"] else 0
     return result
 
@@ -235,6 +274,189 @@ def compare(a: str, b: str) -> None:
             print(f"  {name:28}{cells[0]:>22}{cells[1]:>22}{change:>9}")
 
 
+# MARK: - The record
+
+def load_record() -> dict:
+    if RECORD.exists():
+        return json.loads(RECORD.read_text())
+    return {
+        "about": "Before/after measurements of the optimization plan, made with "
+                 "Scripts/bench_animations.py (`record`). Each holds every launch's "
+                 "numbers; the tables in progress.md and README.md are written from "
+                 "this file (`tables`).",
+        "scenarios": {},
+        "measurements": [],
+    }
+
+
+def label_runs(label: str) -> dict[str, dict]:
+    """The result files under `label`, by scenario."""
+    return {path.stem: json.loads(path.read_text()) for path in sorted((BENCH_DIR / label).glob("*.json"))}
+
+
+def commit_of(results: dict[str, dict], label: str) -> str:
+    commits = {data["commit"] for data in results.values()}
+    if len(commits) != 1:
+        sys.exit(f"{label}: runs from more than one commit ({', '.join(sorted(commits))})")
+    return commits.pop()
+
+
+def record(a: str, b: str, what: str, load: str | None, date: str | None) -> None:
+    before, after = label_runs(a), label_runs(b)
+    shared = [name for name in before if name in after]
+    if not shared:
+        sys.exit(f"no scenario run under both {a} and {b}")
+    data = load_record()
+    entry = {
+        "id": f"{commit_of(before, a)}..{commit_of(after, b)}",
+        "date": date or datetime.date.today().isoformat(),
+        "what": what,
+        "before": commit_of(before, a),
+        "after": commit_of(after, b),
+        "build": "debug",
+        "scenarios": {
+            name: {
+                "rounds": before[name]["rounds"],
+                "before": runs_of(before[name]),
+                "after": runs_of(after[name]),
+            }
+            for name in shared
+        },
+    }
+    if load:
+        entry["load"] = load
+    for name in shared:
+        data["scenarios"][name] = SCENARIOS[name]["about"]
+    data["measurements"] = [m for m in data["measurements"] if m["id"] != entry["id"]] + [entry]
+    RECORD.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    print(f"recorded {entry['id']} ({', '.join(shared)}) → {RECORD.relative_to(ROOT)}")
+    write_tables()
+
+
+def value(run: dict, key: str) -> float:
+    if key == "kept":
+        return run.get("kept", 0)
+    if key == "build_per_pass_ms":
+        return run["build_ms"] / run["passes"] if run["passes"] else 0
+    if key == "cpu_per_pass_ms" and key not in run:
+        return run["cpu_s"] * 1000 / run["passes"] if run["passes"] else 0
+    return run[key]
+
+
+def stats(runs: list[dict], key: str) -> tuple[float, float, float]:
+    values = [value(r, key) for r in runs]
+    return sum(values) / len(values), min(values), max(values)
+
+
+def number(x: float) -> str:
+    text = f"{x:.3g}" if abs(x) < 1000 else f"{x:,.0f}"
+    return text.replace("-", "−")
+
+
+def change_cell(before: list[dict], after: list[dict], key: str, unit: str = "") -> str:
+    """`before → after (change)`, means of the launches; the change in bold
+    when the two sets of launches don't overlap."""
+    mean_a, low_a, high_a = stats(before, key)
+    mean_b, low_b, high_b = stats(after, key)
+    if not mean_a:
+        return f"{number(mean_a)} → {number(mean_b)}{unit}"
+    change = f"{(mean_b - mean_a) / mean_a * 100:+.0f}%".replace("-", "−")
+    if high_b < low_a or low_b > high_a:
+        change = f"**{change}**"
+    return f"{number(mean_a)} → {number(mean_b)}{unit} ({change})"
+
+
+def load_of(entry: dict) -> str:
+    if "load" in entry:
+        return entry["load"]
+    loads = [r["load"] for s in entry["scenarios"].values() for r in s["before"] + s["after"] if "load" in r]
+    if not loads:
+        return "—"
+    return f"{min(loads):g}–{max(loads):g}" if min(loads) != max(loads) else f"{loads[0]:g}"
+
+
+DETAIL_METRICS = [
+    ("cpu_per_pass_ms", "CPU per pass", " ms"),
+    ("build_per_pass_ms", "building per pass", " ms"),
+    ("median_ms", "median pass", " ms"),
+    ("p95_ms", "95th percentile pass", " ms"),
+    ("max_ms", "slowest pass", " ms"),
+    ("passes", "passes for the interaction", ""),
+    ("cpu_s", "CPU for the interaction", " s"),
+    ("built", "nodes built, all passes", ""),
+    ("measured", "sizes measured, all passes", ""),
+    ("text", "texts measured, all passes", ""),
+    ("kept", "subtrees kept, all passes", ""),
+]
+
+
+def scenario_order(names) -> list[str]:
+    known = list(SCENARIOS)
+    return sorted(names, key=lambda n: known.index(n) if n in known else len(known))
+
+
+def summary_table(data: dict) -> str:
+    entries = data["measurements"]
+    names = scenario_order({n for m in entries for n in m["scenarios"]})
+    lines = [
+        "CPU per pass, mean of the launches (debug builds); in **bold** where the",
+        "launches before and after don't overlap. Written by",
+        "`Scripts/bench_animations.py tables` from [measurements.json](measurements.json).",
+        "",
+        "| Measured | Before → after | Date | Load | " + " | ".join(f"`{n}`" for n in names) + " |",
+        "|---|---|---|---|" + "---|" * len(names),
+    ]
+    for m in entries:
+        cells = []
+        for n in names:
+            s = m["scenarios"].get(n)
+            cells.append(change_cell(s["before"], s["after"], "cpu_per_pass_ms", " ms") if s else "")
+        lines.append(f"| {m['what']} | `{m['before']}` → `{m['after']}` | {m['date']} | {load_of(m)} | "
+                     + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def details(data: dict) -> str:
+    out = []
+    for m in data["measurements"]:
+        names = scenario_order(m["scenarios"])
+        launches = ", ".join(
+            f"`{n}` {len(m['scenarios'][n]['before'])}/{len(m['scenarios'][n]['after'])} launches "
+            f"of {m['scenarios'][n]['rounds']} rounds" for n in names
+        )
+        out += [
+            f"#### {m['what']}",
+            "",
+            f"`{m['before']}` → `{m['after']}`, {m['date']}, {m['build']} builds, load {load_of(m)}; {launches}.",
+            "",
+            "| | " + " | ".join(f"`{n}`" for n in names) + " |",
+            "|---|" + "---|" * len(names),
+        ]
+        for key, name, unit in DETAIL_METRICS:
+            cells = [change_cell(m["scenarios"][n]["before"], m["scenarios"][n]["after"], key, unit) for n in names]
+            out.append(f"| {name} | " + " | ".join(cells) + " |")
+        out.append("")
+    return "\n".join(out).rstrip()
+
+
+def write_tables() -> None:
+    data = load_record()
+    blocks = {"summary": summary_table(data), "details": details(data)}
+    for path in TABLE_FILES:
+        text = path.read_text()
+        changed = text
+        for kind, block in blocks.items():
+            start, end = f"<!-- measurements:{kind} -->", f"<!-- /measurements:{kind} -->"
+            if start not in changed:
+                continue
+            head, rest = changed.split(start, 1)
+            _, tail = rest.split(end, 1)
+            changed = f"{head}{start}\n{block}\n{end}{tail}"
+        if changed != text:
+            path.write_text(changed)
+            print(f"tables → {path.relative_to(ROOT)}")
+
+
 def main() -> None:
     args = sys.argv[1:]
     if not args or args[0] == "list":
@@ -245,11 +467,20 @@ def main() -> None:
     def option(name: str, default: int) -> int:
         return int(args[args.index(name) + 1]) if name in args else default
 
+    def text_option(name: str) -> str | None:
+        return args[args.index(name) + 1] if name in args else None
+
     if args[0] == "run" and len(args) >= 3:
         run(args[1], args[2], option("--rounds", 5), option("--runs", 3))
         return
     if args[0] == "compare" and len(args) == 3:
         compare(args[1], args[2])
+        return
+    if args[0] == "record" and len(args) >= 3 and text_option("--what"):
+        record(args[1], args[2], text_option("--what"), text_option("--load"), text_option("--date"))
+        return
+    if args[0] == "tables":
+        write_tables()
         return
     sys.exit(__doc__)
 

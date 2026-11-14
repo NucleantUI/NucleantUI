@@ -111,7 +111,7 @@ struct BookRow {
                     .lineLimit(2)
                 Text(statusLine)
                     .font(.caption)
-                    .foregroundStyle(status == .new ? .secondary : .color(Theme.accent))
+                    .foregroundStyle(status == .new ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

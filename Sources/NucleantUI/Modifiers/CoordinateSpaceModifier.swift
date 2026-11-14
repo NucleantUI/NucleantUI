@@ -35,9 +35,7 @@ extension View {
     ///
     /// - Parameter name: A name used to identify this coordinate space.
     public func coordinateSpace(_ name: NamedCoordinateSpace) -> some View {
-        _ModifierView(content: self, key: ["coordinateSpace", name.name] as [AnyHashable]) { _ in
-            CoordinateSpaceContent(name: name.name)
-        }
+        _ModifierView(content: self, modifier: CoordinateSpaceModifier(name: name.name))
     }
 }
 
@@ -50,5 +48,18 @@ struct CoordinateSpaceContent: NodeContent {
         var inner = context
         inner.coordinateSpaces.append(CoordinateSpaceFrame(name: name, rect: rect, transform: context.transform))
         node.singleChild?.place(in: rect, proposal: proposal, context: inner, into: &list)
+    }
+}
+
+/// `.coordinateSpace(_:)`.
+struct CoordinateSpaceModifier: PrimitiveModifier {
+    let name: AnyHashable
+
+    func makeContent(_ context: inout BuildContext) -> CoordinateSpaceContent {
+        CoordinateSpaceContent(name: name)
+    }
+
+    func _isEquivalent(to other: CoordinateSpaceModifier) -> Bool {
+        name == other.name
     }
 }

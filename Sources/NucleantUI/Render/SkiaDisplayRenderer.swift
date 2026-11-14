@@ -18,10 +18,10 @@
 //  set before its transform, as ThorVG applies a paint's transform to the
 //  paint and not to its clipper.
 //
-//  Text is measured by `TextMeasurer` (ThorVG's metrics), and the lines,
-//  baselines and ellipsis are placed here from those same metrics, so a
-//  line is drawn where layout made room for it. The face is the file
-//  `FontRegistry` resolved, loaded into Skia from the same path.
+//  Text is measured by `TextMeasurer` with the same Skia fonts it is drawn
+//  with (`SkiaFonts`), and the lines, baselines and ellipsis are placed here
+//  from those same metrics, so a line is drawn where layout made room for
+//  it. The face is the file `FontRegistry` resolved.
 //
 
 import NucleantSkia
@@ -66,19 +66,57 @@ public final class SkiaDisplayRenderer {
     private let tintPaint = SkPaint()
     private let path = SkPath()
 
-    /// Fonts by face, size and synthetic slant — what text draws with.
-    private struct FontKey: Hashable {
-        let family: String?
-        let size: Double
-        let slanted: Bool
+    /// What a laid-out line draws: its glyphs, placed — a run per font, a
+    /// fallback face's beside the family's — and its advance. Built the
+    /// first time the line is drawn, then drawn in one call wherever it
+    /// stands; nothing is shaped or measured again.
+    private struct LineBlob {
+        let blob: SkTextBlob?
+        let advance: Double
+        var lastUsed: Int
     }
-    private var fonts: [FontKey: SkFont] = [:]
+
+    private struct LineKey: Hashable {
+        let line: String
+        /// `TextMeasurer`'s face: family, size and style in one number.
+        let face: Int
+        let spacing: Double
+    }
+
+    private var lineBlobs: [LineKey: LineBlob] = [:]
+    /// Renders so far — when each line was last drawn.
+    private var renders = 0
+    /// How many lines the last sweep kept: the next sweeps once there are
+    /// well more than that.
+    private var linesKept = 0
+
 
     /// Images drawn by the last render, by the `RasterImage` they were made
     /// from. The source is held with its image, so its identifier stays its
     /// own; whatever a render does not draw is dropped after it.
     private var images: [ObjectIdentifier: (source: RasterImage, image: SkImage)] = [:]
     private var imagesDrawn: Set<ObjectIdentifier> = []
+
+    /// Gradient shaders made by the last render, by the gradient and where
+    /// it lies — a gradient fill drawn again is filled with the shader it
+    /// had. Dropped when a render does not use them, as images are.
+    private struct GradientKey: Hashable {
+        let gradient: Gradient
+        /// Linear: start and end. Radial: center, and the two radii.
+        let a: SIMD2<Float>
+        let b: SIMD2<Float>
+        let isRadial: Bool
+    }
+    private var gradients: [GradientKey: SkShader] = [:]
+    private var gradientsUsed: Set<GradientKey> = []
+
+    /// Dash effects by pattern and phase, kept the same way.
+    private struct DashKey: Hashable {
+        let intervals: [Float]
+        let phase: Float
+    }
+    private var dashes: [DashKey: SkPathEffect] = [:]
+    private var dashesUsed: Set<DashKey> = []
 
     /// Replace the canvas contents with `list`.
     public func render(_ list: DisplayList) {
@@ -134,20 +172,75 @@ public final class SkiaDisplayRenderer {
         canvas.restoreToCount(1)
         canvas.resetMatrix()
         canvas.clear(SIMD4<Float>(0, 0, 0, 0))
+        renders += 1
         imagesDrawn.removeAll(keepingCapacity: true)
+        gradientsUsed.removeAll(keepingCapacity: true)
+        dashesUsed.removeAll(keepingCapacity: true)
         return canvas
     }
 
-    /// Drop the images this render did not draw — usually none.
+    /// Drop the images, shaders and dash effects this render did not use —
+    /// usually none.
     private func end() {
-        guard images.count > imagesDrawn.count else { return }
-        for key in Array(images.keys) where !imagesDrawn.contains(key) {
-            images[key] = nil
+        // Lines not drawn for a while: a painter that draws one image now
+        // and another the next keeps both's.
+        if lineBlobs.count > 2 * linesKept + 256 {
+            lineBlobs = lineBlobs.filter { $0.value.lastUsed >= renders - 120 }
+            linesKept = lineBlobs.count
+        }
+        if images.count > imagesDrawn.count {
+            for key in Array(images.keys) where !imagesDrawn.contains(key) {
+                images[key] = nil
+            }
+        }
+        if gradients.count > gradientsUsed.count {
+            for key in Array(gradients.keys) where !gradientsUsed.contains(key) {
+                gradients[key] = nil
+            }
+        }
+        if dashes.count > dashesUsed.count {
+            for key in Array(dashes.keys) where !dashesUsed.contains(key) {
+                dashes[key] = nil
+            }
         }
     }
 
+    /// The dash effect for `pattern` from `phase`: the one kept, or made.
+    /// Skia wants on/off pairs; an odd pattern repeats to make them.
+    private func dashEffect(_ pattern: [Double], phase: Double) -> SkPathEffect? {
+        var intervals = pattern.map { Float($0) }
+        if intervals.count % 2 == 1 { intervals += intervals }
+        let key = DashKey(intervals: intervals, phase: Float(phase))
+        dashesUsed.insert(key)
+        if let kept = dashes[key] { return kept }
+        let made = SkDashPathEffect.make(intervals: intervals, phase: key.phase)
+        dashes[key] = made
+        return made
+    }
+
+    /// The gradient shader for `key`: the one kept, or made by `make`.
+    private func gradientShader(_ key: GradientKey, make: () -> SkShader?) -> SkShader? {
+        gradientsUsed.insert(key)
+        if let kept = gradients[key] { return kept }
+        let made = make()
+        gradients[key] = made
+        return made
+    }
+
+    /// Each command under its clip and transform. Those are set once for a
+    /// run of commands that share them — a column of labels under one scroll
+    /// view's clip — and dropped when a command's differ: one save, one clip,
+    /// one transform for the run, where each command set and dropped its own.
     private func emit(_ list: DisplayList, on canvas: SkCanvas) {
-        for command in list.commands {
+        var open = -1
+        for (index, command) in list.commands.enumerated() {
+            let state = list.stateIndex(at: index)
+            if state != open {
+                if open >= 0 { canvas.restore() }
+                canvas.save()
+                begin(on: canvas, list.states[state])
+                open = state
+            }
             switch command {
             case .shape(let draw):
                 emit(draw, on: canvas)
@@ -161,15 +254,16 @@ public final class SkiaDisplayRenderer {
                 emit(draw, on: canvas)
             }
         }
+        if open >= 0 { canvas.restore() }
     }
 
     // MARK: - Canvas views
 
     /// A `Canvas` view: the node's own canvas, handed over at the view's
-    /// origin, cut to its frame, under its clip and transform.
+    /// origin, cut to its frame, under its clip and transform — set for the
+    /// run it is in.
     private func emit(_ draw: CanvasDraw, on canvas: SkCanvas) {
         let saved = canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
         canvas.translate(dx: Float(draw.frame.minX), dy: Float(draw.frame.minY))
         canvas.clipRect(pos: .zero, size: SIMD2(Float(draw.frame.width), Float(draw.frame.height)), doAntiAlias: true)
         if draw.opacity < 1 {
@@ -186,15 +280,44 @@ public final class SkiaDisplayRenderer {
         let stroke = draw.stroke.flatMap { $0.isClear || draw.strokeStyle.lineWidth <= 0 ? nil : $0 }
         guard fill != nil || stroke != nil else { return }
 
-        path.reset()
-        append(draw.path, to: path)
+        // A rect, a rounded rect or an ellipse alone — a background, a
+        // border, a control's track and thumb — is drawn as one; anything
+        // else through the path.
+        let primitive = draw.path.soleElement
+        switch primitive {
+        case .rect?, .ellipse?:
+            break
+        default:
+            path.reset()
+            append(draw.path, to: path)
+        }
 
-        canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        // Under the clip and transform set for its run; a path in its own
+        // space moved out to where it lands, for this command alone.
+        if let origin = draw.origin {
+            canvas.save()
+            canvas.translate(dx: Float(origin.x), dy: Float(origin.y))
+        }
+
+        func drawShape(with paint: SkPaint) {
+            switch primitive {
+            case .rect(let rect, let radiusX, let radiusY)?:
+                if radiusX > 0 || radiusY > 0 {
+                    canvas.drawRRect(pos: rect.origin, size: rect.size, radius: SIMD2(radiusX, radiusY), paint: paint)
+                } else {
+                    canvas.drawRect(pos: rect.origin, size: rect.size, paint: paint)
+                }
+            case .ellipse(let center, let radiusX, let radiusY)?:
+                let radius = SIMD2(radiusX, radiusY)
+                canvas.drawOval(pos: center - radius, size: radius * 2, paint: paint)
+            default:
+                canvas.drawPath(path, paint: paint)
+            }
+        }
 
         if let fill {
             apply(fill, to: fillPaint, bounds: draw.bounds)
-            canvas.drawPath(path, paint: fillPaint)
+            drawShape(with: fillPaint)
         }
         if let stroke {
             let style = draw.strokeStyle
@@ -205,33 +328,32 @@ public final class SkiaDisplayRenderer {
             if style.dash.isEmpty {
                 paint.clearPathEffect()
             } else {
-                // Skia wants on/off pairs; an odd pattern repeats to make them.
-                var intervals = style.dash.map { Float($0) }
-                if intervals.count % 2 == 1 { intervals += intervals }
-                if let dash = SkDashPathEffect.make(intervals: intervals, phase: Float(style.dashPhase)) {
+                if let dash = dashEffect(style.dash, phase: style.dashPhase) {
                     paint.setPathEffect(dash)
                 } else {
                     paint.clearPathEffect()
                 }
             }
             apply(stroke, to: paint, bounds: draw.bounds)
-            canvas.drawPath(path, paint: paint)
+            drawShape(with: paint)
         }
 
         if let fill {
             emitEmbedded(draw.path, fill: fill, on: canvas)
         }
 
-        canvas.restore()
+        if draw.origin != nil {
+            canvas.restore()
+        }
     }
 
     /// The text and images in a path, painted with its fill: text in the
-    /// fill's color, an image faded by its alpha. Inside the shape's own
-    /// save, so its clip and transform already hold.
-    private func emitEmbedded(_ path: Path, fill: ShapeStyle, on canvas: SkCanvas) {
+    /// fill's color, an image faded by its alpha. Under the shape's clip and
+    /// transform, which already hold.
+    private func emitEmbedded(_ path: Path, fill: _ResolvedPaint, on canvas: SkCanvas) {
         let color = fill.flatColor
-        for element in path.elements {
-            switch element {
+        for item in path.embedded {
+            switch item {
             case .text(let string, let origin, let font):
                 emit(TextDraw(
                     string: string,
@@ -242,14 +364,12 @@ public final class SkiaDisplayRenderer {
                 ), on: canvas)
             case .image(let image, let rect):
                 emit(ImageDraw(image: image, frame: rect, opacity: Double(color.alpha)), on: canvas)
-            default:
-                break
             }
         }
     }
 
     private func append(_ path: Path, to skPath: SkPath) {
-        for element in path.elements {
+        for element in path.elementSequence {
             switch element {
             case .move(let point):
                 skPath.moveTo(point)
@@ -279,38 +399,40 @@ public final class SkiaDisplayRenderer {
         }
     }
 
-    private func apply(_ style: ShapeStyle, to paint: SkPaint, bounds: Rect) {
-        switch style {
-        // A display list holds styles resolved for their scheme as they were
-        // recorded; a dynamic one that got past that draws its light color.
-        case .color(let color), .dynamic(light: let color, dark: _):
+    private func apply(_ resolved: _ResolvedPaint, to paint: SkPaint, bounds: Rect) {
+        switch resolved.kind {
+        case .color(let color):
             let (r, g, b, a) = color.rgba8
             paint.clearShader()
             paint.setColor(SIMD4(r, g, b, a))
         case .linearGradient(let gradient, let startPoint, let endPoint):
-            let start = startPoint.resolved(in: bounds)
-            let end = endPoint.resolved(in: bounds)
-            let (colors, positions) = stops(gradient)
+            let start = SIMD2<Float>(startPoint.resolved(in: bounds))
+            let end = SIMD2<Float>(endPoint.resolved(in: bounds))
             paint.setColor(SIMD4<UInt8>(0, 0, 0, 255))
-            if let shader = SkGradientShader.makeLinear(
-                from: SIMD2<Float>(start),
-                to: SIMD2<Float>(end),
-                colors: colors, positions: positions
-            ) {
+            let key = GradientKey(gradient: gradient, a: start, b: end, isRadial: false)
+            let shader = gradientShader(key) {
+                let (colors, positions) = stops(gradient)
+                return SkGradientShader.makeLinear(from: start, to: end, colors: colors, positions: positions)
+            }
+            if let shader {
                 paint.setShader(shader)
             } else {
                 paint.clearShader()
             }
         case .radialGradient(let gradient, let center, let startRadius, let endRadius):
-            let origin = center.resolved(in: bounds)
-            let point = SIMD2<Float>(origin)
-            let (colors, positions) = stops(gradient)
+            let point = SIMD2<Float>(center.resolved(in: bounds))
+            let radii = SIMD2<Float>(Float(startRadius), Float(endRadius))
             paint.setColor(SIMD4<UInt8>(0, 0, 0, 255))
-            if let shader = SkGradientShader.makeTwoPointConical(
-                start: point, startRadius: Float(startRadius),
-                end: point, endRadius: Float(endRadius),
-                colors: colors, positions: positions
-            ) {
+            let key = GradientKey(gradient: gradient, a: point, b: radii, isRadial: true)
+            let shader = gradientShader(key) {
+                let (colors, positions) = stops(gradient)
+                return SkGradientShader.makeTwoPointConical(
+                    start: point, startRadius: radii.x,
+                    end: point, endRadius: radii.y,
+                    colors: colors, positions: positions
+                )
+            }
+            if let shader {
                 paint.setShader(shader)
             } else {
                 paint.clearShader()
@@ -333,26 +455,15 @@ public final class SkiaDisplayRenderer {
 
     // MARK: - Text
 
-    /// ThorVG takes a text size in points at 96 DPI and draws it at
-    /// `size × 96/72` user units; `TextMeasurer` measures with ThorVG, so
-    /// every text box is sized for that. Skia's size is the em height
-    /// itself, so it is given the same factor — the glyphs then fill the
-    /// box layout made for them.
-    static let thorPointScale = 96.0 / 72.0
-
-    /// Faces loaded into Skia, by the family name `FontRegistry` resolved.
-    private static var typefaces: [String: SkTypeface] = [:]
-    /// The platform's default face, for a font nothing resolved for.
-    private static var defaultTypeface: SkTypeface?
 
     private func emit(_ draw: TextDraw, on canvas: SkCanvas) {
-        guard !draw.string.isEmpty else { return }
-        let family = FontRegistry.resolve(draw.font)
-        // No italic face found: a synthetic shear still reads as italic.
-        let slanted = draw.font.isItalic && !(family?.contains("Italic") ?? false)
-        let font = self.font(family: family, size: draw.font.size, slanted: slanted)
+        guard draw.lines.contains(where: { !$0.isEmpty }) else { return }
+        // Resolved once, by the text that made the draw — or here.
+        let face = draw.face ?? TextMeasurer.face(resolving: draw.font)
+        let family = TextMeasurer.family(of: face)
+        let font = TextMeasurer.font(face)
 
-        var lines = draw.string.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var lines = draw.lines
         if draw.wraps, draw.lineLimit != 1 {
             lines = TextMeasurer.wrap(draw.string, font: draw.font, maxWidth: draw.frame.width, lineLimit: draw.lineLimit)
         }
@@ -369,38 +480,69 @@ public final class SkiaDisplayRenderer {
         let (r, g, b, a) = draw.color.rgba8
         paint.setColor(SIMD4(r, g, b, a))
 
-        canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
-        // The first baseline an ascent below the box's top, the rest a line
+        // Under the clip and transform set for its run. The first baseline
+        // an ascent below the box's top, the rest a line
         // height and the line spacing apart — the metrics layout sized the
         // box with.
-        let metrics = TextMeasurer.lineMetrics(for: draw.font)
+        let metrics = TextMeasurer.lineMetrics(face: face)
         let step = metrics.lineHeight + draw.lineSpacing
         let factor = alignFactor(draw.alignment)
         for (index, line) in lines.enumerated() where !line.isEmpty {
             let y = draw.frame.minY + metrics.ascent + Double(index) * step
             let spacing = draw.letterSpacing + (index == lines.count - 1 ? draw.lastLineTightening : 0)
-            let runs = self.runs(of: line, in: font, family: family, style: draw.font)
+            let placed = lineBlob(line, face: face, font: font, family: family, style: draw.font, spacing: spacing)
+            let x = draw.frame.minX + (draw.frame.width - placed.advance) * factor
+            if let blob = placed.blob {
+                canvas.drawTextBlob(blob, pos: SIMD2(Float(x), Float(y)), paint: paint)
+            }
+            // The advance of a spaced line has the spacing after its last
+            // character, which nothing is drawn in.
+            decorate(draw, from: x, to: x + placed.advance - spacing, baseline: y, on: canvas)
+        }
+    }
+
+    /// The glyphs of `line` in `font` — and, for a character its face has
+    /// no glyph for, the face the platform falls back to — placed along a
+    /// baseline from 0, with `spacing` after each character; built the
+    /// first time the line is drawn.
+    private func lineBlob(_ line: String, face: Int, font: SkFont, family: String?, style: Font, spacing: Double) -> LineBlob {
+        let key = LineKey(line: line, face: face, spacing: spacing)
+        if var cached = lineBlobs[key] {
+            cached.lastUsed = renders
+            lineBlobs[key] = cached
+            return cached
+        }
+        let builder = SkTextBlobBuilder()
+        var pen = 0.0
+        for run in runs(of: line, in: font, family: family, style: style) {
+            var glyphs: [UInt16] = []
+            var xs: [Float] = []
             if spacing == 0 {
-                let widths = runs.map { Double($0.font.measureText($0.text)) }
-                let width = widths.reduce(0, +)
-                let x = draw.frame.minX + (draw.frame.width - width) * factor
-                var pen = x
-                for (run, advance) in zip(runs, widths) {
-                    canvas.drawString(run.text, x: Float(pen), y: Float(y), font: run.font, paint: paint)
-                    pen += advance
+                glyphs = run.font.textToGlyphs(run.text)
+                for width in run.font.getWidths(glyphs) {
+                    xs.append(Float(pen))
+                    pen += Double(width)
                 }
-                decorate(draw, from: x, to: x + width, baseline: y, on: canvas)
             } else {
-                let spread = spaced(runs, by: spacing)
-                let x = draw.frame.minX + (draw.frame.width - spread.advance) * factor
-                for piece in spread.pieces {
-                    canvas.drawGlyphs(piece.glyphs, positions: piece.positions, origin: SIMD2(Float(x), Float(y)), font: piece.font, paint: paint)
+                // The spacing goes after each character, however many
+                // glyphs it is.
+                for character in run.text {
+                    let ids = run.font.textToGlyphs(String(character))
+                    for (id, width) in zip(ids, run.font.getWidths(ids)) {
+                        glyphs.append(id)
+                        xs.append(Float(pen))
+                        pen += Double(width)
+                    }
+                    pen += spacing
                 }
-                decorate(draw, from: x, to: x + spread.advance - spacing, baseline: y, on: canvas)
+            }
+            if !glyphs.isEmpty {
+                builder.addRun(glyphs, font: run.font, xpos: xs, y: 0)
             }
         }
-        canvas.restore()
+        let made = LineBlob(blob: builder.make(), advance: pen, lastUsed: renders)
+        lineBlobs[key] = made
+        return made
     }
 
     /// `line` in runs of one font each: `font`, or — for a character its
@@ -421,31 +563,6 @@ public final class SkiaDisplayRenderer {
             }
         }
         return runs
-    }
-
-    /// The runs' glyphs placed a character at a time with `spacing` after
-    /// each — a piece of glyphs for each run, in its font — and the advance
-    /// of the whole, the last spacing included, as layout measured it.
-    private func spaced(
-        _ runs: [(text: String, font: SkFont)], by spacing: Double
-    ) -> (pieces: [(font: SkFont, glyphs: [UInt16], positions: [SIMD2<Float>])], advance: Double) {
-        var pieces: [(font: SkFont, glyphs: [UInt16], positions: [SIMD2<Float>])] = []
-        var pen = 0.0
-        for run in runs {
-            var glyphs: [UInt16] = []
-            var positions: [SIMD2<Float>] = []
-            for character in run.text {
-                let ids = run.font.textToGlyphs(String(character))
-                for (id, width) in zip(ids, run.font.getWidths(ids)) {
-                    glyphs.append(id)
-                    positions.append(SIMD2(Float(pen), 0))
-                    pen += Double(width)
-                }
-                pen += spacing
-            }
-            pieces.append((run.font, glyphs, positions))
-        }
-        return (pieces, pen)
     }
 
     /// One line's underline and strikethrough, from `start` to `end` along
@@ -469,36 +586,6 @@ public final class SkiaDisplayRenderer {
         }
         let (r, g, b, a) = draw.color.rgba8
         paint.setColor(SIMD4(r, g, b, a))
-    }
-
-    private func font(family: String?, size: Double, slanted: Bool) -> SkFont {
-        let key = FontKey(family: family, size: size, slanted: slanted)
-        if let font = fonts[key] { return font }
-        let font = SkFont(typeface(for: family), size: Float(size * Self.thorPointScale))
-        font.setSubpixel(true)
-        font.setEdging(.antiAlias)
-        // Unhinted, as ThorVG draws and the layout measures. Where Skia reads
-        // glyphs through FreeType (the browser, Linux, Android) its default
-        // hinting rounds every advance to a whole pixel, and a word drifts
-        // off its measured width a pixel every few letters.
-        font.setHinting(.none)
-        if slanted { font.setSkewX(-0.2) }
-        fonts[key] = font
-        return font
-    }
-
-    private func typeface(for family: String?) -> SkTypeface? {
-        if let family {
-            if let loaded = Self.typefaces[family] { return loaded }
-            if let path = FontRegistry.path(ofResolved: family), let made = SkFontMgr.makeFromFile(path) {
-                Self.typefaces[family] = made
-                return made
-            }
-        }
-        if Self.defaultTypeface == nil {
-            Self.defaultTypeface = SkFontMgr.matchFamilyStyle(nil)
-        }
-        return Self.defaultTypeface
     }
 
     /// `line` cut short with a trailing "…" until it fits `width`.
@@ -531,15 +618,13 @@ public final class SkiaDisplayRenderer {
         guard draw.frame.width > 0, draw.frame.height > 0, let image = skImage(for: draw.image) else { return }
         let paint = imagePaint
         paint.setAlphaf(max(0, min(1, draw.opacity)))
-        canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
+        // Under the clip and transform set for its run.
         canvas.drawImageRect(
             image,
             pos: SIMD2<Float>(draw.frame.origin),
             size: SIMD2<Float>(draw.frame.size),
             paint: paint
         )
-        canvas.restore()
     }
 
     /// `RasterImage`'s pixels are premultiplied ARGB words — BGRA bytes on a
@@ -567,10 +652,10 @@ public final class SkiaDisplayRenderer {
         guard box.width > 0, box.height > 0 else { return }
         let pos = SIMD2<Float>(box.origin)
         let size = SIMD2<Float>(box.size)
+        // Under the clip and transform set for its run, and its own save for
+        // what follows. The outermost <svg> cuts what it draws to its
+        // viewport, as in a browser.
         let saved = canvas.save()
-        begin(on: canvas, transform: draw.transform, clip: draw.clip, cornerRadius: draw.clipCornerRadius, transformedClips: draw.transformedClips)
-        // The outermost <svg> cuts what it draws to its viewport, as in a
-        // browser.
         canvas.clipRect(pos: pos, size: size, doAntiAlias: true)
         if draw.tint != nil || draw.opacity < 1 {
             layerPaint.setAlphaf(Float(max(0, min(1, draw.opacity))))
@@ -593,20 +678,20 @@ public final class SkiaDisplayRenderer {
     /// Clip first, in the canvas's space, then the command's own transform —
     /// the clip does not move with what it clips. A transformed clip is cut
     /// under its own transform. The caller saves and restores around it.
-    private func begin(on canvas: SkCanvas, transform: Transform, clip: Rect?, cornerRadius: Double, transformedClips: [TransformedClip]) {
-        if let clip {
-            clipRect(clip, cornerRadius: cornerRadius, on: canvas)
+    private func begin(on canvas: SkCanvas, _ state: DrawState) {
+        if let clip = state.clip {
+            clipRect(clip, cornerRadius: state.clipCornerRadius, on: canvas)
         }
-        if !transformedClips.isEmpty {
+        if !state.transformedClips.isEmpty {
             let base = canvas.getTotalMatrix()
-            for turned in transformedClips {
+            for turned in state.transformedClips {
                 canvas.concat(matrix(turned.transform))
                 clipRect(turned.rect, cornerRadius: turned.cornerRadius, on: canvas)
                 canvas.setMatrix(base)
             }
         }
-        if !transform.isIdentity {
-            canvas.concat(matrix(transform))
+        if !state.transform.isIdentity {
+            canvas.concat(matrix(state.transform))
         }
     }
 

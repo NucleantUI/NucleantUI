@@ -95,10 +95,46 @@ struct PaddedGroup {
     }
 }
 
+/// Observers at three depths; a tap adds a writer, and with it a fourth
+/// observer between the outer two.
+@View
+struct NestedObservers {
+    let log: Log
+    @State private var more = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Color.red
+                    .frame(width: 200, height: 100)
+                    .onTapGesture { more = true }
+                    .preference(key: SumKey.self, value: more ? 2 : 1)
+                    .onPreferenceChange(SumKey.self) { log("inner \($0)") }
+                if more {
+                    Color.blue
+                        .frame(width: 200, height: 50)
+                        .preference(key: SumKey.self, value: 10)
+                        .onPreferenceChange(SumKey.self) { log("added \($0)") }
+                }
+            }
+            .onPreferenceChange(SumKey.self) { log("middle \($0)") }
+        }
+        .onPreferenceChange(SumKey.self) { log("outer \($0)") }
+    }
+}
+
 extension HostedViews {
     @MainActor
     @Suite
     struct PreferenceAndFlatteningTests {
+
+        @Test func observersRunOutermostFirstAsTheyComeAndGo() async {
+            let log = Log()
+            let harness = Harness(NestedObservers(log: log))
+            #expect(log.take() == ["outer 1", "middle 1", "inner 1"])
+            await harness.tap(Point(x: 100, y: 50))
+            #expect(log.take() == ["outer 12", "middle 12", "inner 2", "added 10"])
+        }
 
         @Test func preferencesReduceAcrossSiblingsGroupsAndTransforms() {
             let log = Log()

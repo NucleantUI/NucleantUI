@@ -39,14 +39,14 @@ struct FlipCard: Animatable {
         let squash = max(abs(cos(angle * .pi / 180)), 0.02)
         ZStack {
             RoundedRectangle(cornerRadius: 20)
-                .fill(showsAnswer ? .color(Theme.answerCard) : Theme.card)
+                .fill(showsAnswer ? AnyShapeStyle(Theme.answerCard) : AnyShapeStyle(Theme.card))
             VStack(spacing: 10) {
                 Text(showsAnswer ? "ANSWER" : card.category.uppercased())
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(showsAnswer ? .color(Theme.onAnswer.opacity(0.7)) : .secondary)
+                    .foregroundStyle(showsAnswer ? AnyShapeStyle(Theme.onAnswer.opacity(0.7)) : AnyShapeStyle(.secondary))
                 Text(showsAnswer ? card.answer : card.prompt)
                     .font(.system(size: showsAnswer ? 30 : 22, weight: showsAnswer ? .bold : .medium))
-                    .foregroundStyle(showsAnswer ? .color(Theme.onAnswer) : .primary)
+                    .foregroundStyle(showsAnswer ? AnyShapeStyle(Theme.onAnswer) : AnyShapeStyle(.primary))
                     .multilineTextAlignment(.center)
             }
             .padding(24)

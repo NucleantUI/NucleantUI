@@ -8,13 +8,13 @@
 //  of an `@Observable` class is tracked by the standard library's
 //  `withObservationTracking`. Every place user code constructs views — a
 //  view's `body`, a `ForEach` row closure — runs inside one tracking scope
-//  attributed to that view's path, and the first change to anything it read
-//  marks the path dirty. The next frame rebuilds from there, exactly as it
-//  would after a `@State` write.
+//  attributed to that view's position, and the first change to anything it
+//  read marks the view dirty, by its path while it stands. The next frame
+//  rebuilds from there, exactly as it would after a `@State` write.
 //
 //  Scopes are deliberately never nested: a scope wraps the *construction* of
 //  child view values, not the building of their nodes, so a child's own
-//  reads land on the child's path rather than merging into every ancestor's.
+//  reads land on the child rather than merging into every ancestor's.
 //
 
 import Dispatch
@@ -22,12 +22,12 @@ import Foundation
 import Observation
 
 /// Run `construct` with its `@Observable` reads attributed to the view at
-/// `path`. A later change to any of them dirties that path.
+/// `reader`'s position. A later change to any of them dirties that view.
 @MainActor
-func trackingObservation<T>(at path: [Int], _ construct: () -> T) -> T {
+func trackingObservation<T>(for reader: PositionHandle, _ construct: () -> T) -> T {
     let invalidator = Invalidator.shared
     return withObservationTracking(construct) {
-        invalidator.invalidateFromAnyThread(owner: path)
+        invalidator.invalidateFromAnyThread(owner: reader)
     }
 }
 
@@ -36,12 +36,17 @@ extension Invalidator {
     /// wrote the property — a background analysis finishing, say. Hop to the
     /// main actor where the dirty set lives; a write already on the main
     /// thread is recorded at once so the very next frame sees it.
-    nonisolated func invalidateFromAnyThread(owner path: [Int]) {
+    /// A view that no longer stands has nothing to rebuild.
+    nonisolated func invalidateFromAnyThread(owner reader: PositionHandle) {
         if Thread.isMainThread {
-            MainActor.assumeIsolated { invalidate(owner: path) }
+            MainActor.assumeIsolated { invalidate(reader) }
         } else {
-            DispatchQueue.main.async { self.invalidate(owner: path) }
+            DispatchQueue.main.async { self.invalidate(reader) }
         }
+    }
+
+    private func invalidate(_ reader: PositionHandle) {
+        if let path = reader.standingPath { invalidate(owner: path) }
     }
 }
 

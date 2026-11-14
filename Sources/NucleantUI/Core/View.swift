@@ -27,8 +27,9 @@ public protocol View: ViewInput {
     /// body and knows the line it sits on, which no initializer can.
     var _viewID: ViewID { get set }
 
-    /// Bind every `@State` / `@Binding` / `@Environment` on this view.
-    func _bindDynamicProperties(_ binder: DynamicPropertyBinder)
+    /// Bind every `@State` / `@Binding` / `@Environment` on this view, in
+    /// place.
+    mutating func _bindDynamicProperties(_ binder: DynamicPropertyBinder)
 }
 
 extension View {
