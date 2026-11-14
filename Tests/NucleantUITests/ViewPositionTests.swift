@@ -503,15 +503,17 @@ struct ViewPositionTests {
             Issue.record("no row left")
             return
         }
-        let rows = Array(rowPath.dropLast())
-        #expect(rowPath.last == probe.slot(for: 2, under: rows))
+        // A row's view stands under the row (`ForEachRow`), in its slot.
+        let slotPath = Array(rowPath.dropLast())
+        let rows = Array(slotPath.dropLast())
+        #expect(slotPath.last == probe.slot(for: 2, under: rows))
 
         let builder = Builder()
         #expect(builder.build(PositionShelf(title: "a", count: 3)).departed.isEmpty)
-        let built = (0..<3).map { builder.records.entry(for: rows + [builder.slot(for: $0, under: rows)])?.node }
+        let built = (0..<3).map { builder.records.entry(for: rows + [builder.slot(for: $0, under: rows), 0])?.node }
         #expect(built.allSatisfy { $0 != nil })
         func standing(_ index: Int) -> ViewNode? {
-            builder.records.entry(for: rows + [builder.slot(for: index, under: rows)])?.node
+            builder.records.entry(for: rows + [builder.slot(for: index, under: rows), 0])?.node
         }
 
         // The title changes: the rows are compared and kept where they
@@ -523,7 +525,7 @@ struct ViewPositionTests {
         let shrunk = builder.build(PositionShelf(title: "b", count: 2)).departed
         #expect(shrunk.filter(isRow).map(\.0) == [rowPath])
         #expect(shrunk.count > 1)
-        #expect(shrunk.allSatisfy { $0.0.starts(with: rowPath) })
+        #expect(shrunk.allSatisfy { $0.0.starts(with: slotPath) })
         #expect(builder.records.entry(for: rowPath) == nil)
         for index in 0..<2 { #expect(standing(index) === built[index], "row \(index)") }
 

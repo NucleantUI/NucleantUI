@@ -140,6 +140,38 @@ struct LoggedRowClosure {
     }
 }
 
+/// A row's own model, which its row closure reads.
+@MainActor
+@Observable
+final class RowCounter {
+    let id: Int
+    var value = 0
+
+    init(id: Int) {
+        self.id = id
+    }
+}
+
+/// A row per counter, its closure reading the counter.
+@View
+struct CounterRows {
+    let counters: [RowCounter]
+    let log: Log
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(counters, id: \.id) { counter in
+                row(counter)
+            }
+        }
+    }
+
+    private func row(_ counter: RowCounter) -> some View {
+        log("row \(counter.id): \(counter.value)")
+        return Color.orange.frame(width: 10, height: 10)
+    }
+}
+
 /// Rows whose closure captures a value the parent works out from
 /// `shelf.value`.
 @View
@@ -190,8 +222,18 @@ extension HostedViews {
             await harness.change { shelf.value += 1 }
             #expect(log.take().isEmpty, "the same data and closure: no row closure runs")
 
-            await harness.change { shelf.items = [1, 3] }
-            #expect(log.take() == ["row 1", "row 3"], "other data: each row closure runs")
+            await harness.change { shelf.items = [1, 3, 4] }
+            #expect(log.take() == ["row 4"], "other data: a row standing is kept, only a new one's closure runs")
+        }
+
+        @Test func aChangeOneRowClosureReadRunsThatClosureAlone() async {
+            let counters = (1...3).map(RowCounter.init)
+            let log = Log()
+            let harness = Harness(CounterRows(counters: counters, log: log))
+            #expect(log.take() == ["row 1: 0", "row 2: 0", "row 3: 0"])
+
+            await harness.change { counters[1].value = 5 }
+            #expect(log.take() == ["row 2: 5"])
         }
     }
 }

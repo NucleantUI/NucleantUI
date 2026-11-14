@@ -395,7 +395,12 @@ public final class ViewHost {
         // being rebuilt — that rebuild subsumes it. Subsumed, not ignored:
         // the whole set travels down as `dirtyPaths`, so a view at one of
         // those paths can't be reused by the ancestor's rebuild either.
-        let ordered = paths.sorted { $0.count < $1.count }
+        // Views as deep as each other in the order of the tree, so what
+        // their rebuilds queue — `onChange`s, a `ForEach`'s rows' — runs in
+        // that order.
+        let ordered = paths.sorted { a, b in
+            a.count != b.count ? a.count < b.count : a.lexicographicallyPrecedes(b)
+        }
         var rebuilt: [[Int]] = []
 
         for path in ordered {

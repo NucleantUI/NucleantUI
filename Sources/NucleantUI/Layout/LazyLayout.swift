@@ -142,7 +142,6 @@ extension ForEach {
         if Content.self is any LazyExpandable.Type {
             return makeExpandedLazyNode(&context, cursor: cursor)
         }
-        let path = context.path
         let count = data.count
         let start = cursor.position
         let lower = min(max(cursor.window.lowerBound - start, 0), count)
@@ -162,8 +161,7 @@ extension ForEach {
             let index = slots.slot(for: identify(element))
             let isNew = rows.isNewChild(at: index)
             let node = rows.child(index) { ctx in
-                let row = trackingObservation(at: path) { build(element) }
-                return buildNode(row, &ctx)
+                buildNode(ForEachRow(element: element, build: build), &ctx)
             }
             node.tagLazyElement(LazyElementTag(owner: cursor.owner, unit: start + offset))
             built.append((index: index, node: node, isNew: isNew))
@@ -185,14 +183,12 @@ extension ForEach {
     /// Every element built, under the cursor: each is a section whose own
     /// rows are what the window is over, and which count their own units.
     private func makeExpandedLazyNode(_ context: inout BuildContext, cursor: LazyBuildCursor) -> ViewNode {
-        let path = context.path
         let slots = context.rowSlots(for: ID.self)
         let built = data.map { element in
             let index = slots.slot(for: identify(element))
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
-                let row = trackingObservation(at: path) { build(element) }
-                return buildNode(row, &ctx)
+                buildNode(ForEachRow(element: element, build: build), &ctx)
             }
             return (index: index, node: node, isNew: isNew)
         }
