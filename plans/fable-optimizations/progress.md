@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `c2e9d41`.
+Last updated after `3085e1c`.
 
 ## Small fixes that are certain
 
@@ -58,13 +58,16 @@ Last updated after `c2e9d41`.
     `Animatable`'s data, `.animation(_:value:)`'s last value and a
     timeline's next date are fields of the position; the rebuilds and
     timelines to come are lists of positions that pass by one that left.
-  - [ ] transition slots, render nodes, readers
+  - [x] transition slots — `3085e1c`. On the container's position; a
+    container that leaves hands back the exits it was playing, to end.
+  - [ ] render nodes, readers
 - [~] **2.7** `ForEach` rows
   - [ ] a row's slot is the hash of its id
   - [ ] a change read in one row closure re-runs every row closure
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 under way (state
-  effects and animated values done); 5 to 7 not started.
+- Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 under way (state,
+  effects, animated values and transition slots done); 5 to 7 not
+  started.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
 
