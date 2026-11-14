@@ -66,6 +66,39 @@ struct Hit<Value> {
 
 typealias HitResult = Hit<HitTarget>
 
+/// What a pointer going down needs found under it — the frontmost of each
+/// kind — gathered by one walk (`ViewNode.pointerDownHits`).
+@MainActor
+struct PointerDownHits {
+    var focus: Hit<FocusTarget>?
+    /// The frontmost enabled target that scrolls, when asked for.
+    var scroll: HitResult?
+    var dragSource: Hit<DragSource>?
+    /// When asked for.
+    var contextMenu: Hit<ContextMenuSource>?
+    /// Where the press chain starts (`ViewNode.startsPressChain`).
+    var pressLeaf: Hit<ViewNode>?
+
+    let wantsScroll: Bool
+    let wantsContextMenu: Bool
+
+    init(wantsScroll: Bool, wantsContextMenu: Bool) {
+        self.wantsScroll = wantsScroll
+        self.wantsContextMenu = wantsContextMenu
+    }
+
+    /// The traits of the kinds not found yet.
+    var missing: NodeTraits {
+        var traits: NodeTraits = []
+        if focus == nil { traits.insert(.focusTarget) }
+        if wantsScroll, scroll == nil { traits.insert(.hitTarget) }
+        if dragSource == nil { traits.insert(.dragSource) }
+        if wantsContextMenu, contextMenu == nil { traits.insert(.contextMenuSource) }
+        if pressLeaf == nil { traits.formUnion([.hitTarget, .gestureAttachment]) }
+        return traits
+    }
+}
+
 extension Hit where Value == HitTarget {
     var target: HitTarget { value }
 }
@@ -125,6 +158,60 @@ extension ViewNode {
             frame: frame,
             transform: drawn
         )
+    }
+
+    /// Everything a pointer going down looks for under `point`, in one walk:
+    /// for each kind, the node its own walk would find. A walk for one kind
+    /// passes over the subtrees without it, and this one over the subtrees
+    /// without any kind still missing, in the same order: it meets each
+    /// kind's frontmost node where that walk would.
+    func pointerDownHits(at point: Point, scroll: Bool, contextMenu: Bool) -> PointerDownHits {
+        var hits = PointerDownHits(wantsScroll: scroll, wantsContextMenu: contextMenu)
+        collectPointerDownHits(point, into: &hits)
+        return hits
+    }
+
+    private func collectPointerDownHits(_ point: Point, into hits: inout PointerDownHits) {
+        let missing = hits.missing
+        if missing.isEmpty || subtreeTraits.isDisjoint(with: missing) { return }
+        // What stops `hitTest(_:lookingFor:select:)` stops every kind.
+        guard !traits.contains(.parked), removal == nil else { return }
+        guard !traits.contains(.blocksHitTesting) else { return }
+        if traits.contains(.clipsChildren) {
+            guard let local = mapIntoLocalSpace(point), frame.contains(local) else { return }
+        }
+        if traits.contains(.hitShape), let shape = content.hitShape {
+            guard let local = mapIntoLocalSpace(point), shape.contains(local, in: frame) else { return }
+        }
+        for child in (contentHitTestOrder() ?? children).reversed() {
+            child.collectPointerDownHits(point, into: &hits)
+            if hits.missing.isEmpty { return }
+        }
+
+        guard !traits.isDisjoint(with: missing) else { return }
+        let focus = hits.focus == nil && traits.contains(.focusTarget)
+            ? content.focusTarget.flatMap { $0.isEnabled ? $0 : nil } : nil
+        let scroll = hits.wantsScroll && hits.scroll == nil && traits.contains(.hitTarget)
+            ? content.hitTarget.flatMap { $0.isEnabled && $0.handlesScroll ? $0 : nil } : nil
+        let dragSource = hits.dragSource == nil && traits.contains(.dragSource) ? content.dragSource : nil
+        let contextMenu = hits.wantsContextMenu && hits.contextMenu == nil && traits.contains(.contextMenuSource)
+            ? content.contextMenuSource : nil
+        let press = hits.pressLeaf == nil && !traits.isDisjoint(with: [.hitTarget, .gestureAttachment]) && startsPressChain
+        guard focus != nil || scroll != nil || dragSource != nil || contextMenu != nil || press else { return }
+
+        // Where its content is drawn: the same for every kind found here.
+        let drawn = contentTransform
+        guard let local = drawn.inverseApplied(to: point), frame.contains(local) else { return }
+        guard wrappedContentAccepts(point) else { return }
+        let localPoint = Point(x: local.x - frame.minX, y: local.y - frame.minY)
+        func hit<Value>(_ value: Value) -> Hit<Value> {
+            Hit(value: value, node: self, localPoint: localPoint, frame: frame, transform: drawn)
+        }
+        if let focus { hits.focus = hit(focus) }
+        if let scroll { hits.scroll = hit(scroll) }
+        if let dragSource { hits.dragSource = hit(dragSource) }
+        if let contextMenu { hits.contextMenu = hit(contextMenu) }
+        if press { hits.pressLeaf = hit(self) }
     }
 
     /// The transform this node's content is drawn under: the one at the end

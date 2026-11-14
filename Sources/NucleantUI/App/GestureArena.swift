@@ -44,12 +44,28 @@ extension ViewNode {
     /// The press chain at `point` (window coordinates).
     func pressChain(at point: Point) -> PressChain {
         let leaf = hitTest(point, lookingFor: [.hitTarget, .gestureAttachment]) { node -> ViewNode? in
-            if let target = node.content.hitTarget, target.isEnabled, target.handlesPointer { return node }
-            if let attachment = node.content.gestureAttachment, attachment.includesGesture { return node }
-            return nil
+            node.startsPressChain ? node : nil
         }
+        return PressChain(from: leaf, at: point)
+    }
+
+    /// Whether a press chain can start here: an enabled press target, or a
+    /// gesture attachment that takes part itself.
+    var startsPressChain: Bool {
+        if let target = content.hitTarget, target.isEnabled, target.handlesPointer { return true }
+        if let attachment = content.gestureAttachment, attachment.includesGesture { return true }
+        return false
+    }
+}
+
+extension PressChain {
+    /// The chain from `leaf`, the frontmost node a press chain can start at
+    /// (`ViewNode.startsPressChain`), up through its ancestors, at `point`.
+    @MainActor
+    init(from leaf: Hit<ViewNode>?, at point: Point) {
         var chain = PressChain()
-        guard let leaf else { return chain }
+        defer { self = chain }
+        guard let leaf else { return }
         var lineage: [ViewNode] = []
         var cursor: ViewNode? = leaf.node
         while let node = cursor {
@@ -73,8 +89,10 @@ extension ViewNode {
                 chain.gestures.append((hit, depth))
             }
         }
-        return chain
     }
+}
+
+extension ViewNode {
 
     /// `value` found on this node at `point`, as a hit test reports it: in
     /// the space its content is drawn in (`contentTransform`).

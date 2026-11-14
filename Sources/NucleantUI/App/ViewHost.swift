@@ -554,21 +554,26 @@ public final class ViewHost {
     // MARK: - Input
 
     public func pointerDown(id: Int = 0, at point: Point, modifiers: EventModifiers = []) {
+        // The press chain's start, found with the rest for the first pointer.
+        var pressLeaf: Hit<ViewNode>??
         if primaryPointer == nil {
             primaryPointer = id
             pointerLocation = point
             PointerPress.modifiers = modifiers
-            updateFocus(at: point)
+            // What the press looks for under the point — the focus target,
+            // the scroll target, the drag and menu sources, where the press
+            // chain starts — found in one walk.
+            let hits = rootNode?.pointerDownHits(
+                at: point, scroll: scrollsOnDrag, contextMenu: opensContextMenuOnLongPress
+            )
+            updateFocus(to: hits?.focus?.value)
             touchStart = point
             isScrolling = false
             pressSerial += 1
-            scrollTarget = scrollsOnDrag
-                ? rootNode?.hitTest(point, matching: { $0.handlesScroll })
-                : nil
-            dragSourceHit = rootNode?.hitTest(point, lookingFor: .dragSource) { $0.content.dragSource }
-            contextMenuHit = opensContextMenuOnLongPress
-                ? rootNode?.hitTest(point, lookingFor: .contextMenuSource) { $0.content.contextMenuSource }
-                : nil
+            scrollTarget = hits?.scroll
+            dragSourceHit = hits?.dragSource
+            contextMenuHit = hits?.contextMenu
+            pressLeaf = .some(hits?.pressLeaf)
             if contextMenuHit != nil || (dragSourceHit != nil && scrollTarget != nil) {
                 // A finger resting on a view with a menu opens it; on a
                 // draggable row of a list, moving scrolls and resting drags.
@@ -581,7 +586,12 @@ public final class ViewHost {
         }
         // The frontmost pointer target, as always — and the gestures
         // attached around it, which compete for the press in the arena.
-        let chain = rootNode?.pressChain(at: point) ?? PressChain()
+        let chain: PressChain
+        if let pressLeaf {
+            chain = PressChain(from: pressLeaf, at: point)
+        } else {
+            chain = rootNode?.pressChain(at: point) ?? PressChain()
+        }
         if !chain.gestures.isEmpty, id == primaryPointer, arena.timesHoldAhead(of: chain) {
             // A long press gesture is what a held press means here.
             contextMenuHit = nil
@@ -878,10 +888,9 @@ public final class ViewHost {
 
     /// A press at `point`: the view under it that takes keys, if any, gets
     /// them; the one that had them is told it lost them.
-    private func updateFocus(at point: Point) {
-        let found = rootNode?.hitTest(point, lookingFor: .focusTarget) { node in
-            node.content.focusTarget.flatMap { $0.isEnabled ? $0 : nil }
-        }?.value
+    /// Focus `found`, the frontmost enabled focus target under a pointer
+    /// going down, or nothing.
+    private func updateFocus(to found: FocusTarget?) {
         guard found?.path != focusedPath else { return }
         if let path = focusedPath {
             focusTarget(at: path)?.onFocusChange(false)
