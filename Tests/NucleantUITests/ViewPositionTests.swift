@@ -129,7 +129,7 @@ struct ViewPositionTests {
     }
 
     private func file(_ records: RebuildRecords, at path: [Int]) {
-        records.record(entry(), at: path, cursor: records.cursor(at: path))
+        records.record(entry(), at: records.position(along: path))
     }
 
     @Test func whatStoodBeforeIsTheCandidateUntilBuiltOrKept() {
@@ -142,20 +142,20 @@ struct ViewPositionTests {
         #expect(records.endRebuild().isEmpty)
 
         records.beginRebuild()
-        let root = records.cursor(at: [])
-        #expect(records.candidate(at: [], cursor: root) != nil)
-        #expect(!records.isNewChild(at: 0, under: [], cursor: root))
-        #expect(records.isNewChild(at: 1, under: [], cursor: root))
-        #expect(Set(records.leftoverChildren(under: [], cursor: root).map(\.0)) == [0, 2])
+        let root = records.position(along: [])
+        #expect(records.candidate(standingAt: root) != nil)
+        #expect(!records.isNewChild(at: 0, under: root))
+        #expect(records.isNewChild(at: 1, under: root))
+        #expect(Set(records.leftoverChildren(under: root).map(\.0)) == [0, 2])
 
         // Kept: no longer a candidate, and nothing below it is looked at.
-        let kept = records.cursor(at: [0])
-        records.reuse(records.candidate(at: [0], cursor: kept)!, under: EnvironmentValues())
-        #expect(records.candidate(at: [0], cursor: kept) == nil)
-        #expect(records.leftoverChildren(under: [], cursor: root).map(\.0) == [2])
+        let kept = records.position(along: [0])
+        records.reuse(records.candidate(standingAt: kept)!, under: EnvironmentValues())
+        #expect(records.candidate(standingAt: kept) == nil)
+        #expect(records.leftoverChildren(under: root).map(\.0) == [2])
 
         file(records, at: [])
-        #expect(records.candidate(at: [], cursor: root) == nil)
+        #expect(records.candidate(standingAt: root) == nil)
 
         // `[2]` was neither built nor kept: it has left.
         let departed = records.endRebuild()
@@ -188,7 +188,7 @@ struct ViewPositionTests {
         file(records, at: [])
         file(records, at: [0])
         #expect(records.endRebuild().entries.map(\.0) == [[bodies, 3]])
-        #expect(records.cursor(at: []).position.child(bodies) == nil)
+        #expect(records.position(along: []).child(bodies) == nil)
     }
 
     // MARK: - State
@@ -233,7 +233,7 @@ struct ViewPositionTests {
         file(records, at: [])
         file(records, at: [0])
         do {
-            let position = records.cursor(at: [0]).position
+            let position = records.position(along: [0])
             state = position.stateSlot(0, of: view, initialValue: { 1 })
         }
         _ = records.endRebuild()
@@ -242,7 +242,7 @@ struct ViewPositionTests {
         // Kept: the state stays.
         records.beginRebuild()
         file(records, at: [])
-        records.reuse(records.candidate(at: [0], cursor: records.cursor(at: [0]))!, under: EnvironmentValues())
+        records.reuse(records.candidate(standingAt: records.position(along: [0]))!, under: EnvironmentValues())
         _ = records.endRebuild()
         #expect(state != nil)
 
@@ -284,14 +284,14 @@ struct ViewPositionTests {
         records.beginRebuild()
         for path in [[], [0], [0, 1], [0, 1, 2], [3]] { file(records, at: path) }
         for path in [[0], [0, 1, 2], [3]] {
-            records.cursor(at: path).position.disappearing = { ran.append(path) }
+            records.position(along: path).disappearing = { ran.append(path) }
         }
         #expect(records.endRebuild().isEmpty)
 
         // `[0]` leaves with everything below it; `[3]` is kept.
         records.beginRebuild()
         file(records, at: [])
-        records.reuse(records.candidate(at: [3], cursor: records.cursor(at: [3]))!, under: EnvironmentValues())
+        records.reuse(records.candidate(standingAt: records.position(along: [3]))!, under: EnvironmentValues())
         let departed = records.endRebuild()
         #expect(departed.entries.map(\.0) == [[0], [0, 1], [0, 1, 2]])
         for action in departed.disappearing { action() }
@@ -358,7 +358,7 @@ struct ViewPositionTests {
         file(records, at: [])
         file(records, at: [0])
         do {
-            let standing = records.cursor(at: [0]).position
+            let standing = records.position(along: [0])
             beginExit(of: leaving, from: standing)
             standing.transitionSlots = [1: leaving, 2: arriving]
             container = standing
@@ -383,7 +383,7 @@ struct ViewPositionTests {
             records.beginRebuild()
             file(records, at: [])
             file(records, at: [0])
-            let standing = records.cursor(at: [0]).position
+            let standing = records.position(along: [0])
             beginExit(of: leaving, from: standing)
             standing.transitionSlots = [1: leaving]
             container = standing
@@ -405,17 +405,17 @@ struct ViewPositionTests {
         file(records, at: [])
         file(records, at: [0])
         file(records, at: [1])
-        let first = records.cursor(at: [0]).position.renderSlot
-        #expect(records.cursor(at: [0]).position.renderSlot === first, "made once, then found")
-        #expect(records.cursor(at: [1]).position.renderSlot !== first)
+        let first = records.position(along: [0]).renderSlot
+        #expect(records.position(along: [0]).renderSlot === first, "made once, then found")
+        #expect(records.position(along: [1]).renderSlot !== first)
         #expect(first.pathDescription == "[0]")
-        let second = records.cursor(at: [1]).position.renderSlot
+        let second = records.position(along: [1]).renderSlot
         _ = records.endRebuild()
 
         // Another view in its place: a slot of its own, so nodes of its own.
         var left = RebuildRecords.Departed()
-        records.cursor(at: [0]).position.release(into: &left)
-        #expect(records.cursor(at: [0]).position.renderSlot !== first)
+        records.position(along: [0]).release(into: &left)
+        #expect(records.position(along: [0]).renderSlot !== first)
 
         // Gone: its slot no longer says where it stood.
         records.beginRebuild()
@@ -451,8 +451,8 @@ struct ViewPositionTests {
         }
         records.beginRebuild()
         file(records, at: [])
-        records.record(entry(reads: [storage]), at: [0], cursor: records.cursor(at: [0]))
-        let reader = records.cursor(at: [0]).position.handle
+        records.record(entry(reads: [storage]), at: records.position(along: [0]))
+        let reader = records.position(along: [0]).handle
         storage.readers.add(reader, via: [])
         _ = records.endRebuild()
         #expect(readers() == [reader])
@@ -486,7 +486,7 @@ struct ViewPositionTests {
 
         /// The slot of the row for `index` of the `ForEach` at `rows`.
         func slot(for index: Int, under rows: [Int]) -> Int {
-            records.cursor(at: rows).position.rowSlots(Int.self).existingSlot(for: index) ?? -1
+            records.position(along: rows).rowSlots(Int.self).existingSlot(for: index) ?? -1
         }
     }
 
@@ -561,6 +561,35 @@ struct ViewPositionTests {
         #expect(departed.filter(isRow).count == 1)
     }
 
+    // MARK: - Kept contexts
+
+    private func find(in position: ViewPosition, where matches: (ViewPosition) -> Bool) -> ViewPosition? {
+        if matches(position) { return position }
+        var found: ViewPosition?
+        position.forEachChild { child in
+            if found == nil { found = find(in: child, where: matches) }
+        }
+        return found
+    }
+
+    @Test func aGeometryReaderThatLeftIsLetGo() {
+        let builder = Builder()
+        _ = builder.build(ReaderStage(isShown: true))
+        weak var reader: ViewPosition?
+        do {
+            reader = find(in: builder.records.rootPosition) {
+                $0.record?.identity.type == ObjectIdentifier(GeometryReader<Color>.self)
+            }
+        }
+        let found = reader != nil
+        #expect(found)
+
+        // The context it keeps to build its content with does not keep it.
+        _ = builder.build(ReaderStage(isShown: false))
+        let gone = reader == nil
+        #expect(gone)
+    }
+
     // MARK: - Environment
 
     @Test func theSameWriteOverTheSameEnvironmentHandsDownTheSameOne() {
@@ -587,6 +616,20 @@ struct Clash: Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(0)
+    }
+}
+
+/// A `GeometryReader` while `isShown`.
+@View
+struct ReaderStage {
+    let isShown: Bool
+
+    var body: some View {
+        VStack {
+            if isShown {
+                GeometryReader { _ in Color.red }
+            }
+        }
     }
 }
 

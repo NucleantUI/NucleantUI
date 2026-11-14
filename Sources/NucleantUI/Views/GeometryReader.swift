@@ -58,7 +58,12 @@ extension GeometryReader: BuiltinView {
         // The content is not in a stack of its own; clear any inherited axis
         // so a `Spacer` inside doesn't stretch along the enclosing stack's.
         inner.stackAxis = nil
-        let reader = GeometryReaderContent(content: content, log: log, context: inner.keptPastThisBuild)
+        let reader = GeometryReaderContent(
+            content: content,
+            log: log,
+            context: inner.keptPastThisBuild,
+            position: inner.position.handle
+        )
         // Placed before: built now, with where it was, so what stands
         // inside is kept or released by this pass like everything else.
         // Never placed: there is nothing to build it for yet, and nothing
@@ -75,6 +80,10 @@ struct GeometryReaderContent<Content: View>: NodeContent {
 
     /// The build the reader was made in: the records and the environment its content is built with during placement.
     let context: BuildContext
+
+    /// Where the reader stands — what `context` builds at again, while it
+    /// does.
+    let position: PositionHandle
 
     /// Takes everything it is offered, on both axes.
     func flexibility(along axis: Axis, node: ViewNode) -> LayoutPriorityClass {
@@ -119,7 +128,10 @@ struct GeometryReaderContent<Content: View>: NodeContent {
 
     /// Build the content again during placement, in place of what stands.
     private func rebuild(_ node: ViewNode, at placed: PlacedGeometry) {
+        // A reader that left has nothing to build into.
+        guard let standing = position.position, !standing.hasLeft else { return }
         var context = self.context
+        context.resume(at: standing)
         let path = context.path
         // Whatever this frame serves, not the frame the reader was built in.
         context.transaction = context.animations.transaction

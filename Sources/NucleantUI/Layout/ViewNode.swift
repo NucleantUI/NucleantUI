@@ -792,7 +792,6 @@ struct GroupContent: NodeContent {
 /// descendant is a view whose own reads changed under it.
 @MainActor
 func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
-    let path = context.path
     let identity = ViewIdentity(type: ObjectIdentifier(V.self), viewID: view._viewID)
     // Whether the view standing here already drew into a node of its own;
     // a fresh build of the same view keeps it (see `RenderBoundaryContent`).
@@ -820,7 +819,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             EnvironmentReads.shared.add(candidate.environmentReads)
             context.reuse(candidate)
             if PerfTrace.isEnabled { PerfTrace.nodesReused += 1 }
-            PerfTrace.trace("reuse \(path) \(V.self)")
+            PerfTrace.trace("reuse \(context.path) \(V.self)")
             return node
         }
         // Which check failed, worked out again only for the verbose trace.
@@ -831,7 +830,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
                 : context.isDirtyHereOrBelow ? "dirty"
                 : !candidate.readsAgree(with: context.environment) ? "environment"
                 : "inputs"
-            return "build \(path) \(V.self) — \(reason)"
+            return "build \(context.path) \(V.self) — \(reason)"
         }())
 
         // A fresh build replaces what stood here. Its reader registrations
@@ -845,14 +844,14 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         if replaced.identity != identity {
             var left = RebuildRecords.Departed()
             context.position.release(into: &left)
-            context.effects.forget(paths: [path], disappearing: left.disappearing)
+            context.effects.forget(paths: [context.path], disappearing: left.disappearing)
             context.animations.forget(exits: left.exits)
         } else {
             wasBoundary = replaced.isBoundary
             predecessor = replaced.node
         }
     } else {
-        PerfTrace.trace("build \(path) \(V.self) — new")
+        PerfTrace.trace("build \(context.path) \(V.self) — new")
     }
 
     // Every environment value read from here until the view is built —

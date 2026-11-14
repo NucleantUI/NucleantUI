@@ -414,7 +414,8 @@ extension BuildContext {
         animation: Animation?
     ) -> ViewNode {
         var context = self
-        context.move(to: path + [TransitionSlot.bodies, index])
+        context.step(into: TransitionSlot.bodies)
+        context.step(into: index)
         // Not one of a lazy container's items: the child it stands on was
         // counted as one.
         context.lazyCursor = nil

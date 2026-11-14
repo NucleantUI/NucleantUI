@@ -11,18 +11,21 @@
 @MainActor
 public struct BuildContext {
 
-    /// The structural path to the view being built — one index per level.
-    /// Moved only by `child(_:_:)` and `move(to:)`, which keep the cursors
-    /// below with it.
-    private(set) var path: [Int] = []
+    /// Where the view being built stands: what it holds as long as it
+    /// stands — its record, its state — is held there. One step from its
+    /// parent's: moved only by `child(_:_:)`, `step(into:)` and
+    /// `move(to:)`, which keep the dirty cursor below with it.
+    private(set) var position: ViewPosition
 
-    /// Where `path` stands among the positions of the tree — see
-    /// `RebuildRecords.Cursor`.
-    private var recordCursor: RebuildRecords.Cursor?
+    /// The structural path to the view being built — one index per level —
+    /// worked out from the positions when asked for: for a trace line, or
+    /// for what is filed by where it is in the tree.
+    var path: [Int] { position.path }
 
-    /// The node of `dirtyPaths` at `path`; `nil` where no dirty path runs
-    /// through it. Stepped with `path`, so a view asks whether anything
-    /// under it is dirty without walking the trie from the root.
+    /// The node of `dirtyPaths` at this context's position; `nil` where no
+    /// dirty path runs through it. Stepped with the position, so a view
+    /// asks whether anything under it is dirty without walking the trie
+    /// from the root.
     private var dirtyCursor: PathTrie<Void>.Node?
 
     /// The identity of the view whose `makeNode` is running — type and
@@ -84,91 +87,78 @@ public struct BuildContext {
         let trie = PathTrie<Void>()
         for path in dirtyPaths { trie.set((), at: path) }
         self.dirtyPaths = trie
-        self.recordCursor = records.cursor(at: [])
+        self.position = records.rootPosition
         self.dirtyCursor = trie.root
     }
 
     /// Build a subtree at child slot `index`.
     func child<R>(_ index: Int, _ body: (inout BuildContext) -> R) -> R {
         var sub = self
-        sub.path.append(index)
-        sub.recordCursor = records.cursor(stepping: recordCursor, into: index, at: sub.path)
-        sub.dirtyCursor = dirtyCursor?.child(index)
+        sub.step(into: index)
         return body(&sub)
     }
 
+    /// Stand at child slot `index` of where this context stands — a
+    /// transition's body, built beside the children.
+    mutating func step(into index: Int) {
+        position = position.makeChild(index)
+        dirtyCursor = dirtyCursor?.child(index)
+    }
+
     /// A copy to keep past this build — a `GeometryReader`'s, for building
-    /// its content during placement: without the cursor, which says where
-    /// this build stands and no later one. It is found again from the root
-    /// when the copy builds.
+    /// its content during placement. It stands at the root rather than
+    /// holding the position: the position holds the node that keeps the
+    /// copy. `resume(at:)` puts it back where it was.
     var keptPastThisBuild: BuildContext {
         var copy = self
-        copy.recordCursor = nil
+        copy.position = records.rootPosition
         return copy
     }
 
-    /// Stand at `path` — a rebuild starting there, a transition's body built
-    /// beside the children — with the cursors found for it from the roots.
+    /// Stand at `position` again — a kept copy, building there once more.
+    mutating func resume(at position: ViewPosition) {
+        self.position = position
+    }
+
+    /// Stand at `path` — a rebuild starting there — found from the roots.
     mutating func move(to path: [Int]) {
-        self.path = path
-        recordCursor = records.cursor(at: path)
+        position = records.position(along: path)
         dirtyCursor = dirtyPaths.node(at: path)
     }
 
-    /// Whether a state write dirtied exactly `path` this frame — the view
-    /// there is where the change originated.
-    func isDirty(at path: [Int]) -> Bool {
-        if path == self.path { return isDirtyHere }
-        return dirtyPaths.value(at: path) != nil
-    }
-
-    /// Whether anything at or below `path` was dirtied this frame.
-    func isDirty(under path: [Int]) -> Bool {
-        if path == self.path { return isDirtyHereOrBelow }
-        // The trie only has nodes along dirty paths, so a node existing at
-        // `path` means some dirty path runs through or ends there.
-        return dirtyPaths.node(at: path) != nil
-    }
-
-    /// `isDirty(at: path)`, for this context's own path.
+    /// Whether a state write dirtied the view standing here this frame —
+    /// the view where the change originated.
     var isDirtyHere: Bool { dirtyCursor?.value != nil }
 
-    /// `isDirty(under: path)`, for this context's own path.
+    /// Whether anything here or below was dirtied this frame.
     var isDirtyHereOrBelow: Bool { dirtyCursor != nil }
 
-    /// Where this context's path stands in the tree: what the view built
-    /// here holds as long as it stands — its state — is held there.
-    var position: ViewPosition {
-        records.position(at: path, cursor: recordCursor)
-    }
-
-    /// What stood at this context's path before this rebuild began, if
-    /// anything did — `RebuildRecords.candidate(at:)` for `path`, read off
-    /// the cursor.
+    /// What stood at this context's position before this rebuild began, if
+    /// anything did.
     var candidate: RebuildRecords.Candidate? {
-        records.candidate(at: path, cursor: recordCursor)
+        records.candidate(standingAt: position)
     }
 
     /// Whether the child about to be built in slot `index` is new here.
     func isNewChild(at index: Int) -> Bool {
-        records.isNewChild(at: index, under: path, cursor: recordCursor)
+        records.isNewChild(at: index, under: position)
     }
 
-    /// Keep the standing subtree `candidate` at this context's path, now
-    /// standing under `environment`.
+    /// Keep the standing subtree `candidate` at this context's position,
+    /// now standing under `environment`.
     func reuse(_ candidate: RebuildRecords.Candidate) {
         records.reuse(candidate, under: environment)
     }
 
-    /// File `entry` at this context's path.
+    /// File `entry` at this context's position.
     func record(_ entry: RebuildRecords.Entry) {
-        records.record(entry, at: path, cursor: recordCursor)
+        records.record(entry, at: position)
     }
 
-    /// What still stands, un-rebuilt, directly under this context's path —
-    /// by slot.
+    /// What still stands, un-rebuilt, directly under this context's
+    /// position — by slot.
     var leftoverChildren: [(Int, ViewNode)] {
-        records.leftoverChildren(under: path, cursor: recordCursor)
+        records.leftoverChildren(under: position)
     }
 
     /// Bind every `@State` / `@Environment` on `view`, in place, before its
@@ -583,39 +573,15 @@ final class RebuildRecords {
     /// left.
     private var rebuilt: [ViewPosition] = []
 
-    /// Where a build stands: its position, found in this rebuild. Moved one
-    /// child at a time as the builder descends (`BuildContext.child`), so
-    /// finding the candidate and filing the entry each take one step, not a
-    /// walk from the root along the path.
-    struct Cursor {
-        fileprivate let session: UInt64
-        let position: ViewPosition
-    }
+    /// The root's position, where a build starts.
+    var rootPosition: ViewPosition { root }
 
-    /// The cursor at `path`, found from the root — the positions on the way
-    /// made where missing.
-    func cursor(at path: [Int]) -> Cursor {
-        Cursor(session: session, position: root.makeDescendant(along: path))
-    }
-
-    /// The cursor one step below `parent`, into slot `index` — at `path`.
-    /// Found from the root when `parent` is from before this rebuild began.
-    func cursor(stepping parent: Cursor?, into index: Int, at path: [Int]) -> Cursor {
-        guard let parent, parent.session == session else { return cursor(at: path) }
-        return Cursor(session: session, position: parent.position.makeChild(index))
-    }
-
-    /// The position at `path`: `cursor`'s, if it is from this rebuild, or
-    /// else found from the root — `nil` if there is none.
-    private func standing(at path: [Int], cursor: Cursor?) -> ViewPosition? {
-        if let cursor, cursor.session == session { return cursor.position }
-        return root.descendant(along: path)
-    }
-
-    /// The position at `path`, as `standing(at:cursor:)` finds it — made,
-    /// with any missing on the way, if there is none.
-    func position(at path: [Int], cursor: Cursor?) -> ViewPosition {
-        standing(at: path, cursor: cursor) ?? root.makeDescendant(along: path)
+    /// The position at `path`, found from the root — the positions on the
+    /// way made where missing. A build steps from position to position as
+    /// it descends (`BuildContext.child`); only a rebuild that starts
+    /// partway down finds its first one this way.
+    func position(along path: [Int]) -> ViewPosition {
+        root.makeDescendant(along: path)
     }
 
     /// Start a rebuild: every entry filed so far becomes what stood before.
@@ -625,22 +591,16 @@ final class RebuildRecords {
     }
 
     /// What stood at `position` before this rebuild began, if it is still
-    /// there to be kept or replaced.
-    private func candidate(standingAt position: ViewPosition) -> Candidate? {
+    /// there to be kept or replaced — as a handle the builder can either
+    /// keep or replace.
+    func candidate(standingAt position: ViewPosition) -> Candidate? {
         guard position.record != nil, position.session != session else { return nil }
         return Candidate(position: position)
     }
 
-    /// What stood at `path` before this rebuild began, as a handle the
-    /// builder can either keep or replace — read off `cursor` when it
-    /// stands at `path` in this rebuild.
-    func candidate(at path: [Int], cursor: Cursor?) -> Candidate? {
-        standing(at: path, cursor: cursor).flatMap { candidate(standingAt: $0) }
-    }
-
-    /// Whether nothing stood in slot `index` below `path` — `cursor`'s.
-    func isNewChild(at index: Int, under path: [Int], cursor: Cursor?) -> Bool {
-        guard let child = standing(at: path, cursor: cursor)?.child(index) else { return true }
+    /// Whether nothing stood in slot `index` below `position`.
+    func isNewChild(at index: Int, under position: ViewPosition) -> Bool {
+        guard let child = position.child(index) else { return true }
         return candidate(standingAt: child) == nil
     }
 
@@ -747,9 +707,8 @@ final class RebuildRecords {
         return candidate.entry
     }
 
-    /// File `entry` at `path` — `cursor`'s — as this rebuild's.
-    func record(_ entry: Entry, at path: [Int], cursor: Cursor?) {
-        let position = position(at: path, cursor: cursor)
+    /// File `entry` at `position` as this rebuild's.
+    func record(_ entry: Entry, at position: ViewPosition) {
         position.record = entry
         position.session = session
         rebuilt.append(position)
@@ -785,11 +744,10 @@ final class RebuildRecords {
 
     func node(for path: [Int]) -> ViewNode? { entry(for: path)?.node }
 
-    /// What still stands, un-rebuilt, directly under `path` — by slot. Asked
-    /// by a container once its new children are built: whatever is left is
-    /// a child it no longer has.
-    func leftoverChildren(under path: [Int], cursor: Cursor?) -> [(Int, ViewNode)] {
-        guard let position = standing(at: path, cursor: cursor) else { return [] }
+    /// What still stands, un-rebuilt, directly under `position` — by slot.
+    /// Asked by a container once its new children are built: whatever is
+    /// left is a child it no longer has.
+    func leftoverChildren(under position: ViewPosition) -> [(Int, ViewNode)] {
         var leftover: [(Int, ViewNode)] = []
         position.forEachChild { child in
             if let entry = child.record, child.session != session { leftover.append((child.key, entry.node)) }

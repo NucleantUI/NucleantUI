@@ -33,7 +33,7 @@ extension HostedViews {
         private let tree = RebuildRecords()
 
         private func reader(_ slot: Int) -> PositionHandle {
-            tree.cursor(at: [slot]).position.handle
+            tree.position(along: [slot]).handle
         }
 
         /// A binding onto a slot holding `value`, as `$state` makes one.

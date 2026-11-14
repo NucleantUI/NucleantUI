@@ -78,7 +78,7 @@ public struct LazyVGrid<Content: View> {
 
 extension LazyVGrid: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let owner = context.path.hashValue
+        let owner = ObjectIdentifier(context.position).hashValue
         var inner = context
         inner.stackAxis = nil
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
@@ -133,7 +133,7 @@ public struct LazyHGrid<Content: View> {
 
 extension LazyHGrid: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let owner = context.path.hashValue
+        let owner = ObjectIdentifier(context.position).hashValue
         var inner = context
         inner.stackAxis = nil
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)

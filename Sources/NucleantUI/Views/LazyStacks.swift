@@ -55,7 +55,7 @@ public struct LazyVStack<Content: View> {
 
 extension LazyVStack: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let owner = context.path.hashValue
+        let owner = ObjectIdentifier(context.position).hashValue
         var inner = context
         inner.stackAxis = .vertical
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
@@ -106,7 +106,7 @@ public struct LazyHStack<Content: View> {
 
 extension LazyHStack: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let owner = context.path.hashValue
+        let owner = ObjectIdentifier(context.position).hashValue
         var inner = context
         inner.stackAxis = .horizontal
         inner.lazyCursor = LazyBuildCursor(owner: owner, window: window.units)
