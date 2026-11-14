@@ -58,10 +58,11 @@ extension ForEach: BuiltinView {
             return makeLazyNode(&context, cursor: cursor)
         }
         let path = context.path
+        // The id, not the ordinal, gives a row its slot — so a row keeps
+        // its state when the collection is reordered.
+        let slots = context.rowSlots(for: ID.self)
         let built = data.map { element in
-            // The identity hash, not the ordinal, is the path component — so a
-            // row keeps its state when the collection is reordered.
-            let index = context.childSlot(for: identify(element))
+            let index = slots.slot(for: identify(element))
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
                 // The row closure is user code and may read an `@Observable`
@@ -72,6 +73,7 @@ extension ForEach: BuiltinView {
             }
             return (index: index, node: node, isNew: isNew)
         }
+        slots.forgetGone(from: context.position, built: built.count)
         // Rows added come in with their transition (a fade, without one);
         // rows removed go out with it.
         return ContentNode(content: GroupContent(), children: context.transitionChildren(built))

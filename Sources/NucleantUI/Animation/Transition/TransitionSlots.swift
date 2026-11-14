@@ -50,8 +50,8 @@ final class TransitionSlot {
 
     /// The path component a container's transition bodies are built under:
     /// child slot `i` of the container at `C` has its body at
-    /// `C + [bodies, i]`. No container builds a child in this slot — see
-    /// `BuildContext.childSlot(for:)` for the one that could.
+    /// `C + [bodies, i]`. No container builds a child in this slot: a
+    /// `ForEach` numbers its rows from 0 (`RowSlots`).
     static let bodies = Int.min + 1
 
     /// The child's slot in its container.
@@ -213,11 +213,10 @@ extension ViewNode {
 
 extension BuildContext {
 
-    /// The slot a `ForEach` builds an element in: the hash of its id — any
-    /// `Int` but the one transition bodies are built under.
-    func childSlot<ID: Hashable>(for id: ID) -> Int {
-        let hash = id.hashValue
-        return hash == TransitionSlot.bodies ? hash &+ 1 : hash
+    /// The table the `ForEach` being built gives its rows their slots from,
+    /// by id — on its position.
+    func rowSlots<ID: Hashable>(for _: ID.Type) -> RowSlots<ID> {
+        position.rowSlots(ID.self)
     }
 
     /// The children of an `if`, a `switch`, a `ForEach` or a `for`, with

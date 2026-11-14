@@ -152,13 +152,14 @@ extension ForEach {
         var rows = context
         rows.lazyCursor = nil
 
+        let slots = rows.rowSlots(for: ID.self)
         var built: [(index: Int, node: ViewNode, isNew: Bool)] = []
         built.reserveCapacity(upper - lower)
         var position = data.index(data.startIndex, offsetBy: lower)
         for offset in lower..<upper {
             let element = data[position]
             position = data.index(after: position)
-            let index = rows.childSlot(for: identify(element))
+            let index = slots.slot(for: identify(element))
             let isNew = rows.isNewChild(at: index)
             let node = rows.child(index) { ctx in
                 let row = trackingObservation(at: path) { build(element) }
@@ -167,6 +168,7 @@ extension ForEach {
             node.tagLazyElement(LazyElementTag(owner: cursor.owner, unit: start + offset))
             built.append((index: index, node: node, isNew: isNew))
         }
+        slots.forgetGone(from: rows.position, built: built.count)
 
         var children: [ViewNode] = []
         if lower > 0 {
@@ -184,8 +186,9 @@ extension ForEach {
     /// rows are what the window is over, and which count their own units.
     private func makeExpandedLazyNode(_ context: inout BuildContext, cursor: LazyBuildCursor) -> ViewNode {
         let path = context.path
+        let slots = context.rowSlots(for: ID.self)
         let built = data.map { element in
-            let index = context.childSlot(for: identify(element))
+            let index = slots.slot(for: identify(element))
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
                 let row = trackingObservation(at: path) { build(element) }
@@ -193,6 +196,7 @@ extension ForEach {
             }
             return (index: index, node: node, isNew: isNew)
         }
+        slots.forgetGone(from: context.position, built: built.count)
         return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
     }
 }

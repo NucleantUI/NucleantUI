@@ -129,6 +129,23 @@ final class ViewPosition {
 
     private var renderSlotIfMade: RenderSlot?
 
+    /// The slots of the rows of the `ForEach` standing here, by id — kept
+    /// for as long as the position, like the rows themselves: a row keeps
+    /// its slot, and so its state, while the data moves around it.
+    private var rowSlotsIfMade: AnyRowSlots?
+
+    /// The table of row slots for ids of type `ID` — made the first time,
+    /// and again for ids of another type, numbering on from the last.
+    func rowSlots<ID: Hashable>(_: ID.Type) -> RowSlots<ID> {
+        if let standing = rowSlotsIfMade,
+           ObjectIdentifier(Swift.type(of: standing)) == ObjectIdentifier(RowSlots<ID>.self) {
+            return unsafeDowncast(standing, to: RowSlots<ID>.self)
+        }
+        let made = RowSlots<ID>(numberingFrom: rowSlotsIfMade?.next ?? 0)
+        rowSlotsIfMade = made
+        return made
+    }
+
     /// Whether this position was cut out of the tree, with the view that
     /// stood here. A list of positions kept past a rebuild — the rebuilds
     /// `AnimationStore` has to come — passes it by.
@@ -377,6 +394,50 @@ final class PositionHandle: Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(ObjectIdentifier(self))
+    }
+}
+
+/// A `ForEach`'s row slots, whatever its ids' type: where the numbering
+/// has got to.
+class AnyRowSlots {
+    /// The slot the next new id is given. Only ever goes up: a slot a row
+    /// stood in, or may still stand in, is never another id's.
+    fileprivate(set) var next: Int
+
+    fileprivate init(numberingFrom next: Int) {
+        self.next = next
+    }
+}
+
+/// The child slot of each row of a `ForEach`, by its id — the id itself,
+/// so two ids are two rows even when their hashes are the same. A new id
+/// gets a slot no row of this `ForEach` has had: the rows are numbered 0,
+/// 1, 2 … in the order their ids first came.
+final class RowSlots<ID: Hashable>: AnyRowSlots {
+    private var slots: [ID: Int] = [:]
+
+    /// The slot of the row for `id`, given one if it is new.
+    func slot(for id: ID) -> Int {
+        if let slot = slots[id] { return slot }
+        let slot = next
+        next += 1
+        slots[id] = slot
+        return slot
+    }
+
+    /// The slot `id`'s row has, if it has one.
+    func existingSlot(for id: ID) -> Int? { slots[id] }
+
+    /// Forget the ids whose rows are gone from `position` — no position of
+    /// their own, no exit playing — once there are well more of them than
+    /// the `built` rows, so that a list that has shown many ids keeps only
+    /// what it needs. An id kept past its row is harmless: it comes back
+    /// to the slot it had, where nothing stands.
+    func forgetGone(from position: ViewPosition, built: Int) {
+        guard slots.count > 2 * built + 16 else { return }
+        slots = slots.filter { _, slot in
+            position.child(slot) != nil || position.transitionSlots[slot] != nil
+        }
     }
 }
 

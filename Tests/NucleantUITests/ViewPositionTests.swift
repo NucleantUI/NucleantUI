@@ -472,7 +472,7 @@ struct ViewPositionTests {
         let effects = EffectQueue()
         let animations = AnimationStore()
 
-        func build(_ view: PositionShelf) -> (node: ViewNode, departed: [([Int], RebuildRecords.Entry)]) {
+        func build<V: View>(_ view: V) -> (node: ViewNode, departed: [([Int], RebuildRecords.Entry)]) {
             records.beginRebuild()
             var context = BuildContext(
                 environment: EnvironmentValues(),
@@ -484,9 +484,9 @@ struct ViewPositionTests {
             return (node, records.endRebuild().entries)
         }
 
-        func slot(for index: Int) -> Int {
-            BuildContext(environment: EnvironmentValues(), effects: effects, animations: animations, records: records)
-                .childSlot(for: index)
+        /// The slot of the row for `index` of the `ForEach` at `rows`.
+        func slot(for index: Int, under rows: [Int]) -> Int {
+            records.cursor(at: rows).position.rowSlots(Int.self).existingSlot(for: index) ?? -1
         }
     }
 
@@ -503,15 +503,15 @@ struct ViewPositionTests {
             Issue.record("no row left")
             return
         }
-        #expect(rowPath.last == probe.slot(for: 2))
         let rows = Array(rowPath.dropLast())
+        #expect(rowPath.last == probe.slot(for: 2, under: rows))
 
         let builder = Builder()
         #expect(builder.build(PositionShelf(title: "a", count: 3)).departed.isEmpty)
-        let built = (0..<3).map { builder.records.entry(for: rows + [builder.slot(for: $0)])?.node }
+        let built = (0..<3).map { builder.records.entry(for: rows + [builder.slot(for: $0, under: rows)])?.node }
         #expect(built.allSatisfy { $0 != nil })
         func standing(_ index: Int) -> ViewNode? {
-            builder.records.entry(for: rows + [builder.slot(for: index)])?.node
+            builder.records.entry(for: rows + [builder.slot(for: index, under: rows)])?.node
         }
 
         // The title changes: the rows are compared and kept where they
@@ -534,6 +534,52 @@ struct ViewPositionTests {
         #expect(builder.build(PositionShelf(title: "c", count: 3)).departed.isEmpty)
         #expect(standing(2) != nil)
         #expect(standing(2) !== built[2])
+    }
+
+    // MARK: - Rows
+
+    @Test func idsThatHashAlikeAreRowsOfTheirOwn() {
+        let position = ViewPosition(parent: nil, key: 0)
+        let slots = position.rowSlots(Clash.self)
+        let one = slots.slot(for: Clash(value: 1))
+        let two = slots.slot(for: Clash(value: 2))
+        #expect(one != two)
+        #expect(slots.slot(for: Clash(value: 1)) == one, "kept while it stands")
+        #expect(position.rowSlots(Clash.self) === slots)
+
+        // Ids of another type number on: a slot is never another id's.
+        let ints = position.rowSlots(Int.self)
+        #expect(ints.slot(for: 1) > max(one, two))
+    }
+
+    @Test func rowsWhoseIdsHashAlikeLeaveOnTheirOwn() {
+        let builder = Builder()
+        #expect(builder.build(ClashingRows(ids: [Clash(value: 1), Clash(value: 2)])).departed.isEmpty)
+        let departed = builder.build(ClashingRows(ids: [Clash(value: 2)])).departed
+        #expect(departed.filter(isRow).count == 1)
+    }
+}
+
+/// An id whose hash is every other one's.
+struct Clash: Hashable {
+    let value: Int
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(0)
+    }
+}
+
+/// A row per id.
+@View
+struct ClashingRows {
+    let ids: [Clash]
+
+    var body: some View {
+        VStack {
+            ForEach(ids, id: \.self) { id in
+                PositionRow(index: id.value)
+            }
+        }
     }
 }
 
