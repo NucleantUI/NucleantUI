@@ -892,7 +892,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         // every ancestor that happened to be mid-build.
         // An `Animatable` view mid-change shows its in-between value.
         let shown = context.showing(view)
-        let body = trackingObservation(at: path) { shown.body }
+        let body = trackingObservation(for: context.position.handle) { shown.body }
         node = context.child(0) { sub in buildNode(body, &sub) }
         // A user view that a change can originate at draws into a node of
         // its own: it read `@State`, or this very build is the rebuild its

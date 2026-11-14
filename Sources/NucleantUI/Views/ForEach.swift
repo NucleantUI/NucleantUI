@@ -67,7 +67,7 @@ struct ForEachRow<Element, Content: View> {
 
 extension ForEachRow: BuiltinView, LazyPassThrough {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let row = trackingObservation(at: context.path) { build(element) }
+        let row = trackingObservation(for: context.position.handle) { build(element) }
         return context.child(0) { ctx in buildNode(row, &ctx) }
     }
 }

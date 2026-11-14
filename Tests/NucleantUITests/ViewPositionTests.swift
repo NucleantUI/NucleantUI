@@ -738,7 +738,58 @@ struct TickingStage {
     }
 }
 
+/// A count that reads its model, shown while `knobs.isShown`.
+@View
+struct ObservedStage {
+    let knobs: Knobs
+    let counter: RowCounter
+    let log: Log
+
+    var body: some View {
+        let _ = log("stage")
+        VStack {
+            if knobs.isShown {
+                ObservedCount(counter: counter, log: log)
+            }
+        }
+    }
+}
+
+@View
+struct ObservedCount {
+    let counter: RowCounter
+    let log: Log
+
+    var body: some View {
+        let _ = log("count \(counter.value)")
+        Color.blue.frame(width: 10, height: 10)
+    }
+}
+
 extension HostedViews {
+    @MainActor
+    @Suite
+    struct ObservedPositionTests {
+
+        @Test func aViewThatLeftIsNotRebuiltForWhatItObserved() async {
+            let knobs = Knobs()
+            let counter = RowCounter(id: 0)
+            let log = Log()
+            let harness = Harness(ObservedStage(knobs: knobs, counter: counter, log: log))
+            #expect(log.take() == ["stage", "count 0"])
+
+            await harness.change { counter.value = 1 }
+            #expect(log.take() == ["count 1"], "the view that read it, alone")
+
+            await harness.change { knobs.isShown = false }
+            #expect(log.take() == ["stage"])
+
+            // What it read last still tells of a change: nothing to rebuild.
+            await harness.change { counter.value = 2 }
+            #expect(log.take().isEmpty)
+        }
+    }
+
     @MainActor
     @Suite
     struct AnimatedPositionTests {

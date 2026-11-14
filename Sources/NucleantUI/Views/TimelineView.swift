@@ -191,7 +191,7 @@ struct TimelineContent<Schedule: TimelineSchedule, Content: View>: ViewInput {
 
 extension TimelineView: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
-        let path = context.path
+        let reader = context.position.handle
         let now = Date()
         let cadence: TimelineViewDefaultContext.Cadence
         switch schedule {
@@ -201,7 +201,7 @@ extension TimelineView: BuiltinView {
         }
         // The content is user code and may read an `@Observable` model;
         // those reads are this view's, like a `body`'s.
-        let built = trackingObservation(at: path) {
+        let built = trackingObservation(for: reader) {
             content.build(TimelineViewDefaultContext(date: now, cadence: cadence))
         }
         let node = context.child(0) { ctx in buildNode(built, &ctx) }

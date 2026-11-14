@@ -73,7 +73,6 @@ extension ThorCanvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         ContentNode(content: ThorCanvasContent(
             key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity, id: nodeID),
-            path: context.path,
             reader: context.position.handle,
             onInit: onInit,
             render: renderer
@@ -86,8 +85,7 @@ extension ThorCanvas: BuiltinView {
 /// not the enclosing canvas.
 struct ThorCanvasContent: NodeContent {
     let key: RenderNodeKey
-    let path: [Int]
-    /// What the state `render` reads lists among its readers: the view.
+    /// Whose reads what `render` reads are: the view's.
     let reader: PositionHandle
     let onInit: (borrowing ThorContext, SIMD2<Float>) -> Void
     let render: (borrowing ThorContext, SIMD2<Float>) -> Void
@@ -155,7 +153,7 @@ struct ThorCanvasContent: NodeContent {
             }
             node.reader = reader
             DependencyTracker.shared.push(reader)
-            trackingObservation(at: path) {
+            trackingObservation(for: reader) {
                 render(node.thorContext, size)
             }
             node.reads = DependencyTracker.shared.pop()

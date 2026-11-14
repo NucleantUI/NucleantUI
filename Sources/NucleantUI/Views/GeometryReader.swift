@@ -109,12 +109,11 @@ struct GeometryReaderContent<Content: View>: NodeContent {
 
     /// The content for `placed`, built at the reader's child slot. Its
     /// `@State` and `@Observable` reads are the reader's, as a body's are
-    /// its view's — whoever runs this has the reader's path published.
+    /// its view's — whoever runs this has the reader published.
     func build(at placed: PlacedGeometry, context: BuildContext) -> ViewNode {
         log.builtWith = placed
-        let path = context.path
         let proxy = GeometryProxy(geometry: placed, log: log)
-        let view = trackingObservation(at: path) { content(proxy) }
+        let view = trackingObservation(for: context.position.handle) { content(proxy) }
         return context.child(0) { ctx in buildNode(view, &ctx) }
     }
 

@@ -379,10 +379,13 @@ final class ViewPosition {
 }
 
 /// A position, held by what must not keep it: a state slot's readers, a
-/// render slot. The position lets go of it as it goes, and one whose
-/// position is gone — or cut out of the tree — stands for nothing.
-/// Compared as the object it is.
-final class PositionHandle: Hashable {
+/// render slot, an observation scope. The position lets go of it as it
+/// goes, and one whose position is gone — or cut out of the tree — stands
+/// for nothing. Compared as the object it is.
+///
+/// Sendable as a token: an observation's change handler, on whichever
+/// thread wrote, hands it to the main actor, and only there is it read.
+final class PositionHandle: Hashable, @unchecked Sendable {
     /// Cleared by the position's `deinit`, so never left dangling.
     fileprivate(set) unowned(unsafe) var position: ViewPosition?
 

@@ -556,10 +556,10 @@ final class TableColumnLayout {
 /// cells when its value is unchanged.
 @MainActor
 final class TableCells<Value> {
-    let cells: [@MainActor (Value, [Int], inout BuildContext) -> ViewNode]
+    let cells: [@MainActor (Value, PositionHandle, inout BuildContext) -> ViewNode]
     let layout: TableColumnLayout
 
-    init(cells: [@MainActor (Value, [Int], inout BuildContext) -> ViewNode], layout: TableColumnLayout) {
+    init(cells: [@MainActor (Value, PositionHandle, inout BuildContext) -> ViewNode], layout: TableColumnLayout) {
         self.cells = cells
         self.layout = layout
     }
@@ -636,7 +636,7 @@ extension _TableRowCells: BuiltinView {
         inner.stackAxis = nil
         // One line per cell, as in a table on the desktop.
         inner.environment.lineLimit = 1
-        let owner = context.path
+        let owner = context.position.handle
         let children = cells.cells.enumerated().map { index, cell in
             inner.child(index) { ctx in cell(value, owner, &ctx) }
         }
