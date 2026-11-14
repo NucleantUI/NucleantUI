@@ -144,8 +144,9 @@ final class TransitionSlot {
 /// A child slot on its way out: where it stood, and what its exit is
 /// waiting on.
 struct NodeRemoval {
-    /// The container it is leaving, rebuilt once the exit is over.
-    let container: [Int]
+    /// The container it is leaving, rebuilt once the exit is over. Held
+    /// weakly: the container's position holds the slot, and so this.
+    weak var container: ViewPosition?
     /// Where, how and under what transform the slot last stood.
     let frame: Rect
     let proposal: ProposedSize
@@ -226,7 +227,8 @@ extension BuildContext {
     /// it — with the children still leaving back where they stood.
     func transitionChildren(_ built: [(index: Int, node: ViewNode, isNew: Bool)]) -> [ViewNode] {
         let stood = isReplacingStandingView && animations.runsTransitions
-        let previous = animations.transitionSlots(in: path)
+        let container = position
+        let previous = container.transitionSlots
         var slots: [Int: TransitionSlot] = [:]
         var children: [ViewNode] = []
         children.reserveCapacity(built.count)
@@ -252,7 +254,7 @@ extension BuildContext {
                 children.insert(slot.node, at: min(slot.exitPosition, children.count))
             }
         }
-        animations.setTransitionSlots(slots, in: path)
+        container.transitionSlots = slots
         return children
     }
 
@@ -341,7 +343,7 @@ extension BuildContext {
         }
         let runs = collectingRuns { show(slot, in: .didDisappear, animation: transaction.animation) }
         slot.node.removal = NodeRemoval(
-            container: path,
+            container: self.position,
             frame: shown.frame,
             proposal: shown.proposal,
             transform: shown.transform,

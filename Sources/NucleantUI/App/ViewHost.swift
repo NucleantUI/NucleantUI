@@ -472,7 +472,7 @@ public final class ViewHost {
         }
         let paths = Set(departed.entries.map { $0.0 })
         effects.forget(paths: paths, disappearing: departed.disappearing)
-        animations.forget(paths: paths)
+        animations.forget(exits: departed.exits)
     }
 
     /// Lay the tree out and paint it. Returns whether the window canvas was

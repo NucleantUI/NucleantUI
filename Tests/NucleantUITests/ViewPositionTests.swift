@@ -216,7 +216,9 @@ struct ViewPositionTests {
         #expect(slot(0, of: view, 3) !== count)
         #expect(slot(0, of: view, 4).peek() == 3)
 
-        #expect(position.release() == nil)
+        var left = RebuildRecords.Departed()
+        position.release(into: &left)
+        #expect(left.isEmpty)
         #expect(slot(0, of: view, 6).peek() == 6)
     }
 
@@ -260,13 +262,17 @@ struct ViewPositionTests {
         #expect(position.placed === placed, "made once, then found")
 
         // Another view takes the position: the one that stood there leaves.
-        position.release()?()
+        var left = RebuildRecords.Departed()
+        position.release(into: &left)
+        for action in left.disappearing { action() }
         #expect(ran == 1)
         #expect(!position.hasAppeared)
         #expect(position.observed == nil)
         #expect(position.disappearing == nil)
         #expect(position.placed !== placed)
-        #expect(position.release() == nil)
+        var again = RebuildRecords.Departed()
+        position.release(into: &again)
+        #expect(again.isEmpty)
     }
 
     @Test func onDisappearActionsLeaveWithTheirPositions() {
@@ -316,9 +322,76 @@ struct ViewPositionTests {
         #expect(store.animatableData(at: position, target: 4.0, animation: nil) === data)
 
         // Another view takes the position: everything starts afresh.
-        #expect(position.release() == nil)
+        var left = RebuildRecords.Departed()
+        position.release(into: &left)
         #expect(store.value(at: position, slot: .fill, target: [1, 0, 0, 1], animation: nil) !== fill)
         #expect(store.animatableData(at: position, target: 3.0, animation: nil) !== data)
+    }
+
+    // MARK: - Transitions
+
+    private func slot(_ index: Int) -> TransitionSlot {
+        TransitionSlot(index: index, content: ContentNode(content: GroupContent()), effects: [], transition: .opacity)
+    }
+
+    private func beginExit(of slot: TransitionSlot, from container: ViewPosition) {
+        slot.node.removal = NodeRemoval(
+            container: container,
+            frame: .zero,
+            proposal: .unspecified,
+            transform: .identity,
+            position: 0,
+            startFrame: 0,
+            runs: []
+        )
+    }
+
+    @Test func theExitsOfAContainerThatLeftEndWithIt() {
+        let records = RebuildRecords()
+        let leaving = slot(1)
+        let arriving = slot(2)
+        weak var container: ViewPosition?
+        records.beginRebuild()
+        file(records, at: [])
+        file(records, at: [0])
+        do {
+            let standing = records.cursor(at: [0]).position
+            beginExit(of: leaving, from: standing)
+            standing.transitionSlots = [1: leaving, 2: arriving]
+            container = standing
+        }
+        #expect(records.endRebuild().isEmpty)
+
+        // The container leaves: only the slot on its way out had an exit
+        // to end, and nothing the container held keeps it.
+        records.beginRebuild()
+        file(records, at: [])
+        let departed = records.endRebuild()
+        #expect(departed.exits.map(ObjectIdentifier.init) == [ObjectIdentifier(leaving.node)])
+        let gone = container == nil
+        #expect(gone)
+    }
+
+    @Test func aContainerPlayingAnExitIsNotKeptByIt() {
+        let leaving = slot(1)
+        weak var container: ViewPosition?
+        do {
+            let records = RebuildRecords()
+            records.beginRebuild()
+            file(records, at: [])
+            file(records, at: [0])
+            let standing = records.cursor(at: [0]).position
+            beginExit(of: leaving, from: standing)
+            standing.transitionSlots = [1: leaving]
+            container = standing
+            _ = records.endRebuild()
+        }
+        // The tree gone — its host closed — the container went with it,
+        // though its slot, held here, points back at it.
+        let gone = container == nil
+        #expect(gone)
+        let pointsAtNothing = leaving.node.removal?.container == nil
+        #expect(pointsAtNothing)
     }
 
     // MARK: - Built views

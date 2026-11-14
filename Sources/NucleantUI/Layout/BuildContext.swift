@@ -804,8 +804,11 @@ final class RebuildRecords {
         var entries: [([Int], Entry)] = []
         /// The `onDisappear` actions that left with them, to run.
         var disappearing: [() -> Void] = []
+        /// The slot nodes their containers were playing exits of — over,
+        /// with the containers.
+        var exits: [ViewNode] = []
 
-        var isEmpty: Bool { entries.isEmpty && disappearing.isEmpty }
+        var isEmpty: Bool { entries.isEmpty && disappearing.isEmpty && exits.isEmpty }
     }
 
     /// Finish the rebuild: every child of a position built in it that was

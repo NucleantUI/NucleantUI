@@ -241,19 +241,8 @@ final class AnimationStore {
     /// simply there or not.
     var runsTransitions = true
 
-    /// The child slots with a transition standing on them, by the path of
-    /// their container and their slot in it.
-    private var transitionSlots: [[Int]: [Int: TransitionSlot]] = [:]
-
-    func transitionSlots(in container: [Int]) -> [Int: TransitionSlot] {
-        transitionSlots[container] ?? [:]
-    }
-
-    func setTransitionSlots(_ slots: [Int: TransitionSlot], in container: [Int]) {
-        transitionSlots[container] = slots.isEmpty ? nil : slots
-    }
-
-    /// The slot nodes on their way out.
+    /// The slot nodes on their way out. The slots themselves are on their
+    /// containers' positions (`ViewPosition.transitionSlots`).
     private var leaving: Set<ObjectIdentifier> = []
 
     /// Whether any slot is on its way out — what makes every node placed
@@ -271,11 +260,11 @@ final class AnimationStore {
 
     /// Containers whose exits played out this frame, rebuilt the next so
     /// what was left of the views goes.
-    private var finishedExits: Set<[Int]> = []
+    private var finishedExits: [ViewPosition] = []
 
-    func exitFinished(_ node: ViewNode, container: [Int]) {
+    func exitFinished(_ node: ViewNode, container: ViewPosition?) {
         exitEnded(node)
-        finishedExits.insert(container)
+        if let container { finishedExits.append(container) }
     }
 
     // MARK: - Timelines
@@ -301,8 +290,8 @@ final class AnimationStore {
         }
         rebuilds.removeAll(keepingCapacity: true)
         // A container whose exit is over, still standing.
-        for path in finishedExits where transitionSlots[path] != nil {
-            Invalidator.shared.invalidate(owner: path)
+        for position in finishedExits where !position.hasLeft && !position.transitionSlots.isEmpty {
+            Invalidator.shared.invalidate(owner: position.path)
         }
         finishedExits.removeAll()
         guard !timelines.isEmpty else { return }
@@ -318,16 +307,12 @@ final class AnimationStore {
 
     // MARK: - Departure
 
-    /// Drop what the views at `paths` held here — they left the tree, or
-    /// another view took their place. What they kept on their positions
-    /// went with those.
-    func forget(paths: Set<[Int]>) {
-        for path in paths {
-            if let slots = transitionSlots.removeValue(forKey: path) {
-                for slot in slots.values where slot.isLeaving {
-                    exitEnded(slot.node)
-                }
-            }
+    /// End `exits`, the exits that the containers which left, or which
+    /// another view took the place of, were playing. Everything else the
+    /// views kept for their animations went with their positions.
+    func forget(exits: [ViewNode]) {
+        for node in exits {
+            exitEnded(node)
         }
     }
 }

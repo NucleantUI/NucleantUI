@@ -119,6 +119,6 @@ final class OffscreenRender {
         }
         let paths = Set(departed.entries.map { $0.0 })
         effects.forget(paths: paths, disappearing: departed.disappearing)
-        animations.forget(paths: paths)
+        animations.forget(exits: departed.exits)
     }
 }

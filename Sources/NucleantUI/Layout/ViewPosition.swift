@@ -17,9 +17,9 @@
 //
 //  It also holds what belongs to the view standing there for as long as it
 //  is the same view: its state, what its effects keep between builds — an
-//  `onAppear`'s mark, an `onChange`'s last value — and its animated values.
-//  A rebuild of the same view keeps them; another view taking the position,
-//  or the view leaving, drops them.
+//  `onAppear`'s mark, an `onChange`'s last value — its animated values, and
+//  a container's transition slots. A rebuild of the same view keeps them;
+//  another view taking the position, or the view leaving, drops them.
 //
 
 import Foundation
@@ -100,6 +100,10 @@ final class ViewPosition {
 
     /// When the `TimelineView` standing here wants its content rebuilt next.
     var nextTimelineDate: Date?
+
+    /// The child slots of the container standing here — an `if`, a
+    /// `ForEach` — with a transition standing on them, by slot.
+    var transitionSlots: [Int: TransitionSlot] = [:]
 
     /// Whether this position was cut out of the tree, with the view that
     /// stood here. A list of positions kept past a rebuild — the rebuilds
@@ -270,9 +274,12 @@ final class ViewPosition {
     }
 
     /// Drop what the view that stood here kept — its state, what its
-    /// effects kept, its animated values — for another takes the position;
-    /// and hand back its `onDisappear` action, to run.
-    func release() -> (() -> Void)? {
+    /// effects kept, its animated values, its transition slots — for
+    /// another takes the position; and add what leaves with it, its
+    /// `onDisappear` action and the exits its slots were playing, to
+    /// `departed`.
+    @MainActor
+    func release(into departed: inout RebuildRecords.Departed) {
         stateSlots.removeAll()
         stateOwner = nil
         animatedVectors.removeAll()
@@ -280,26 +287,38 @@ final class ViewPosition {
         animatableData = nil
         rebuildsNextFrame = false
         nextTimelineDate = nil
-        defer {
-            hasAppeared = false
-            disappearing = nil
-            observed = nil
-            placedIfMade = nil
-        }
-        return disappearing
+        if let disappearing { departed.disappearing.append(disappearing) }
+        takeExits(into: &departed)
+        hasAppeared = false
+        disappearing = nil
+        observed = nil
+        placedIfMade = nil
     }
 
     /// Mark this position and everything below it as gone — cut out of
     /// the tree — and collect what leaves with them: each record, with its
-    /// path — this position's being `base` — and each `onDisappear`
-    /// action, in the order of the tree.
+    /// path — this position's being `base` — each `onDisappear` action, in
+    /// the order of the tree, and the exits their slots were playing.
+    @MainActor
     func leave(base: [Int], into departed: inout RebuildRecords.Departed) {
         hasLeft = true
         if let record { departed.entries.append((base, record)) }
         if let disappearing { departed.disappearing.append(disappearing) }
+        takeExits(into: &departed)
         forEachChild { child in
             child.leave(base: base + [child.key], into: &departed)
         }
+    }
+
+    /// Let go of the transition slots, adding the nodes of those on their
+    /// way out to `departed`: their exits end with the container.
+    @MainActor
+    private func takeExits(into departed: inout RebuildRecords.Departed) {
+        guard !transitionSlots.isEmpty else { return }
+        for slot in transitionSlots.values where slot.isLeaving {
+            departed.exits.append(slot.node)
+        }
+        transitionSlots = [:]
     }
 }
 

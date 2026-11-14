@@ -842,9 +842,10 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             storage.readers.remove(path)
         }
         if replaced.identity != identity {
-            let disappearing = context.position.release()
-            context.effects.forget(paths: [path], disappearing: disappearing.map { [$0] } ?? [])
-            context.animations.forget(paths: [path])
+            var left = RebuildRecords.Departed()
+            context.position.release(into: &left)
+            context.effects.forget(paths: [path], disappearing: left.disappearing)
+            context.animations.forget(exits: left.exits)
         } else {
             wasBoundary = replaced.isBoundary
             predecessor = replaced.node

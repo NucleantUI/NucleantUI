@@ -166,6 +166,6 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         }
         let paths = Set(departed.entries.map { $0.0 })
         context.effects.forget(paths: paths, disappearing: departed.disappearing)
-        context.animations.forget(paths: paths)
+        context.animations.forget(exits: departed.exits)
     }
 }
