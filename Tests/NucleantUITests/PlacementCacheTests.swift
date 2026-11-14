@@ -81,6 +81,17 @@ struct PlacementCacheTests {
         #expect(a.frame == .zero, "not placed: what it drew was appended")
     }
 
+    @Test func aListHoldingOneKeptSubtreeIsTheKeptList() {
+        let root = stack(leaf(), leaf())
+        _ = place(root)
+        _ = place(root)
+        let third = place(root)
+        #expect(third.version != nil)
+        #expect(third.version == root.placed?.list?.version, "appended into an empty list: the kept list")
+        #expect(place(root).translated(dx: -5, dy: 0).version == third.translated(dx: -5, dy: 0).version,
+                "the same image, told by its number")
+    }
+
     @Test func placedSomewhereElseItIsPlacedAgain() {
         let a = leaf()
         let root = stack(a)

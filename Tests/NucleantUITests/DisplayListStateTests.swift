@@ -107,6 +107,42 @@ struct DisplayListStateTests {
         #expect(shifted.paintBounds(at: 0) == built.paintBounds(at: 0))
     }
 
+    @Test func aKeptListIsKnownByItsNumberAsItIsAndMovedOnce() {
+        var kept = DisplayList()
+        kept.append(square(at: 0), under: clipped)
+        kept.markKept(7)
+
+        var holder = DisplayList()
+        holder.append(contentsOf: kept)
+        #expect(holder.version == kept.version, "appended into an empty list: that list")
+
+        let image = holder.translated(dx: -3, dy: -4)
+        #expect(image.version == DisplayList.Version(kept: 7, dx: -3, dy: -4))
+        #expect(image == kept.translated(dx: -3, dy: -4))
+        #expect(image.translated(dx: 1, dy: 1).version == nil, "moved twice: compared by its commands")
+        #expect(kept.transformed(by: .scale(x: 2, y: 2)).version == nil)
+
+        var grown = holder
+        grown.append(square(at: 20), under: clipped)
+        #expect(grown.version == nil, "anything added: compared by its commands")
+        var joined = holder
+        joined.append(contentsOf: kept)
+        #expect(joined.version == nil)
+    }
+
+    @Test func listsWithoutTheSameNumberAreComparedByTheirCommands() {
+        var a = DisplayList()
+        a.append(square(at: 0), under: clipped)
+        var b = a
+        a.markKept(1)
+        b.markKept(2)
+        #expect(a == b, "kept twice, drawing the same")
+        var c = DisplayList()
+        c.append(square(at: 20), under: clipped)
+        c.markKept(3)
+        #expect(a != c)
+    }
+
     @Test func aStateCutToARectReplacesARoundedClipThatHoldsIt() {
         let rounded = DrawState(clip: Rect(x: 0, y: 0, width: 100, height: 100), clipCornerRadius: 10)
         let inside = Rect(x: 20, y: 20, width: 10, height: 10)

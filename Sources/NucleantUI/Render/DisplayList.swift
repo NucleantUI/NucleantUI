@@ -685,10 +685,29 @@ public struct DisplayList: Equatable, Sendable {
     /// boundary into runs and damage all ask it, every pass. Not part of
     /// what the list is: it follows from the rest.
     private var bounds: [Rect?] = []
+    /// Which kept list this is, and how far it was moved since: two lists
+    /// with the same version are the same list, told without comparing a
+    /// command. Given to what a pure subtree keeps (`PlacementCache.swift`),
+    /// carried by a list that is that one as it is or moved once — a
+    /// boundary holding one kept subtree, in its image's space — and
+    /// dropped by anything else that changes it. Without one, lists are
+    /// compared command by command.
+    private(set) var version: Version?
+
+    struct Version: Equatable, Sendable {
+        let kept: Int
+        var dx = 0.0
+        var dy = 0.0
+    }
 
     public init() {}
 
     public var isEmpty: Bool { commands.isEmpty }
+
+    /// Number this list as the kept list `kept`.
+    mutating func markKept(_ kept: Int) {
+        version = Version(kept: kept)
+    }
 
     /// The state `commands[index]` is drawn under.
     public func state(at index: Int) -> DrawState {
@@ -733,6 +752,7 @@ public struct DisplayList: Equatable, Sendable {
     }
 
     private mutating func append(_ command: DrawCommand, under state: DrawState, bounds: Rect?) {
+        version = nil
         if states.last != state {
             states.append(state)
         }
@@ -743,6 +763,13 @@ public struct DisplayList: Equatable, Sendable {
 
     public mutating func append(contentsOf other: DisplayList) {
         guard !other.commands.isEmpty else { return }
+        // Into an empty list: that list, as it is — its storage and its
+        // version with it.
+        guard !commands.isEmpty else {
+            self = other
+            return
+        }
+        version = nil
         // Its first run goes on with this list's last, when they share a
         // state — the list it would have been, built in one.
         let joins = states.last == other.states[0]
@@ -765,7 +792,8 @@ public struct DisplayList: Equatable, Sendable {
     }
 
     public static func == (lhs: DisplayList, rhs: DisplayList) -> Bool {
-        lhs.stateIndices == rhs.stateIndices && lhs.states == rhs.states && lhs.commands == rhs.commands
+        if let version = lhs.version, version == rhs.version { return true }
+        return lhs.stateIndices == rhs.stateIndices && lhs.states == rhs.states && lhs.commands == rhs.commands
     }
 
     /// The same list drawn `(dx, dy)` further along — how a view's absolute
@@ -778,6 +806,13 @@ public struct DisplayList: Equatable, Sendable {
         copy.states = states.map { $0.translated(dx: dx, dy: dy) }
         copy.commands = commands.map { $0.translated(dx: dx, dy: dy) }
         copy.bounds = bounds.map { $0?.offsetBy(dx: dx, dy: dy) }
+        // Moved once, it is still the kept list, there; moved again, the
+        // sums of two moves need not be the moves of one.
+        if let version, version.dx == 0, version.dy == 0 {
+            copy.version = Version(kept: version.kept, dx: dx, dy: dy)
+        } else {
+            copy.version = nil
+        }
         return copy
     }
 
@@ -790,6 +825,7 @@ public struct DisplayList: Equatable, Sendable {
         guard !transform.isIdentity else { return self }
         var copy = self
         copy.states = states.map { $0.transformed(by: transform) }
+        copy.version = nil
         for index in commands.indices {
             copy.bounds[index] = commands[index].paintBox.flatMap(copy.state(at: index).paintBounds(of:))
         }

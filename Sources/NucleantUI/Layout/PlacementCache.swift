@@ -31,6 +31,11 @@
 //  view leaving anywhere turns keeping off for the pass, and a forced
 //  rebuild drops everything kept.
 //
+//  Each kept list has a number of its own (`DisplayList.version`). A render
+//  boundary whose content is one kept subtree holds that list itself, in its
+//  image's space, so the painter tells the image unchanged by the number,
+//  not by comparing its commands.
+//
 
 /// What a pure node was last placed with, and what it drew then when it
 /// may be drawn again.
@@ -71,6 +76,9 @@ final class PlacementRecorder {
     }
 
     private var frames: [Frame] = []
+
+    /// The number the next kept list gets (`DisplayList.version`).
+    private var nextKept = 0
 
     private init() {}
 
@@ -113,7 +121,7 @@ final class PlacementRecorder {
         if disturbances == mark && stable {
             if frames.isEmpty {
                 // Nothing above it places purely: it keeps itself.
-                node.placed?.list = list.slice(range)
+                node.placed?.list = keep(range, of: list)
             } else {
                 // The node above decides: it keeps itself, this with it, or
                 // this alone.
@@ -125,9 +133,18 @@ final class PlacementRecorder {
         // below it stood still where it stood is kept on its own.
         for child in frame.pending {
             var kept = child.record
-            kept.list = list.slice(child.range)
+            kept.list = keep(child.range, of: list)
             child.node.placed = kept
         }
+    }
+
+    /// The commands in `range` of `list`, kept: a list of their own, with a
+    /// number no other kept list has.
+    private func keep(_ range: Range<Int>, of list: DisplayList) -> DisplayList {
+        var kept = list.slice(range)
+        nextKept += 1
+        kept.markKept(nextKept)
+        return kept
     }
 }
 
