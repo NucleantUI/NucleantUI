@@ -543,9 +543,10 @@ public final class ViewHost {
         return true
     }
 
-    /// The overlay node's identity: slot `[1]` of the root, whatever it holds.
+    /// The overlay node's identity: the root's second slot, whatever it
+    /// holds.
     private static let overlayKey = RenderNodeKey(
-        path: [1],
+        slot: RenderSlot(position: nil),
         identity: ViewIdentity(type: ObjectIdentifier(_HostOverlay.self), viewID: .unknown)
     )
 

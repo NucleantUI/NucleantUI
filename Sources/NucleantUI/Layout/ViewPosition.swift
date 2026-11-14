@@ -105,6 +105,18 @@ final class ViewPosition {
     /// `ForEach` — with a transition standing on them, by slot.
     var transitionSlots: [Int: TransitionSlot] = [:]
 
+    /// What the render nodes of the view standing here are filed under —
+    /// a boundary's images, a drawing group's canvas, a texture view's
+    /// node. Made the first time it is asked for.
+    var renderSlot: RenderSlot {
+        if let renderSlotIfMade { return renderSlotIfMade }
+        let made = RenderSlot(position: self)
+        renderSlotIfMade = made
+        return made
+    }
+
+    private var renderSlotIfMade: RenderSlot?
+
     /// Whether this position was cut out of the tree, with the view that
     /// stood here. A list of positions kept past a rebuild — the rebuilds
     /// `AnimationStore` has to come — passes it by.
@@ -274,8 +286,8 @@ final class ViewPosition {
     }
 
     /// Drop what the view that stood here kept — its state, what its
-    /// effects kept, its animated values, its transition slots — for
-    /// another takes the position; and add what leaves with it, its
+    /// effects kept, its animated values, its transition slots, the slot
+    /// its render nodes are filed under — for another takes the position; and add what leaves with it, its
     /// `onDisappear` action and the exits its slots were playing, to
     /// `departed`.
     @MainActor
@@ -287,6 +299,7 @@ final class ViewPosition {
         animatableData = nil
         rebuildsNextFrame = false
         nextTimelineDate = nil
+        renderSlotIfMade = nil
         if let disappearing { departed.disappearing.append(disappearing) }
         takeExits(into: &departed)
         hasAppeared = false

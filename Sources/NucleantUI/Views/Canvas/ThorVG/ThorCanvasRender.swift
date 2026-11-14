@@ -38,7 +38,7 @@ extension ThorCanvasRender: BuiltinView {
     func makeNode(_ build: inout BuildContext) -> ViewNode {
         let context = self.context
         return ContentNode(content: ThorCanvasContent(
-            key: RenderNodeKey(path: build.path, identity: build.viewIdentity, id: nodeID),
+            key: RenderNodeKey(slot: build.position.renderSlot, identity: build.viewIdentity, id: nodeID),
             path: build.path,
             onInit: { canvas, size in context.onAppear(context: canvas, size: size) },
             render: { canvas, size in context.update(context: canvas, size: size) }

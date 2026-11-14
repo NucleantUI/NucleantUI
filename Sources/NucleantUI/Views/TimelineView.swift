@@ -213,7 +213,7 @@ extension TimelineView: BuiltinView {
         // there rather than in whatever encloses it.
         guard !node.isTransparent else { return node }
         let boundary = ContentNode(
-            content: RenderBoundaryContent(key: RenderNodeKey(path: path, identity: context.viewIdentity)),
+            content: RenderBoundaryContent(key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity)),
             children: [node]
         )
         boundary.transitionTrait = node.transitionTrait

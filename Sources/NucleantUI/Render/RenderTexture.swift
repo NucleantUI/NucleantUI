@@ -156,7 +156,7 @@ public final class RenderTexture {
         generation += 1
         attach()
         guard let canvas else { return }
-        canvas.render(content, at: [OffscreenRender.rootIndex])
+        canvas.render(content, at: "texture")
         hasContent = true
         // Placements already put down this pass were told `hasContent` as it
         // was *before* this render; a queued render lands after them.
@@ -177,7 +177,7 @@ public final class RenderTexture {
         guard canvas == nil, pixelWidth > 0, pixelHeight > 0 else { return }
         attach()
         guard let canvas else { return }
-        canvas.render(content, at: [OffscreenRender.rootIndex])
+        canvas.render(content, at: "texture")
         hasContent = !content.commands.isEmpty
         generation += 1
     }

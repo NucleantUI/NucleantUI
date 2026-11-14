@@ -182,7 +182,7 @@ final class RenderBoundaries<N: NucleantContainerNode> {
         guard !split.detached.isEmpty else { return }
         for run in split.detached {
             _ = useImage(
-                key: RenderNodeKey(path: [], identity: Self.rootIdentity, id: run.index),
+                key: RenderNodeKey(slot: rootSlot, identity: Self.rootIdentity, id: run.index),
                 clip: nil,
                 content: run.list,
                 order: frame.markers[run.index - 1].runOrder
@@ -190,6 +190,9 @@ final class RenderBoundaries<N: NucleantContainerNode> {
         }
         list = split.primary
     }
+
+    /// What the window's own runs are filed under.
+    private let rootSlot = RenderSlot(position: nil)
 
     private static var rootIdentity: ViewIdentity { ViewIdentity(type: ObjectIdentifier(RenderBoundaries.self), viewID: .unknown) }
 
@@ -263,7 +266,7 @@ final class RenderBoundaries<N: NucleantContainerNode> {
         cover(useImage(key: key, clip: clip, content: split.primary, order: frame.primaryOrder))
         for run in split.detached {
             cover(useImage(
-                key: RenderNodeKey(path: key.path, identity: key.identity, id: run.index),
+                key: RenderNodeKey(slot: key.slot, identity: key.identity, id: run.index),
                 clip: clip,
                 content: run.list,
                 order: frame.markers[run.index - 1].runOrder
@@ -329,7 +332,7 @@ final class RenderBoundaries<N: NucleantContainerNode> {
                 format: "[layout] image   rect x=%7.2f y=%7.2f w=%7.2f h=%7.2f  image %dx%d  ",
                 imageRect.minX, imageRect.minY, imageRect.width, imageRect.height,
                 entry.width, entry.height
-            ) + "\(key.path)/\(key.id)\n")
+            ) + "\(key.slot.pathDescription)/\(key.id)\n")
         }
         return visible.width > 0 && visible.height > 0 ? visible : nil
     }

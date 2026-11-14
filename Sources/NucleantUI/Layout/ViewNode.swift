@@ -903,7 +903,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         if isBoundary {
             let body = node
             node = ContentNode(
-                content: RenderBoundaryContent(key: RenderNodeKey(path: path, identity: identity)),
+                content: RenderBoundaryContent(key: RenderNodeKey(slot: context.position.renderSlot, identity: identity)),
                 children: [body]
             )
             node.transitionTrait = body.transitionTrait

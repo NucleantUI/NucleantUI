@@ -90,13 +90,13 @@ struct DrawingGroupContent: NodeContent {
         host.boundaries.noteNested(at: list.commands.count, rect: clip.map { visible.intersection($0) } ?? visible)
         // Local to the image, so a view that merely moved compares equal to
         // what its node already holds.
-        node.render(content.translated(dx: -visible.minX, dy: -visible.minY), at: key.path)
+        node.render(content.translated(dx: -visible.minX, dy: -visible.minY), at: key.slot.pathDescription)
     }
 }
 
 /// `.drawingGroup()`.
 struct DrawingGroupModifier: PrimitiveModifier, Equatable {
     func makeContent(_ context: inout BuildContext) -> DrawingGroupContent {
-        DrawingGroupContent(key: RenderNodeKey(path: context.path, identity: context.viewIdentity))
+        DrawingGroupContent(key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity))
     }
 }

@@ -394,6 +394,34 @@ struct ViewPositionTests {
         #expect(pointsAtNothing)
     }
 
+    // MARK: - Render nodes
+
+    @Test func renderNodesAreFiledUnderTheViewsOwnSlot() {
+        let records = RebuildRecords()
+        records.beginRebuild()
+        file(records, at: [])
+        file(records, at: [0])
+        file(records, at: [1])
+        let first = records.cursor(at: [0]).position.renderSlot
+        #expect(records.cursor(at: [0]).position.renderSlot === first, "made once, then found")
+        #expect(records.cursor(at: [1]).position.renderSlot !== first)
+        #expect(first.pathDescription == "[0]")
+        let second = records.cursor(at: [1]).position.renderSlot
+        _ = records.endRebuild()
+
+        // Another view in its place: a slot of its own, so nodes of its own.
+        var left = RebuildRecords.Departed()
+        records.cursor(at: [0]).position.release(into: &left)
+        #expect(records.cursor(at: [0]).position.renderSlot !== first)
+
+        // Gone: its slot no longer says where it stood.
+        records.beginRebuild()
+        file(records, at: [])
+        file(records, at: [0])
+        _ = records.endRebuild()
+        #expect(second.pathDescription != "[1]")
+    }
+
     // MARK: - Built views
 
     @MainActor

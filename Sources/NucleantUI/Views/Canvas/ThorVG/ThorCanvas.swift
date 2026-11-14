@@ -72,7 +72,7 @@ public struct ThorCanvas {
 extension ThorCanvas: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         ContentNode(content: ThorCanvasContent(
-            key: RenderNodeKey(path: context.path, identity: context.viewIdentity, id: nodeID),
+            key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity, id: nodeID),
             path: context.path,
             onInit: onInit,
             render: renderer
