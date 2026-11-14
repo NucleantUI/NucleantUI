@@ -7,7 +7,7 @@ Each finding links its phase file; the hash is the commit that did it.
 - [~] partly done — the note says what is left
 - [ ] not started
 
-Last updated after `e43a737`.
+Last updated after `795a477`.
 
 ## Small fixes that are certain
 
@@ -41,16 +41,19 @@ Last updated after `e43a737`.
 ## [Phase 2](phase-2-view-positions.md): a position object instead of `[Int]` paths
 
 - [x] **2.3** Forgetting without a scan — `d350522`
-- [~] **2.4 / 2.5** The position object and one trie. Not started as
-  designed; `0f10917` gives the builder a cursor into the record tries, so
-  finding a view's place is one step per child instead of a walk from the
-  root. Paths are still the keys everywhere.
-- [ ] **2.6** What a position caches — waits on 2.4.
+- [~] **2.4 / 2.5** The position object and one trie — `795a477` (step 3 of
+  2.8). The rebuild records sit on `ViewPosition`s that stay in place;
+  every rebuild takes a number. A kept subtree is one number set, and the
+  views that left are found from the children of the positions rebuilt.
+  Left: what the position holds besides the record (2.6, step 4), and the
+  dirty marks, still a trie of paths: they move with state, whose writes
+  make them.
+- [ ] **2.6** What a position caches — step 4 of 2.8.
 - [~] **2.7** `ForEach` rows
   - [ ] a row's slot is the hash of its id
   - [ ] a change read in one row closure re-runs every row closure
   - [x] a `ForEach` compared like any other input — `5ce17e3`
-- Steps of 2.8: 1 and 2 done (2.3, 6.7); 3 to 7 not started.
+- Steps of 2.8: 1, 2 and 3 done (2.3, 6.7, 2.4/2.5); 4 to 7 not started.
 
 ## [Phase 3](phase-3-layout.md): layout caches and stack math
 
