@@ -36,7 +36,7 @@ struct FontFallbackTests {
     private func roboto(_ font: Font = .system(size: size)) -> SkFont? {
         guard let family = FontRegistry.resolve(font), let path = FontRegistry.path(ofResolved: family),
               let face = SkFontMgr.makeFromFile(path) else { return nil }
-        let made = SkFont(face, size: Float(font.size * SkiaDisplayRenderer.thorPointScale))
+        let made = SkFont(face, size: Float(font.size * SkiaFonts.pointScale))
         made.setSubpixel(true)
         made.setEdging(.antiAlias)
         made.setHinting(.none)

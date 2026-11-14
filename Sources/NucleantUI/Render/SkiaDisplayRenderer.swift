@@ -18,10 +18,10 @@
 //  set before its transform, as ThorVG applies a paint's transform to the
 //  paint and not to its clipper.
 //
-//  Text is measured by `TextMeasurer` (ThorVG's metrics), and the lines,
-//  baselines and ellipsis are placed here from those same metrics, so a
-//  line is drawn where layout made room for it. The face is the file
-//  `FontRegistry` resolved, loaded into Skia from the same path.
+//  Text is measured by `TextMeasurer` with the same Skia fonts it is drawn
+//  with (`SkiaFonts`), and the lines, baselines and ellipsis are placed here
+//  from those same metrics, so a line is drawn where layout made room for
+//  it. The face is the file `FontRegistry` resolved.
 //
 
 import NucleantSkia
@@ -66,13 +66,6 @@ public final class SkiaDisplayRenderer {
     private let tintPaint = SkPaint()
     private let path = SkPath()
 
-    /// Fonts by face, size and synthetic slant — what text draws with.
-    private struct FontKey: Hashable {
-        let family: String?
-        let size: Double
-        let slanted: Bool
-    }
-    private var fonts: [FontKey: SkFont] = [:]
 
     /// Images drawn by the last render, by the `RasterImage` they were made
     /// from. The source is held with its image, so its identifier stays its
@@ -431,23 +424,12 @@ public final class SkiaDisplayRenderer {
 
     // MARK: - Text
 
-    /// ThorVG takes a text size in points at 96 DPI and draws it at
-    /// `size × 96/72` user units; `TextMeasurer` measures with ThorVG, so
-    /// every text box is sized for that. Skia's size is the em height
-    /// itself, so it is given the same factor — the glyphs then fill the
-    /// box layout made for them.
-    static let thorPointScale = 96.0 / 72.0
-
-    /// Faces loaded into Skia, by the family name `FontRegistry` resolved.
-    private static var typefaces: [String: SkTypeface] = [:]
-    /// The platform's default face, for a font nothing resolved for.
-    private static var defaultTypeface: SkTypeface?
 
     private func emit(_ draw: TextDraw, on canvas: SkCanvas) {
         guard draw.lines.contains(where: { !$0.isEmpty }) else { return }
         let family = FontRegistry.resolve(draw.font)
         // No italic face found: a synthetic shear still reads as italic.
-        let slanted = draw.font.isItalic && !(family?.contains("Italic") ?? false)
+        let slanted = SkiaFonts.isSlanted(draw.font, family: family)
         let font = self.font(family: family, size: draw.font.size, slanted: slanted)
 
         var lines = draw.lines
@@ -568,33 +550,7 @@ public final class SkiaDisplayRenderer {
     }
 
     private func font(family: String?, size: Double, slanted: Bool) -> SkFont {
-        let key = FontKey(family: family, size: size, slanted: slanted)
-        if let font = fonts[key] { return font }
-        let font = SkFont(typeface(for: family), size: Float(size * Self.thorPointScale))
-        font.setSubpixel(true)
-        font.setEdging(.antiAlias)
-        // Unhinted, as ThorVG draws and the layout measures. Where Skia reads
-        // glyphs through FreeType (the browser, Linux, Android) its default
-        // hinting rounds every advance to a whole pixel, and a word drifts
-        // off its measured width a pixel every few letters.
-        font.setHinting(.none)
-        if slanted { font.setSkewX(-0.2) }
-        fonts[key] = font
-        return font
-    }
-
-    private func typeface(for family: String?) -> SkTypeface? {
-        if let family {
-            if let loaded = Self.typefaces[family] { return loaded }
-            if let path = FontRegistry.path(ofResolved: family), let made = SkFontMgr.makeFromFile(path) {
-                Self.typefaces[family] = made
-                return made
-            }
-        }
-        if Self.defaultTypeface == nil {
-            Self.defaultTypeface = SkFontMgr.matchFamilyStyle(nil)
-        }
-        return Self.defaultTypeface
+        SkiaFonts.shared.font(family: family, size: size, slanted: slanted)
     }
 
     /// `line` cut short with a trailing "…" until it fits `width`.
