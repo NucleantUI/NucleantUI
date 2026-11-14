@@ -1137,7 +1137,8 @@ extension TextFieldLine: BuiltinView {
                 onKeyDown: onKeyDown,
                 editCommands: editCommands,
                 onEditCommand: onEditCommand,
-                isTabStop: true
+                isTabStop: true,
+                textInput: .singleLine
             ),
             hitTarget: HitTarget(
                 isEnabled: isEnabled,
