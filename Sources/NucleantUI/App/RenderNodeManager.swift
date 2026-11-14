@@ -39,25 +39,21 @@ import Dispatch
 /// main actor. Its one stored property is set when it is made, and read on
 /// the main actor.
 final class RenderSlot: Hashable, @unchecked Sendable {
-    /// Where the view stands, for trace output; `nil` for a node no view
-    /// owns, and once the position is gone.
-    private weak var position: ViewPosition?
+    /// Where the view stands; `nil` for a node no view owns.
+    private let position: PositionHandle?
 
-    init(position: ViewPosition?) {
+    init(position: PositionHandle?) {
         self.position = position
     }
 
     /// The path of the view, for a trace line.
     var pathDescription: String {
         guard let position else { return "-" }
-        return position.hasLeft ? "(left)" : "\(position.path)"
+        return position.standingPath.map { "\($0)" } ?? "(left)"
     }
 
     /// The path of the view while it stands — to dirty it.
-    var standingPath: [Int]? {
-        guard let position, !position.hasLeft else { return nil }
-        return position.path
-    }
+    var standingPath: [Int]? { position?.standingPath }
 
 
     static func == (a: RenderSlot, b: RenderSlot) -> Bool { a === b }

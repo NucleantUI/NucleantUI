@@ -110,10 +110,22 @@ final class ViewPosition {
     /// node. Made the first time it is asked for.
     var renderSlot: RenderSlot {
         if let renderSlotIfMade { return renderSlotIfMade }
-        let made = RenderSlot(position: self)
+        let made = RenderSlot(position: handle)
         renderSlotIfMade = made
         return made
     }
+
+    /// This position as something that must not keep it holds it — a
+    /// state slot listing its readers, a render slot. Made the first time
+    /// it is asked for; let go of as the position goes.
+    var handle: PositionHandle {
+        if let handleIfMade { return handleIfMade }
+        let made = PositionHandle(self)
+        handleIfMade = made
+        return made
+    }
+
+    private var handleIfMade: PositionHandle?
 
     private var renderSlotIfMade: RenderSlot?
 
@@ -142,6 +154,7 @@ final class ViewPosition {
     }
 
     deinit {
+        handleIfMade?.position = nil
         if let children {
             for index in 0..<childCount { children[index].release() }
         }
@@ -309,13 +322,20 @@ final class ViewPosition {
     }
 
     /// Mark this position and everything below it as gone — cut out of
-    /// the tree — and collect what leaves with them: each record, with its
-    /// path — this position's being `base` — each `onDisappear` action, in
-    /// the order of the tree, and the exits their slots were playing.
+    /// the tree — take each view off the readers of the state it read, and
+    /// collect what leaves with them: each record, with its path — this
+    /// position's being `base` — each `onDisappear` action, in the order of
+    /// the tree, and the exits their slots were playing.
     @MainActor
     func leave(base: [Int], into departed: inout RebuildRecords.Departed) {
         hasLeft = true
-        if let record { departed.entries.append((base, record)) }
+        if let record {
+            departed.entries.append((base, record))
+            // What it read will not dirty it again.
+            if let handleIfMade {
+                for storage in record.reads { storage.readers.remove(handleIfMade) }
+            }
+        }
         if let disappearing { departed.disappearing.append(disappearing) }
         takeExits(into: &departed)
         forEachChild { child in
@@ -332,6 +352,31 @@ final class ViewPosition {
             departed.exits.append(slot.node)
         }
         transitionSlots = [:]
+    }
+}
+
+/// A position, held by what must not keep it: a state slot's readers, a
+/// render slot. The position lets go of it as it goes, and one whose
+/// position is gone — or cut out of the tree — stands for nothing.
+/// Compared as the object it is.
+final class PositionHandle: Hashable {
+    /// Cleared by the position's `deinit`, so never left dangling.
+    fileprivate(set) unowned(unsafe) var position: ViewPosition?
+
+    fileprivate init(_ position: ViewPosition) {
+        self.position = position
+    }
+
+    /// The path of the position while it stands in the tree.
+    var standingPath: [Int]? {
+        guard let position, !position.hasLeft else { return nil }
+        return position.path
+    }
+
+    static func == (a: PositionHandle, b: PositionHandle) -> Bool { a === b }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
     }
 }
 

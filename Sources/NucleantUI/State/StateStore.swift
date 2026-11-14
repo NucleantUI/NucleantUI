@@ -20,8 +20,8 @@ protocol AnyStateStorage: AnyObject {
     var readers: StateReaders { get set }
 }
 
-/// The views that read one state slot, by path, with the key paths each
-/// read through — `[]` for the whole value, `[\.[3], \.level]` for a read
+/// The views that read one state slot, by their positions' handles, with
+/// the key paths each read through — `[]` for the whole value, `[\.[3], \.level]` for a read
 /// through `$tracks[3].level`.
 ///
 /// A write dirties each reader whose chain overlaps the written one, which
@@ -35,17 +35,17 @@ protocol AnyStateStorage: AnyObject {
 struct StateReaders {
 
     /// Readers of the whole value.
-    private var whole: Set<[Int]> = []
+    private var whole: Set<PositionHandle> = []
 
     /// The other readers, by the first key path of their chain, each with
     /// the chains it read through.
-    private var byFirstKeyPath: [AnyKeyPath: [[Int]: [[AnyKeyPath]]]] = [:]
+    private var byFirstKeyPath: [AnyKeyPath: [PositionHandle: [[AnyKeyPath]]]] = [:]
 
     /// The first key paths each of those is filed under, to take it out.
-    private var firstKeyPaths: [[Int]: [AnyKeyPath]] = [:]
+    private var firstKeyPaths: [PositionHandle: [AnyKeyPath]] = [:]
 
     /// `reader` read the slot through `chain`.
-    mutating func add(_ reader: [Int], via chain: [AnyKeyPath]) {
+    mutating func add(_ reader: PositionHandle, via chain: [AnyKeyPath]) {
         guard let first = chain.first else {
             whole.insert(reader)
             return
@@ -59,7 +59,7 @@ struct StateReaders {
     }
 
     /// `reader` is rebuilt or gone: the reads it made are forgotten.
-    mutating func remove(_ reader: [Int]) {
+    mutating func remove(_ reader: PositionHandle) {
         whole.remove(reader)
         guard let firsts = firstKeyPaths.removeValue(forKey: reader) else { return }
         for first in firsts {
@@ -73,7 +73,7 @@ struct StateReaders {
     /// Each reader a write through `chain` reaches: one whose chain and the
     /// written one are nested either way. A reader may be handed over more
     /// than once.
-    func forEachReader(reachedBy chain: [AnyKeyPath], _ body: ([Int]) -> Void) {
+    func forEachReader(reachedBy chain: [AnyKeyPath], _ body: (PositionHandle) -> Void) {
         for reader in whole {
             body(reader)
         }
@@ -180,8 +180,9 @@ final class StateStorage<Value>: StateSlot, AnyStateStorage {
         if isReadDuringPlacement {
             Invalidator.shared.invalidate(owner: ownerPath)
         }
+        // A reader no longer standing has nothing to rebuild.
         readers.forEachReader(reachedBy: chain) { reader in
-            Invalidator.shared.invalidate(owner: reader)
+            if let path = reader.standingPath { Invalidator.shared.invalidate(owner: path) }
         }
     }
 
@@ -229,7 +230,7 @@ final class DependencyTracker {
     /// One view having its `body` evaluated, and the slots it read so far —
     /// each once, in the order first read.
     private struct Frame {
-        let path: [Int]
+        let reader: PositionHandle
         var reads: [any AnyStateStorage] = []
     }
 
@@ -252,10 +253,10 @@ final class DependencyTracker {
         placements -= 1
     }
 
-    /// A view at `path` begins evaluating: the reads from here until the
-    /// matching `pop` are its own.
-    func push(_ path: [Int]) {
-        stack.append(Frame(path: path))
+    /// The view at `reader`'s position begins evaluating: the reads from
+    /// here until the matching `pop` are its own.
+    func push(_ reader: PositionHandle) {
+        stack.append(Frame(reader: reader))
     }
 
     /// The view at the top is done: the slots it read, handed over once for
@@ -268,7 +269,7 @@ final class DependencyTracker {
     func recordRead(_ storage: any AnyStateStorage, via chain: [AnyKeyPath]) {
         guard !stack.isEmpty else { return }
         let top = stack.count - 1
-        storage.readers.add(stack[top].path, via: chain)
+        storage.readers.add(stack[top].reader, via: chain)
         // Read again, most likely the slot read last.
         for read in stack[top].reads.reversed() where read === storage { return }
         stack[top].reads.append(storage)

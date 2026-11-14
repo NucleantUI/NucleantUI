@@ -838,8 +838,9 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
         // are stale from this moment — the reads are about to happen again —
         // and its state is only carried over if this is still the same view.
         let replaced = context.records.replace(candidate)
+        let reader = context.position.handle
         for storage in replaced.reads {
-            storage.readers.remove(path)
+            storage.readers.remove(reader)
         }
         if replaced.identity != identity {
             var left = RebuildRecords.Departed()
@@ -867,7 +868,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     // Publish this view's identity for the duration of its own evaluation, so
     // any `@State` read below is attributed to it — that attribution is what
     // lets a later write rebuild only this subtree.
-    DependencyTracker.shared.push(path)
+    DependencyTracker.shared.push(context.position.handle)
 
     var node: ViewNode
     var isBoundary = false

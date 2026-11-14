@@ -38,11 +38,11 @@ extension RenderNodeManager {
         var initialized = false
         var generation = -1
         var renderedSize: Size = .zero
-        /// State the `renderer` closure read, each slot listing the view's
-        /// path (`readerPath`) among its readers — undone before it runs
-        /// again and when the node retires.
+        /// State the `renderer` closure read, each slot listing the view
+        /// (`reader`) among its readers — undone before it runs again and
+        /// when the node retires.
         var reads: [any AnyStateStorage] = []
-        var readerPath: [Int] = []
+        var reader: PositionHandle?
         /// Seen during the current layout pass.
         var used = true
         /// Where the view last showed, in points — its frame under its
@@ -245,10 +245,11 @@ extension RenderNodeManager {
         /// and of the reader registrations its `renderer` made; past the
         /// limit it is freed.
         private func recycle(_ node: ThorCanvasNode) {
-            for storage in node.reads {
-                storage.readers.remove(node.readerPath)
+            if let reader = node.reader {
+                for storage in node.reads { storage.readers.remove(reader) }
             }
             node.reads.removeAll()
+            node.reader = nil
             node.generation = -1
             node.renderedSize = .zero
             guard spare.count < spareLimit else {

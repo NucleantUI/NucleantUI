@@ -458,18 +458,12 @@ public final class ViewHost {
     }
 
     /// Let go of everything held by views that a rebuild did not put back:
-    /// the reader registrations that would otherwise keep dirtying paths no
-    /// longer in the tree, and their preference observers — and run their
-    /// `onDisappear` actions. Their `@State`, and what their effects kept,
-    /// went with their positions.
+    /// their preference observers — and run their `onDisappear` actions.
+    /// Their `@State`, what their effects kept and their reader
+    /// registrations went with their positions.
     private func releaseDeparted() {
         let departed = records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed.entries {
-            for storage in entry.reads {
-                storage.readers.remove(path)
-            }
-        }
         let paths = Set(departed.entries.map { $0.0 })
         effects.forget(paths: paths, disappearing: departed.disappearing)
         animations.forget(exits: departed.exits)

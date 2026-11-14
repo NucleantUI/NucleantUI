@@ -70,7 +70,12 @@ extension Canvas: BuiltinView {
         // drawn with depends on, is read here, so a change of appearance
         // builds the canvas again and it draws again.
         _ = context.environment.colorScheme
-        return ContentNode(content: CanvasContent(path: context.path, environment: context.environment, renderer: renderer))
+        return ContentNode(content: CanvasContent(
+            path: context.path,
+            reader: context.position.handle,
+            environment: context.environment,
+            renderer: renderer
+        ))
     }
 }
 
@@ -78,6 +83,8 @@ extension Canvas: BuiltinView {
 /// the author's closure when it reaches it.
 struct CanvasContent: NodeContent {
     let path: [Int]
+    /// What the state the drawing reads lists among its readers: the view.
+    let reader: PositionHandle
     /// What the drawing's styles resolve in.
     let environment: EnvironmentValues
     let renderer: (inout GraphicsContext, Size) -> Void
@@ -100,6 +107,7 @@ struct CanvasContent: NodeContent {
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard rect.width > 0, rect.height > 0 else { return }
         let path = self.path
+        let reader = self.reader
         let renderer = self.renderer
         let size = rect.size
         let environment = self.environment
@@ -112,7 +120,7 @@ struct CanvasContent: NodeContent {
                 // Reads inside the renderer belong to this view: a change
                 // to one dirties it alone, which rebuilds it, which draws
                 // the node again.
-                DependencyTracker.shared.push(path)
+                DependencyTracker.shared.push(reader)
                 trackingObservation(at: path) {
                     renderer(&graphics, size)
                 }

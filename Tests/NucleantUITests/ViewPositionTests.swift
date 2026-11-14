@@ -114,14 +114,17 @@ struct ViewPositionTests {
 
     // MARK: - Rebuilds
 
-    private func entry(at node: ViewNode = ContentNode(content: GroupContent())) -> RebuildRecords.Entry {
+    private func entry(
+        at node: ViewNode = ContentNode(content: GroupContent()),
+        reads: [any AnyStateStorage] = []
+    ) -> RebuildRecords.Entry {
         RebuildRecords.Entry(
             identity: ViewIdentity(type: ObjectIdentifier(EmptyView.self), viewID: .unknown),
             environment: EnvironmentValues(),
             stackAxis: nil,
             view: RecordedViewOf(EmptyView()),
             node: node,
-            reads: []
+            reads: reads
         )
     }
 
@@ -420,6 +423,45 @@ struct ViewPositionTests {
         file(records, at: [0])
         _ = records.endRebuild()
         #expect(second.pathDescription != "[1]")
+    }
+
+    // MARK: - Readers
+
+    @Test func aHandleStandsForItsPositionWhileItStands() {
+        let root = ViewPosition(parent: nil, key: 0)
+        let handle: PositionHandle
+        do {
+            let position = root.makeDescendant(along: [2, 5])
+            handle = position.handle
+            #expect(position.handle === handle, "made once, then found")
+            #expect(handle.standingPath == [2, 5])
+        }
+        // Gone, it stands for nothing — and does not point at where it was.
+        root.removeChild(2)
+        #expect(handle.standingPath == nil)
+    }
+
+    @Test func aViewThatLeftIsTakenOffWhatItRead() {
+        let records = RebuildRecords()
+        let storage = StateStorage(1, ownerPath: [])
+        func readers() -> [PositionHandle] {
+            var found: [PositionHandle] = []
+            storage.readers.forEachReader(reachedBy: []) { found.append($0) }
+            return found
+        }
+        records.beginRebuild()
+        file(records, at: [])
+        records.record(entry(reads: [storage]), at: [0], cursor: records.cursor(at: [0]))
+        let reader = records.cursor(at: [0]).position.handle
+        storage.readers.add(reader, via: [])
+        _ = records.endRebuild()
+        #expect(readers() == [reader])
+
+        records.beginRebuild()
+        file(records, at: [])
+        _ = records.endRebuild()
+        #expect(readers().isEmpty)
+        #expect(reader.standingPath == nil)
     }
 
     // MARK: - Built views

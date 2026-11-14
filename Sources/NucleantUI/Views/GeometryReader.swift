@@ -133,7 +133,7 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         }
         context.records.beginRebuild()
 
-        DependencyTracker.shared.push(path)
+        DependencyTracker.shared.push(context.position.handle)
         EnvironmentReads.shared.begin()
         let child = build(at: placed, context: context)
         let environmentReads = EnvironmentReads.shared.end()
@@ -159,11 +159,6 @@ struct GeometryReaderContent<Content: View>: NodeContent {
     private func releaseDeparted(_ context: BuildContext) {
         let departed = context.records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed.entries {
-            for storage in entry.reads {
-                storage.readers.remove(path)
-            }
-        }
         let paths = Set(departed.entries.map { $0.0 })
         context.effects.forget(paths: paths, disappearing: departed.disappearing)
         context.animations.forget(exits: departed.exits)

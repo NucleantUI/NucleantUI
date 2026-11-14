@@ -29,6 +29,13 @@ extension HostedViews {
     @Suite
     struct BindingWriteTests {
 
+        /// Views standing at `[n]`, to list as readers.
+        private let tree = RebuildRecords()
+
+        private func reader(_ slot: Int) -> PositionHandle {
+            tree.cursor(at: [slot]).position.handle
+        }
+
         /// A binding onto a slot holding `value`, as `$state` makes one.
         private func bound<Value>(_ value: Value) -> (StateStorage<Value>, Binding<Value>) {
             let storage = StateStorage(value, ownerPath: [0])
@@ -72,11 +79,11 @@ extension HostedViews {
 
         @Test func aWriteReachesTheReadersOfItsPartAndOfTheWhole() {
             let (storage, tracks) = bound([Track(level: 1, name: "a"), Track(level: 2, name: "b")])
-            storage.readers.add([1], via: [])
-            storage.readers.add([2], via: [\[Track].[0], \Track.level])
-            storage.readers.add([3], via: [\[Track].[1], \Track.level])
-            storage.readers.add([4], via: [\[Track].[1]])
-            storage.readers.add([5], via: [\[Track].[1], \Track.name])
+            storage.readers.add(reader(1), via: [])
+            storage.readers.add(reader(2), via: [\[Track].[0], \Track.level])
+            storage.readers.add(reader(3), via: [\[Track].[1], \Track.level])
+            storage.readers.add(reader(4), via: [\[Track].[1]])
+            storage.readers.add(reader(5), via: [\[Track].[1], \Track.name])
             _ = dirtied()
 
             tracks[1].level.wrappedValue = 9
@@ -88,16 +95,16 @@ extension HostedViews {
 
         @Test func aReaderTakenOutIsReachedNoMore() {
             let (storage, tracks) = bound([Track(level: 1, name: "a")])
-            storage.readers.add([1], via: [\[Track].[0], \Track.level])
-            storage.readers.add([1], via: [\[Track].[0], \Track.name])
-            storage.readers.add([1], via: [])
-            storage.readers.add([2], via: [\[Track].[0]])
-            storage.readers.remove([1])
+            storage.readers.add(reader(1), via: [\[Track].[0], \Track.level])
+            storage.readers.add(reader(1), via: [\[Track].[0], \Track.name])
+            storage.readers.add(reader(1), via: [])
+            storage.readers.add(reader(2), via: [\[Track].[0]])
+            storage.readers.remove(reader(1))
             _ = dirtied()
 
             tracks[0].level.wrappedValue = 3
             #expect(dirtied() == [[2]])
-            storage.readers.remove([2])
+            storage.readers.remove(reader(2))
             tracks.wrappedValue = []
             #expect(dirtied().isEmpty)
         }
@@ -105,7 +112,7 @@ extension HostedViews {
         @Test func aWriteIntoAnObjectLeavesTheSlotAsItWas() {
             let model = Model()
             let (storage, binding) = bound(model)
-            storage.readers.add([1], via: [])
+            storage.readers.add(reader(1), via: [])
             _ = dirtied()
 
             binding.name.wrappedValue = "b"

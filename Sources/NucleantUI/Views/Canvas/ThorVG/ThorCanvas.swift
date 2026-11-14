@@ -74,6 +74,7 @@ extension ThorCanvas: BuiltinView {
         ContentNode(content: ThorCanvasContent(
             key: RenderNodeKey(slot: context.position.renderSlot, identity: context.viewIdentity, id: nodeID),
             path: context.path,
+            reader: context.position.handle,
             onInit: onInit,
             render: renderer
         ))
@@ -86,6 +87,8 @@ extension ThorCanvas: BuiltinView {
 struct ThorCanvasContent: NodeContent {
     let key: RenderNodeKey
     let path: [Int]
+    /// What the state `render` reads lists among its readers: the view.
+    let reader: PositionHandle
     let onInit: (borrowing ThorContext, SIMD2<Float>) -> Void
     let render: (borrowing ThorContext, SIMD2<Float>) -> Void
     /// Which build this content came from. A rebuilt view gets a new
@@ -147,11 +150,11 @@ struct ThorCanvasContent: NodeContent {
         }
         if node.generation != generation || node.renderedSize != rect.size {
             // The reads about to happen replace the last run's.
-            for storage in node.reads {
-                storage.readers.remove(node.readerPath)
+            if let previous = node.reader {
+                for storage in node.reads { storage.readers.remove(previous) }
             }
-            node.readerPath = path
-            DependencyTracker.shared.push(path)
+            node.reader = reader
+            DependencyTracker.shared.push(reader)
             trackingObservation(at: path) {
                 render(node.thorContext, size)
             }

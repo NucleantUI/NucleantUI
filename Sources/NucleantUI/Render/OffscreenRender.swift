@@ -112,11 +112,6 @@ final class OffscreenRender {
     private func releaseDeparted() {
         let departed = records.endRebuild()
         guard !departed.isEmpty else { return }
-        for (path, entry) in departed.entries {
-            for storage in entry.reads {
-                storage.readers.remove(path)
-            }
-        }
         let paths = Set(departed.entries.map { $0.0 })
         effects.forget(paths: paths, disappearing: departed.disappearing)
         animations.forget(exits: departed.exits)
