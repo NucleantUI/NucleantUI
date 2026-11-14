@@ -8,9 +8,10 @@ What is done so far, finding by finding: [progress.md](progress.md).
 
 ## How to read this
 
-- Every finding comes from reading the code. **Nothing here was measured.**
-  The order is my judgment of where the cost is, and each phase says how to
-  check it before and after.
+- Every finding comes from reading the code; the review itself measured
+  nothing. The order is my judgment of where the cost is, and each phase
+  says how to check it before and after. What was done has been measured
+  since: see [Measuring](#measuring).
 - About 10,000 of the 50,000 lines were read in full: `Core`, `Layout`,
   `State`, most of `Render`, `ViewHost`, the modifier and shape plumbing, and
   the animation value storage. The rest was only searched for patterns.
@@ -93,6 +94,21 @@ These are a few lines each and do not depend on any phase.
 - Instruments on an example app, Allocations and Time Profiler, from
   outside. Phases 1, 2 and 6 are mostly about allocations per view built,
   which the trace does not count.
+
+What was measured, step by step ([progress.md](progress.md) has every
+metric):
+
+<!-- measurements:summary -->
+CPU per pass, mean of the launches (debug builds); in **bold** where the
+launches before and after don't overlap. Written by
+`Scripts/bench_animations.py tables` from [measurements.json](measurements.json).
+
+| Measured | Before → after | Date | Load | `bookmarks-layout` | `flashcards-card` |
+|---|---|---|---|---|---|
+| Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5 | `4adf040` → `f6c6802` | 2026-11-14 | not recorded | 73.5 → 33 ms (**−55%**) | 3.33 → 2.95 ms (**−11%**) |
+| 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept | `10a442a` → `a266d81` | 2026-11-14 | about 3–7 | 34.5 → 34.5 ms (+0%) | 2.91 → 2.72 ms (**−7%**) |
+| 2.8 step 7: no paths in the build | `a266d81` → `fc626e4` | 2026-11-14 | about 12 | 34.8 → 32.7 ms (−6%) | 2.9 → 2.88 ms (**−1%**) |
+<!-- /measurements:summary -->
 
 ## Every cache in this plan
 

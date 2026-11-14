@@ -198,31 +198,83 @@ Last updated after `fc626e4`.
 
 ## Measuring
 
-- `Scripts/bench_animations.py`, the baseline from before the branch
-  (`.build/bench/opt-before`, `4adf040`) against `f6c6802`
-  (`.build/bench/opt-after`), 3 launches of 5 rounds each, debug builds,
-  2026-11-14:
+Every before/after run of `Scripts/bench_animations.py` that a step was
+judged by, kept in [measurements.json](measurements.json) with each
+launch's numbers. Run both commits, then `record <before> <after> --what
+"…"`; the tables below are written from the record.
 
-  | | `bookmarks-layout` | `flashcards-card` |
-  |---|---|---|
-  | CPU per pass | 73.5 → 33.1 ms (−55%) | 3.33 → 2.95 ms (−11%) |
-  | median pass | 67.5 → 28.0 ms | 1.6 → 1.1 ms |
-  | 95th percentile pass | 76.5 → 34.6 ms | 2.2 → 1.5 ms |
-  | passes for the same interaction | 69 → 138 | 791 → 790 |
-  | total CPU | −10% | −11% |
+<!-- measurements:summary -->
+CPU per pass, mean of the launches (debug builds); in **bold** where the
+launches before and after don't overlap. Written by
+`Scripts/bench_animations.py tables` from [measurements.json](measurements.json).
 
-  Bookmarks runs its layout switch at twice the frame rate on less CPU.
-- `0f10917` measured Bookmarks' Cards/List rebuild from samples: 1171
-  before, 881 after (debug build).
-- Steps 5 and 6 of 2.8 (`10a442a` → `a266d81`), 3 launches of 5 rounds,
-  2026-11-14, load about 3–7: `bookmarks-layout` CPU per pass the same
-  (34.46 → 34.55 ms; building +5%, within the ranges; slowest pass
-  71.9 → 44.7 ms), `flashcards-card` −7% (2.91 → 2.72 ms; nodes built
-  1927 → 1811).
-- Step 7 of 2.8 (`a266d81` → `fc626e4`), 3 launches of 5 rounds,
-  2026-11-14, load about 12 throughout: `bookmarks-layout` −6% CPU per
-  pass (34.85 → 32.65 ms; building −5% with 5% more frames drawn),
-  `flashcards-card` −1% (building −5%).
+| Measured | Before → after | Date | Load | `bookmarks-layout` | `flashcards-card` |
+|---|---|---|---|---|---|
+| Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5 | `4adf040` → `f6c6802` | 2026-11-14 | not recorded | 73.5 → 33 ms (**−55%**) | 3.33 → 2.95 ms (**−11%**) |
+| 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept | `10a442a` → `a266d81` | 2026-11-14 | about 3–7 | 34.5 → 34.5 ms (+0%) | 2.91 → 2.72 ms (**−7%**) |
+| 2.8 step 7: no paths in the build | `a266d81` → `fc626e4` | 2026-11-14 | about 12 | 34.8 → 32.7 ms (−6%) | 2.9 → 2.88 ms (**−1%**) |
+<!-- /measurements:summary -->
+
+<details>
+<summary>Every metric, per measurement</summary>
+
+<!-- measurements:details -->
+#### Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5
+
+`4adf040` → `f6c6802`, 2026-11-14, debug builds, load not recorded; `bookmarks-layout` 3/3 launches of 5 rounds, `flashcards-card` 3/3 launches of 5 rounds.
+
+| | `bookmarks-layout` | `flashcards-card` |
+|---|---|---|
+| CPU per pass | 73.5 → 33 ms (**−55%**) | 3.33 → 2.95 ms (**−11%**) |
+| building per pass | 47 → 12.8 ms (**−73%**) | 0.314 → 0.238 ms (**−24%**) |
+| median pass | 67.5 → 27.9 ms (**−59%**) | 1.6 → 1.1 ms (**−31%**) |
+| 95th percentile pass | 76.5 → 34.6 ms (**−55%**) | 2.2 → 1.53 ms (**−30%**) |
+| slowest pass | 82.3 → 41.3 ms (**−50%**) | 6.63 → 4.3 ms (**−35%**) |
+| passes for the interaction | 69.3 → 138 (**+100%**) | 791 → 790 (−0%) |
+| CPU for the interaction | 5.09 → 4.57 s (−10%) | 2.63 → 2.33 s (**−11%**) |
+| nodes built, all passes | 28,917 → 43,261 (**+50%**) | 1,964 → 1,920 (**−2%**) |
+| sizes measured, all passes | 57,913 → 106,078 (**+83%**) | 22,216 → 20,704 (**−7%**) |
+| texts measured, all passes | 7,516 → 15,128 (**+101%**) | 2,613 → 2,621 (+0%) |
+
+#### 2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept
+
+`10a442a` → `a266d81`, 2026-11-14, debug builds, load about 3–7; `bookmarks-layout` 3/3 launches of 5 rounds, `flashcards-card` 3/3 launches of 5 rounds.
+
+| | `bookmarks-layout` | `flashcards-card` |
+|---|---|---|
+| CPU per pass | 34.5 → 34.5 ms (+0%) | 2.91 → 2.72 ms (**−7%**) |
+| building per pass | 12.7 → 13.4 ms (+6%) | 0.221 → 0.209 ms (**−5%**) |
+| median pass | 28.8 → 30 ms (+4%) | 1.1 → 1.07 ms (−3%) |
+| 95th percentile pass | 41.8 → 36.8 ms (−12%) | 1.5 → 1.5 ms (+0%) |
+| slowest pass | 71.9 → 44.7 ms (−38%) | 4.53 → 4.1 ms (−10%) |
+| passes for the interaction | 134 → 133 (−1%) | 793 → 791 (−0%) |
+| CPU for the interaction | 4.61 → 4.59 s (−0%) | 2.3 → 2.15 s (**−7%**) |
+| nodes built, all passes | 42,089 → 41,867 (−1%) | 1,927 → 1,811 (**−6%**) |
+| sizes measured, all passes | 103,143 → 102,190 (−1%) | 20,738 → 20,685 (−0%) |
+| texts measured, all passes | 14,845 → 14,660 (−1%) | 2,626 → 2,621 (−0%) |
+
+#### 2.8 step 7: no paths in the build
+
+`a266d81` → `fc626e4`, 2026-11-14, debug builds, load about 12; `bookmarks-layout` 3/3 launches of 5 rounds, `flashcards-card` 3/3 launches of 5 rounds.
+
+| | `bookmarks-layout` | `flashcards-card` |
+|---|---|---|
+| CPU per pass | 34.8 → 32.7 ms (−6%) | 2.9 → 2.88 ms (**−1%**) |
+| building per pass | 13.4 → 12 ms (**−10%**) | 0.221 → 0.21 ms (**−5%**) |
+| median pass | 29.6 → 28 ms (−5%) | 1.07 → 1.07 ms (+0%) |
+| 95th percentile pass | 39.3 → 33.5 ms (−15%) | 1.5 → 1.5 ms (+0%) |
+| slowest pass | 46.3 → 37.2 ms (−20%) | 4.03 → 3.77 ms (−7%) |
+| passes for the interaction | 134 → 141 (+6%) | 790 → 790 (−0%) |
+| CPU for the interaction | 4.64 → 4.61 s (−1%) | 2.29 → 2.28 s (−1%) |
+| nodes built, all passes | 42,018 → 44,139 (+5%) | 1,822 → 1,816 (−0%) |
+| sizes measured, all passes | 102,549 → 108,516 (+6%) | 20,682 → 20,692 (+0%) |
+| texts measured, all passes | 14,694 → 15,902 (+8%) | 2,616 → 2,616 (+0%) |
+<!-- /measurements:details -->
+
+</details>
+
+Not in the record: `0f10917` counted Bookmarks' Cards/List rebuild from
+samples, 1171 before and 881 after (debug build).
 
 ## Outside this repo
 

@@ -1,0 +1,714 @@
+{
+  "about": "Before/after measurements of the optimization plan, made with Scripts/bench_animations.py (`record`). Each holds every launch's numbers; the tables in progress.md and README.md are written from this file (`tables`).",
+  "scenarios": {
+    "bookmarks-layout": "Cards ⇄ List: every card moves and resizes to its row (geometry motion)",
+    "flashcards-card": "the card flipped and back (animatableData), then dragged short and let go (spring-back)"
+  },
+  "measurements": [
+    {
+      "id": "4adf040..f6c6802",
+      "date": "2026-11-14",
+      "what": "Before phase 2: phases 1 (but 1.4) and 3, 2.3, 2.7's `ForEach` comparison, 4.1 steps 1–2, 4.2–4.9, 5.1–5.3, 6 (6.4 in part), 7.1 steps 1–2, 7.2–7.5",
+      "before": "4adf040",
+      "after": "f6c6802",
+      "build": "debug",
+      "scenarios": {
+        "bookmarks-layout": {
+          "rounds": 5,
+          "before": [
+            {
+              "cpu_s": 5.84,
+              "wall_s": 18.0,
+              "passes": 80,
+              "kinds": {
+                "scoped": 80
+              },
+              "total_ms": 5372.0,
+              "build_ms": 3809.3,
+              "median_ms": 68.45,
+              "p95_ms": 78.2,
+              "max_ms": 86.7,
+              "built": 33370,
+              "measured": 66697,
+              "text": 8824,
+              "cpu_per_pass_ms": 73.0
+            },
+            {
+              "cpu_s": 5.84,
+              "wall_s": 18.7,
+              "passes": 80,
+              "kinds": {
+                "scoped": 80
+              },
+              "total_ms": 5324.9,
+              "build_ms": 3807.8,
+              "median_ms": 66.75,
+              "p95_ms": 77.7,
+              "max_ms": 82.2,
+              "built": 33370,
+              "measured": 66706,
+              "text": 8473,
+              "cpu_per_pass_ms": 73.0
+            },
+            {
+              "cpu_s": 3.58,
+              "wall_s": 20.0,
+              "passes": 48,
+              "kinds": {
+                "scoped": 48
+              },
+              "total_ms": 3129.4,
+              "build_ms": 2195.3,
+              "median_ms": 67.2,
+              "p95_ms": 73.5,
+              "max_ms": 78.1,
+              "built": 20010,
+              "measured": 40337,
+              "text": 5252,
+              "cpu_per_pass_ms": 74.58
+            }
+          ],
+          "after": [
+            {
+              "cpu_s": 4.61,
+              "wall_s": 18.1,
+              "passes": 136,
+              "kinds": {
+                "scoped": 136
+              },
+              "total_ms": 4010.6,
+              "build_ms": 1799.8,
+              "median_ms": 29.1,
+              "p95_ms": 36.3,
+              "max_ms": 42.2,
+              "built": 42752,
+              "measured": 104328,
+              "text": 14735,
+              "cpu_per_pass_ms": 33.9
+            },
+            {
+              "cpu_s": 4.63,
+              "wall_s": 18.0,
+              "passes": 142,
+              "kinds": {
+                "scoped": 142
+              },
+              "total_ms": 4002.3,
+              "build_ms": 1800.2,
+              "median_ms": 27.55,
+              "p95_ms": 33.3,
+              "max_ms": 42.7,
+              "built": 44270,
+              "measured": 108878,
+              "text": 15603,
+              "cpu_per_pass_ms": 32.61
+            },
+            {
+              "cpu_s": 4.47,
+              "wall_s": 18.0,
+              "passes": 137,
+              "kinds": {
+                "scoped": 137
+              },
+              "total_ms": 3864.2,
+              "build_ms": 1728.0,
+              "median_ms": 27.2,
+              "p95_ms": 34.2,
+              "max_ms": 38.9,
+              "built": 42760,
+              "measured": 105027,
+              "text": 15045,
+              "cpu_per_pass_ms": 32.63
+            }
+          ]
+        },
+        "flashcards-card": {
+          "rounds": 5,
+          "before": [
+            {
+              "cpu_s": 2.69,
+              "wall_s": 28.2,
+              "passes": 794,
+              "kinds": {
+                "scoped": 544,
+                "repaint": 250
+              },
+              "total_ms": 1319.5,
+              "build_ms": 253.1,
+              "median_ms": 1.6,
+              "p95_ms": 2.5,
+              "max_ms": 6.2,
+              "built": 1971,
+              "measured": 22347,
+              "text": 2627,
+              "cpu_per_pass_ms": 3.39
+            },
+            {
+              "cpu_s": 2.61,
+              "wall_s": 28.2,
+              "passes": 788,
+              "kinds": {
+                "scoped": 537,
+                "repaint": 251
+              },
+              "total_ms": 1272.7,
+              "build_ms": 250.8,
+              "median_ms": 1.6,
+              "p95_ms": 2.1,
+              "max_ms": 7.3,
+              "built": 1953,
+              "measured": 22057,
+              "text": 2600,
+              "cpu_per_pass_ms": 3.31
+            },
+            {
+              "cpu_s": 2.6,
+              "wall_s": 28.2,
+              "passes": 790,
+              "kinds": {
+                "scoped": 544,
+                "repaint": 246
+              },
+              "total_ms": 1263.5,
+              "build_ms": 239.9,
+              "median_ms": 1.6,
+              "p95_ms": 2.0,
+              "max_ms": 6.4,
+              "built": 1969,
+              "measured": 22245,
+              "text": 2612,
+              "cpu_per_pass_ms": 3.29
+            }
+          ],
+          "after": [
+            {
+              "cpu_s": 2.35,
+              "wall_s": 28.5,
+              "passes": 788,
+              "kinds": {
+                "scoped": 539,
+                "repaint": 249
+              },
+              "total_ms": 863.9,
+              "build_ms": 186.3,
+              "median_ms": 1.1,
+              "p95_ms": 1.6,
+              "max_ms": 4.2,
+              "built": 1901,
+              "measured": 20686,
+              "text": 2619,
+              "cpu_per_pass_ms": 2.98
+            },
+            {
+              "cpu_s": 2.33,
+              "wall_s": 28.3,
+              "passes": 793,
+              "kinds": {
+                "scoped": 543,
+                "repaint": 250
+              },
+              "total_ms": 857.9,
+              "build_ms": 187.8,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.3,
+              "built": 1929,
+              "measured": 20701,
+              "text": 2622,
+              "cpu_per_pass_ms": 2.94
+            },
+            {
+              "cpu_s": 2.32,
+              "wall_s": 28.3,
+              "passes": 789,
+              "kinds": {
+                "scoped": 544,
+                "repaint": 245
+              },
+              "total_ms": 856.3,
+              "build_ms": 189.3,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.4,
+              "built": 1930,
+              "measured": 20725,
+              "text": 2621,
+              "cpu_per_pass_ms": 2.94
+            }
+          ]
+        }
+      },
+      "load": "not recorded"
+    },
+    {
+      "id": "10a442a..a266d81",
+      "date": "2026-11-14",
+      "what": "2.8 steps 5 and 6: `ForEach` rows by id, a scope per row, a modifier's environment write kept",
+      "before": "10a442a",
+      "after": "a266d81",
+      "build": "debug",
+      "scenarios": {
+        "bookmarks-layout": {
+          "rounds": 5,
+          "before": [
+            {
+              "cpu_s": 4.72,
+              "wall_s": 18.5,
+              "passes": 125,
+              "kinds": {
+                "scoped": 125
+              },
+              "total_ms": 4251.6,
+              "build_ms": 1822.5,
+              "median_ms": 30.5,
+              "p95_ms": 55.5,
+              "max_ms": 137.8,
+              "built": 39694,
+              "measured": 96147,
+              "text": 13866,
+              "cpu_per_pass_ms": 37.76
+            },
+            {
+              "cpu_s": 4.59,
+              "wall_s": 18.1,
+              "passes": 137,
+              "kinds": {
+                "scoped": 137
+              },
+              "total_ms": 3950.4,
+              "build_ms": 1637.2,
+              "median_ms": 29.1,
+              "p95_ms": 36.2,
+              "max_ms": 40.3,
+              "built": 42820,
+              "measured": 105259,
+              "text": 15004,
+              "cpu_per_pass_ms": 33.5
+            },
+            {
+              "cpu_s": 4.53,
+              "wall_s": 18.0,
+              "passes": 141,
+              "kinds": {
+                "scoped": 141
+              },
+              "total_ms": 3887.2,
+              "build_ms": 1611.5,
+              "median_ms": 26.7,
+              "p95_ms": 33.7,
+              "max_ms": 37.6,
+              "built": 43752,
+              "measured": 108024,
+              "text": 15666,
+              "cpu_per_pass_ms": 32.13
+            }
+          ],
+          "after": [
+            {
+              "cpu_s": 4.54,
+              "wall_s": 18.1,
+              "passes": 129,
+              "kinds": {
+                "scoped": 129
+              },
+              "total_ms": 3941.8,
+              "build_ms": 1752.2,
+              "median_ms": 30.4,
+              "p95_ms": 38.0,
+              "max_ms": 54.7,
+              "built": 40938,
+              "measured": 99409,
+              "text": 13756,
+              "cpu_per_pass_ms": 35.19
+            },
+            {
+              "cpu_s": 4.6,
+              "wall_s": 18.1,
+              "passes": 136,
+              "kinds": {
+                "scoped": 136
+              },
+              "total_ms": 3997.0,
+              "build_ms": 1777.5,
+              "median_ms": 29.4,
+              "p95_ms": 35.3,
+              "max_ms": 38.8,
+              "built": 42482,
+              "measured": 104240,
+              "text": 15294,
+              "cpu_per_pass_ms": 33.82
+            },
+            {
+              "cpu_s": 4.64,
+              "wall_s": 18.1,
+              "passes": 134,
+              "kinds": {
+                "scoped": 134
+              },
+              "total_ms": 4052.8,
+              "build_ms": 1801.7,
+              "median_ms": 30.1,
+              "p95_ms": 37.1,
+              "max_ms": 40.6,
+              "built": 42181,
+              "measured": 102921,
+              "text": 14929,
+              "cpu_per_pass_ms": 34.63
+            }
+          ]
+        },
+        "flashcards-card": {
+          "rounds": 5,
+          "before": [
+            {
+              "cpu_s": 2.31,
+              "wall_s": 28.3,
+              "passes": 794,
+              "kinds": {
+                "scoped": 542,
+                "repaint": 252
+              },
+              "total_ms": 835.5,
+              "build_ms": 173.1,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.8,
+              "built": 1925,
+              "measured": 20778,
+              "text": 2629,
+              "cpu_per_pass_ms": 2.91
+            },
+            {
+              "cpu_s": 2.33,
+              "wall_s": 28.4,
+              "passes": 793,
+              "kinds": {
+                "scoped": 543,
+                "repaint": 250
+              },
+              "total_ms": 852.3,
+              "build_ms": 177.4,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.2,
+              "built": 1930,
+              "measured": 20717,
+              "text": 2629,
+              "cpu_per_pass_ms": 2.94
+            },
+            {
+              "cpu_s": 2.27,
+              "wall_s": 28.4,
+              "passes": 791,
+              "kinds": {
+                "scoped": 541,
+                "repaint": 250
+              },
+              "total_ms": 837.0,
+              "build_ms": 174.4,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.6,
+              "built": 1925,
+              "measured": 20718,
+              "text": 2619,
+              "cpu_per_pass_ms": 2.87
+            }
+          ],
+          "after": [
+            {
+              "cpu_s": 2.05,
+              "wall_s": 28.4,
+              "passes": 795,
+              "kinds": {
+                "scoped": 543,
+                "repaint": 252
+              },
+              "total_ms": 819.5,
+              "build_ms": 158.6,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.0,
+              "built": 1821,
+              "measured": 20700,
+              "text": 2629,
+              "cpu_per_pass_ms": 2.58
+            },
+            {
+              "cpu_s": 2.19,
+              "wall_s": 28.4,
+              "passes": 792,
+              "kinds": {
+                "scoped": 542,
+                "repaint": 250
+              },
+              "total_ms": 830.8,
+              "build_ms": 167.5,
+              "median_ms": 1.0,
+              "p95_ms": 1.5,
+              "max_ms": 4.2,
+              "built": 1817,
+              "measured": 20761,
+              "text": 2627,
+              "cpu_per_pass_ms": 2.77
+            },
+            {
+              "cpu_s": 2.2,
+              "wall_s": 28.4,
+              "passes": 785,
+              "kinds": {
+                "scoped": 536,
+                "repaint": 249
+              },
+              "total_ms": 821.0,
+              "build_ms": 169.5,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.1,
+              "built": 1796,
+              "measured": 20593,
+              "text": 2607,
+              "cpu_per_pass_ms": 2.8
+            }
+          ]
+        }
+      },
+      "load": "about 3–7"
+    },
+    {
+      "id": "a266d81..fc626e4",
+      "date": "2026-11-14",
+      "what": "2.8 step 7: no paths in the build",
+      "before": "a266d81",
+      "after": "fc626e4",
+      "build": "debug",
+      "scenarios": {
+        "bookmarks-layout": {
+          "rounds": 5,
+          "before": [
+            {
+              "cpu_s": 4.78,
+              "wall_s": 18.4,
+              "passes": 125,
+              "kinds": {
+                "scoped": 125
+              },
+              "total_ms": 4164.1,
+              "build_ms": 1853.7,
+              "median_ms": 32.1,
+              "p95_ms": 49.0,
+              "max_ms": 60.8,
+              "built": 39907,
+              "measured": 96283,
+              "text": 13614,
+              "cpu_per_pass_ms": 38.24
+            },
+            {
+              "cpu_s": 4.6,
+              "wall_s": 18.1,
+              "passes": 138,
+              "kinds": {
+                "scoped": 138
+              },
+              "total_ms": 3954.9,
+              "build_ms": 1770.5,
+              "median_ms": 28.65,
+              "p95_ms": 34.9,
+              "max_ms": 39.4,
+              "built": 43026,
+              "measured": 105609,
+              "text": 14976,
+              "cpu_per_pass_ms": 33.33
+            },
+            {
+              "cpu_s": 4.55,
+              "wall_s": 18.0,
+              "passes": 138,
+              "kinds": {
+                "scoped": 138
+              },
+              "total_ms": 3910.5,
+              "build_ms": 1745.1,
+              "median_ms": 27.95,
+              "p95_ms": 34.0,
+              "max_ms": 38.6,
+              "built": 43122,
+              "measured": 105755,
+              "text": 15492,
+              "cpu_per_pass_ms": 32.97
+            }
+          ],
+          "after": [
+            {
+              "cpu_s": 4.58,
+              "wall_s": 18.0,
+              "passes": 137,
+              "kinds": {
+                "scoped": 137
+              },
+              "total_ms": 3945.1,
+              "build_ms": 1687.5,
+              "median_ms": 28.8,
+              "p95_ms": 34.2,
+              "max_ms": 36.2,
+              "built": 42919,
+              "measured": 105311,
+              "text": 15403,
+              "cpu_per_pass_ms": 33.43
+            },
+            {
+              "cpu_s": 4.63,
+              "wall_s": 18.0,
+              "passes": 143,
+              "kinds": {
+                "scoped": 143
+              },
+              "total_ms": 3991.0,
+              "build_ms": 1714.3,
+              "median_ms": 27.8,
+              "p95_ms": 33.8,
+              "max_ms": 36.6,
+              "built": 44641,
+              "measured": 109769,
+              "text": 15881,
+              "cpu_per_pass_ms": 32.38
+            },
+            {
+              "cpu_s": 4.63,
+              "wall_s": 18.1,
+              "passes": 144,
+              "kinds": {
+                "scoped": 144
+              },
+              "total_ms": 3965.3,
+              "build_ms": 1700.1,
+              "median_ms": 27.3,
+              "p95_ms": 32.6,
+              "max_ms": 38.9,
+              "built": 44856,
+              "measured": 110467,
+              "text": 16422,
+              "cpu_per_pass_ms": 32.15
+            }
+          ]
+        },
+        "flashcards-card": {
+          "rounds": 5,
+          "before": [
+            {
+              "cpu_s": 2.3,
+              "wall_s": 28.3,
+              "passes": 793,
+              "kinds": {
+                "scoped": 542,
+                "repaint": 251
+              },
+              "total_ms": 825.8,
+              "build_ms": 176.0,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.1,
+              "built": 1825,
+              "measured": 20693,
+              "text": 2622,
+              "cpu_per_pass_ms": 2.9
+            },
+            {
+              "cpu_s": 2.29,
+              "wall_s": 28.3,
+              "passes": 791,
+              "kinds": {
+                "scoped": 542,
+                "repaint": 249
+              },
+              "total_ms": 822.4,
+              "build_ms": 176.7,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 4.1,
+              "built": 1820,
+              "measured": 20676,
+              "text": 2618,
+              "cpu_per_pass_ms": 2.9
+            },
+            {
+              "cpu_s": 2.28,
+              "wall_s": 28.2,
+              "passes": 787,
+              "kinds": {
+                "scoped": 542,
+                "repaint": 245
+              },
+              "total_ms": 816.3,
+              "build_ms": 170.4,
+              "median_ms": 1.0,
+              "p95_ms": 1.5,
+              "max_ms": 3.9,
+              "built": 1820,
+              "measured": 20676,
+              "text": 2608,
+              "cpu_per_pass_ms": 2.9
+            }
+          ],
+          "after": [
+            {
+              "cpu_s": 2.27,
+              "wall_s": 28.4,
+              "passes": 789,
+              "kinds": {
+                "scoped": 541,
+                "repaint": 248
+              },
+              "total_ms": 815.1,
+              "build_ms": 164.4,
+              "median_ms": 1.0,
+              "p95_ms": 1.5,
+              "max_ms": 3.7,
+              "built": 1822,
+              "measured": 20689,
+              "text": 2609,
+              "cpu_per_pass_ms": 2.88
+            },
+            {
+              "cpu_s": 2.28,
+              "wall_s": 28.3,
+              "passes": 793,
+              "kinds": {
+                "scoped": 543,
+                "repaint": 250
+              },
+              "total_ms": 829.0,
+              "build_ms": 168.7,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 3.9,
+              "built": 1825,
+              "measured": 20701,
+              "text": 2620,
+              "cpu_per_pass_ms": 2.88
+            },
+            {
+              "cpu_s": 2.28,
+              "wall_s": 28.3,
+              "passes": 788,
+              "kinds": {
+                "scoped": 539,
+                "repaint": 249
+              },
+              "total_ms": 816.9,
+              "build_ms": 165.7,
+              "median_ms": 1.1,
+              "p95_ms": 1.5,
+              "max_ms": 3.7,
+              "built": 1802,
+              "measured": 20686,
+              "text": 2619,
+              "cpu_per_pass_ms": 2.89
+            }
+          ]
+        }
+      },
+      "load": "about 12"
+    }
+  ]
+}
