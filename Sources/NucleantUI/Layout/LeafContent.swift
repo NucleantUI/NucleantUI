@@ -10,6 +10,8 @@ struct TextContent: NodeContent {
     /// The string, its font and the paragraph settings: everything its lines
     /// depend on, and what its layouts are kept by.
     let input: TextLayoutInput
+    /// `input.font` resolved, once, when the text was built: what draws it.
+    let face: Int
     /// Drawn as one flat color: a gradient gives its first stop.
     let style: _ResolvedPaint
     let alignment: TextAlignment
@@ -63,7 +65,7 @@ struct TextContent: NodeContent {
         if offset < 0 { frame.origin.y -= offset }
 
         let font = layout.scale == 1 ? input.font : input.font.size(input.font.size * layout.scale)
-        list.append(.text(TextDraw(
+        var draw = TextDraw(
             lines: layout.lines,
             frame: frame,
             font: font,
@@ -77,7 +79,10 @@ struct TextContent: NodeContent {
             lineSpacing: max(input.paragraph.lineSpacing, 0),
             underline: underline.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) },
             strikethrough: strikethrough.map { Text.LineStyle(pattern: $0.pattern, color: $0.color.map(context.resolve)) }
-        )), under: context.drawState)
+        )
+        // Set smaller to fit: another size, another face.
+        draw.face = layout.scale == 1 ? face : nil
+        list.append(.text(draw), under: context.drawState)
     }
 }
 

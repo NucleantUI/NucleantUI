@@ -209,6 +209,7 @@ extension Text: BuiltinView {
         )
         return ContentNode(content: TextContent(
             input: input,
+            face: TextMeasurer.face(resolving: input.font),
             style: style,
             alignment: alignment ?? environment.multilineTextAlignment,
             underline: explicitUnderline ?? settings.underline,

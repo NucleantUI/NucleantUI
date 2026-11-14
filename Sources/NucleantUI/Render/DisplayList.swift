@@ -485,6 +485,11 @@ public struct TextDraw: Equatable, Sendable {
     /// A line through each line's middle; `nil` for none.
     public var strikethrough: Text.LineStyle?
 
+    /// `font` resolved — `TextMeasurer`'s face for it — when whoever made
+    /// the draw knew it already, as a `Text` does from its build; `nil`,
+    /// resolved by the renderer.
+    var face: Int?
+
     public init(
         string: String,
         frame: Rect,

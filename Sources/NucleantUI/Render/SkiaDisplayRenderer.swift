@@ -78,10 +78,8 @@ public final class SkiaDisplayRenderer {
 
     private struct LineKey: Hashable {
         let line: String
-        let family: String?
-        let size: Double
-        let bold: Bool
-        let italic: Bool
+        /// `TextMeasurer`'s face: family, size and style in one number.
+        let face: Int
         let spacing: Double
     }
 
@@ -460,10 +458,10 @@ public final class SkiaDisplayRenderer {
 
     private func emit(_ draw: TextDraw, on canvas: SkCanvas) {
         guard draw.lines.contains(where: { !$0.isEmpty }) else { return }
-        let family = FontRegistry.resolve(draw.font)
-        // No italic face found: a synthetic shear still reads as italic.
-        let slanted = SkiaFonts.isSlanted(draw.font, family: family)
-        let font = self.font(family: family, size: draw.font.size, slanted: slanted)
+        // Resolved once, by the text that made the draw — or here.
+        let face = draw.face ?? TextMeasurer.face(resolving: draw.font)
+        let family = TextMeasurer.family(of: face)
+        let font = TextMeasurer.font(face)
 
         var lines = draw.lines
         if draw.wraps, draw.lineLimit != 1 {
@@ -486,13 +484,13 @@ public final class SkiaDisplayRenderer {
         // an ascent below the box's top, the rest a line
         // height and the line spacing apart — the metrics layout sized the
         // box with.
-        let metrics = TextMeasurer.lineMetrics(for: draw.font)
+        let metrics = TextMeasurer.lineMetrics(face: face)
         let step = metrics.lineHeight + draw.lineSpacing
         let factor = alignFactor(draw.alignment)
         for (index, line) in lines.enumerated() where !line.isEmpty {
             let y = draw.frame.minY + metrics.ascent + Double(index) * step
             let spacing = draw.letterSpacing + (index == lines.count - 1 ? draw.lastLineTightening : 0)
-            let placed = lineBlob(line, font: font, family: family, style: draw.font, spacing: spacing)
+            let placed = lineBlob(line, face: face, font: font, family: family, style: draw.font, spacing: spacing)
             let x = draw.frame.minX + (draw.frame.width - placed.advance) * factor
             if let blob = placed.blob {
                 canvas.drawTextBlob(blob, pos: SIMD2(Float(x), Float(y)), paint: paint)
@@ -507,11 +505,8 @@ public final class SkiaDisplayRenderer {
     /// no glyph for, the face the platform falls back to — placed along a
     /// baseline from 0, with `spacing` after each character; built the
     /// first time the line is drawn.
-    private func lineBlob(_ line: String, font: SkFont, family: String?, style: Font, spacing: Double) -> LineBlob {
-        let key = LineKey(
-            line: line, family: family, size: style.size,
-            bold: style.weight.isBoldFace, italic: style.isItalic, spacing: spacing
-        )
+    private func lineBlob(_ line: String, face: Int, font: SkFont, family: String?, style: Font, spacing: Double) -> LineBlob {
+        let key = LineKey(line: line, face: face, spacing: spacing)
         if var cached = lineBlobs[key] {
             cached.lastUsed = renders
             lineBlobs[key] = cached
@@ -591,10 +586,6 @@ public final class SkiaDisplayRenderer {
         }
         let (r, g, b, a) = draw.color.rgba8
         paint.setColor(SIMD4(r, g, b, a))
-    }
-
-    private func font(family: String?, size: Double, slanted: Bool) -> SkFont {
-        SkiaFonts.shared.font(family: family, size: size, slanted: slanted)
     }
 
     /// `line` cut short with a trailing "…" until it fits `width`.

@@ -120,6 +120,12 @@ enum TextMeasurer {
 
     static func face(for font: Font, spacing: Double = 0) -> Int {
         if PerfTrace.isEnabled { PerfTrace.textMeasures += 1 }
+        return face(resolving: font, spacing: spacing)
+    }
+
+    /// `face(for:spacing:)` without counting a measurement: a font resolved
+    /// to draw with.
+    static func face(resolving font: Font, spacing: Double = 0) -> Int {
         let key = FaceKey(
             family: FontRegistry.resolve(font),
             size: font.size,
@@ -133,7 +139,13 @@ enum TextMeasurer {
         return faces.count - 1
     }
 
-    private static func font(_ face: Int) -> SkFont {
+    /// The family name `face` was resolved to.
+    static func family(of face: Int) -> String? {
+        faces[face].key.family
+    }
+
+    /// The Skia font `face` is measured — and drawn — with.
+    static func font(_ face: Int) -> SkFont {
         if let font = faces[face].font { return font }
         let key = faces[face].key
         let slanted = key.italic && !(key.family?.contains("Italic") ?? false)
