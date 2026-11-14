@@ -51,7 +51,6 @@ final class DragSession {
             // shader slot it claims apart from the tree's.
             var context = BuildContext(
                 environment: environment,
-                store: StateStore(),
                 effects: EffectQueue(),
                 animations: AnimationStore(),
                 records: RebuildRecords()

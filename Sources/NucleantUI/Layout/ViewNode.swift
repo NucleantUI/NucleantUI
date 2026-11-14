@@ -2,10 +2,10 @@
 //  ViewNode.swift
 //  NucleantUI
 //
-//  One node of the laid-out tree. State lives in `StateStore`, not here, so
-//  a node is cheap to throw away — and cheap to keep: a subtree whose view
-//  came out equivalent on the next build is grafted into the new tree as is
-//  (see `buildNode`). A class so `place` can write frames back for hit
+//  One node of the laid-out tree. State lives on the view's position
+//  (`ViewPosition`), not here, so a node is cheap to throw away — and cheap
+//  to keep: a subtree whose view came out equivalent on the next build is
+//  grafted into the new tree as is (see `buildNode`). A class so `place` can write frames back for hit
 //  testing without threading everything through inout, and so that graft is
 //  a pointer swap.
 //
@@ -842,7 +842,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             storage.readers.remove(path)
         }
         if replaced.identity != identity {
-            context.store.release(replaced.stateKeys)
+            context.position.releaseState()
             context.effects.forget(paths: [path])
             context.animations.forget(paths: [path])
         } else {
@@ -861,7 +861,7 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
     // Wire up @State / @Environment before anything reads `body` — on this
     // copy, which is the one built and recorded.
     var view = view
-    let stateKeys = context.bindDynamicProperties(of: &view)
+    context.bindDynamicProperties(of: &view)
 
     // Publish this view's identity for the duration of its own evaluation, so
     // any `@State` read below is attributed to it — that attribution is what
@@ -929,7 +929,6 @@ func buildNode<V: View>(_ view: V, _ context: inout BuildContext) -> ViewNode {
             stackAxis: context.stackAxis,
             view: RecordedViewOf(view),
             node: node,
-            stateKeys: stateKeys,
             reads: reads,
             isBoundary: isBoundary,
             lazyKey: lazyKey,

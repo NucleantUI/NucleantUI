@@ -16,7 +16,6 @@ public final class ViewHost {
 
     private let root: AnyView
 
-    private let store = StateStore()
     private let effects = EffectQueue()
     private let animations = AnimationStore()
 
@@ -366,7 +365,6 @@ public final class ViewHost {
         records.beginRebuild()
         var context = BuildContext(
             environment: environment,
-            store: store,
             effects: effects,
             animations: animations,
             records: records,
@@ -422,8 +420,7 @@ public final class ViewHost {
             // built: nothing above it re-ran, so nothing above it changed.
             var context = BuildContext(
                 environment: record.environment,
-                store: store,
-                effects: effects,
+                    effects: effects,
                 animations: animations,
                 records: records,
                 dirtyPaths: paths
@@ -461,8 +458,9 @@ public final class ViewHost {
     }
 
     /// Let go of everything held by views that a rebuild did not put back:
-    /// their `@State`, their `onAppear` marks, and the reader registrations
-    /// that would otherwise keep dirtying paths no longer in the tree.
+    /// their `onAppear` marks, and the reader registrations that would
+    /// otherwise keep dirtying paths no longer in the tree. Their `@State`
+    /// went with their positions.
     private func releaseDeparted() {
         let departed = records.endRebuild()
         guard !departed.isEmpty else { return }
@@ -470,7 +468,6 @@ public final class ViewHost {
             for storage in entry.reads {
                 storage.readers.remove(path)
             }
-            store.release(entry.stateKeys)
         }
         let paths = Set(departed.map { $0.0 })
         effects.forget(paths: paths)

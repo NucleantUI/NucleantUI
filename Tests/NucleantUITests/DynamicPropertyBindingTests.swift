@@ -78,21 +78,27 @@ extension HostedViews {
 @Suite
 struct DynamicPropertyBindingTests {
 
+    /// Property 0 of a view standing at a position of its own.
+    private func context(_ environment: EnvironmentValues) -> BindingContext {
+        BindingContext(
+            position: ViewPosition(parent: nil, key: 0),
+            index: 0,
+            owner: ViewIdentity(type: ObjectIdentifier(Int.self), viewID: .unknown),
+            ownerPath: [0],
+            environment: environment
+        )
+    }
+
     @Test func anEnvironmentPropertyHoldsTheValueItIsBoundTo() {
         var environment = EnvironmentValues()
         environment.shade = 7
         var property = Environment(\.shade)
-        property._bind(to: BindingContext(
-            store: StateStore(), key: StateKey(path: [0], propertyIndex: 0, viewType: ObjectIdentifier(Int.self)),
-            environment: environment
-        ))
+        property._bind(to: context(environment))
         #expect(property.wrappedValue == 7)
     }
 
     @Test func aNamespaceKeepsItsIDAcrossBindings() {
-        let store = StateStore()
-        let key = StateKey(path: [0], propertyIndex: 0, viewType: ObjectIdentifier(Int.self))
-        let context = BindingContext(store: store, key: key, environment: EnvironmentValues())
+        let context = context(EnvironmentValues())
         var first = Namespace()
         first._bind(to: context)
         var second = Namespace()

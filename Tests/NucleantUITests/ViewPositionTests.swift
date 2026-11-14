@@ -116,7 +116,6 @@ struct ViewPositionTests {
             stackAxis: nil,
             view: RecordedViewOf(EmptyView()),
             node: node,
-            stateKeys: [],
             reads: []
         )
     }
@@ -184,12 +183,71 @@ struct ViewPositionTests {
         #expect(records.cursor(at: []).position.child(bodies) == nil)
     }
 
+    // MARK: - State
+
+    private struct Marker {}
+
+    @Test func stateIsHeldByPropertyIndexForItsOwnView() {
+        let position = ViewPosition(parent: nil, key: 0)
+        let view = ViewIdentity(type: ObjectIdentifier(Int.self), viewID: .unknown)
+        let other = ViewIdentity(type: ObjectIdentifier(Marker.self), viewID: .unknown)
+        func slot<Value>(_ index: Int, of owner: ViewIdentity, _ value: Value) -> StateStorage<Value> {
+            position.stateSlot(index, of: owner, ownerPath: [], initialValue: { value })
+        }
+
+        let count = slot(0, of: view, 1)
+        let name = slot(1, of: view, "a")
+        #expect(slot(0, of: view, 2) === count)
+        #expect(slot(0, of: view, 2).peek() == 1)
+        #expect(slot(1, of: view, "b") === name)
+
+        // A property of another type at the index: a slot of its own.
+        let flag = slot(1, of: view, true)
+        #expect(flag.peek() == true)
+        #expect(slot(1, of: view, false) === flag)
+
+        // Another view here: its own state, and the first one's is gone.
+        #expect(slot(0, of: other, 5).peek() == 5)
+        #expect(slot(0, of: view, 3) !== count)
+        #expect(slot(0, of: view, 4).peek() == 3)
+
+        position.releaseState()
+        #expect(slot(0, of: view, 6).peek() == 6)
+    }
+
+    @Test func stateGoesWithItsPosition() {
+        let records = RebuildRecords()
+        let view = ViewIdentity(type: ObjectIdentifier(Int.self), viewID: .unknown)
+        weak var state: StateStorage<Int>?
+        records.beginRebuild()
+        file(records, at: [])
+        file(records, at: [0])
+        do {
+            let position = records.cursor(at: [0]).position
+            state = position.stateSlot(0, of: view, ownerPath: [0], initialValue: { 1 })
+        }
+        _ = records.endRebuild()
+        #expect(state != nil)
+
+        // Kept: the state stays.
+        records.beginRebuild()
+        file(records, at: [])
+        records.reuse(records.candidate(at: [0], cursor: records.cursor(at: [0]))!, under: EnvironmentValues())
+        _ = records.endRebuild()
+        #expect(state != nil)
+
+        // Left: cut out, and its state with it.
+        records.beginRebuild()
+        file(records, at: [])
+        _ = records.endRebuild()
+        #expect(state == nil)
+    }
+
     // MARK: - Built views
 
     @MainActor
     private final class Builder {
         let records = RebuildRecords()
-        let store = StateStore()
         let effects = EffectQueue()
         let animations = AnimationStore()
 
@@ -197,7 +255,6 @@ struct ViewPositionTests {
             records.beginRebuild()
             var context = BuildContext(
                 environment: EnvironmentValues(),
-                store: store,
                 effects: effects,
                 animations: animations,
                 records: records
@@ -207,7 +264,7 @@ struct ViewPositionTests {
         }
 
         func slot(for index: Int) -> Int {
-            BuildContext(environment: EnvironmentValues(), store: store, effects: effects, animations: animations, records: records)
+            BuildContext(environment: EnvironmentValues(), effects: effects, animations: animations, records: records)
                 .childSlot(for: index)
         }
     }

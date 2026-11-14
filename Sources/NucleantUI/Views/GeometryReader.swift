@@ -73,8 +73,7 @@ struct GeometryReaderContent<Content: View>: NodeContent {
     let content: (GeometryProxy) -> Content
     let log: GeometryReadLog
 
-    /// The build the reader was made in: the records, state store and
-    /// environment its content is built with during placement.
+    /// The build the reader was made in: the records and the environment its content is built with during placement.
     let context: BuildContext
 
     /// Takes everything it is offered, on both axes.
@@ -164,7 +163,6 @@ struct GeometryReaderContent<Content: View>: NodeContent {
             for storage in entry.reads {
                 storage.readers.remove(path)
             }
-            context.store.release(entry.stateKeys)
         }
         let paths = Set(departed.map { $0.0 })
         context.effects.forget(paths: paths)

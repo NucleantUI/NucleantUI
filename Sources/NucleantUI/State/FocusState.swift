@@ -77,7 +77,7 @@ public struct FocusState<Value: Hashable>: DynamicProperty {
 
     public mutating func _bind(to context: BindingContext) {
         let empty = self.empty
-        storage = context.store.slot(for: context.key, initialValue: { empty })
+        storage = context.slot(initialValue: { empty })
     }
 
     /// A focus state handed to `.focused`, or down to a view below as

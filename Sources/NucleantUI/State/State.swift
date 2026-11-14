@@ -125,7 +125,7 @@ extension _StateProperty: DynamicProperty {
     public func _bind(to context: BindingContext) {
         let holder = self.holder
         let initial = self.initial
-        holder.storage = context.store.slot(for: context.key) {
+        holder.storage = context.slot {
             if let pending = holder.pending {
                 return pending
             }

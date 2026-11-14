@@ -15,6 +15,10 @@
 //  what stood before, and is the candidate the builder compares a new build
 //  against. See `RebuildRecords`.
 //
+//  It also holds what belongs to the view standing there for as long as it
+//  is the same view: its state. A rebuild of the same view keeps it;
+//  another view taking the position, or the view leaving, drops it.
+//
 
 /// One place in the view tree, kept in place across rebuilds.
 final class ViewPosition {
@@ -31,6 +35,16 @@ final class ViewPosition {
 
     /// The rebuild that last built or kept the view here.
     var session: UInt64 = 0
+
+    /// The view the state here belongs to — type and call site.
+    private var stateOwner: ViewIdentity?
+
+    /// The `@State`, `@Namespace` and `@FocusState` slots of the view
+    /// standing here, by the index of the property that declared each.
+    /// They stay as long as the view does: another view taking the
+    /// position drops them (`releaseState`), and they go with the position
+    /// when the view leaves.
+    private var stateSlots: [(index: Int, slot: StateSlot)] = []
 
     // The children, by slot, in no particular order: the slots in `keys`,
     // the positions in `children`, retained by hand. Raw buffers so that
@@ -163,6 +177,43 @@ final class ViewPosition {
         var position = self
         for key in path { position = position.makeChild(key) }
         return position
+    }
+
+    /// The state slot for property `index` of `owner`, the view standing
+    /// here — made from `initialValue` the first time it is asked for, and
+    /// again for a property of another type. A view of another identity
+    /// gets slots of its own.
+    @MainActor
+    func stateSlot<Value>(
+        _ index: Int,
+        of owner: ViewIdentity,
+        ownerPath: [Int],
+        initialValue: () -> Value
+    ) -> StateStorage<Value> {
+        if stateOwner != owner {
+            stateSlots.removeAll()
+            stateOwner = owner
+        }
+        let type = ObjectIdentifier(StateStorage<Value>.self)
+        for position in stateSlots.indices where stateSlots[position].index == index {
+            let slot = stateSlots[position].slot
+            if ObjectIdentifier(Swift.type(of: slot)) == type {
+                return unsafeDowncast(slot, to: StateStorage<Value>.self)
+            }
+            let made = StateStorage(initialValue(), ownerPath: ownerPath)
+            stateSlots[position].slot = made
+            return made
+        }
+        let made = StateStorage(initialValue(), ownerPath: ownerPath)
+        stateSlots.append((index, made))
+        return made
+    }
+
+    /// Drop the state of the view that stood here: another takes the
+    /// position.
+    func releaseState() {
+        stateSlots.removeAll()
+        stateOwner = nil
     }
 
     /// Every record here and below, with its path — this position's being

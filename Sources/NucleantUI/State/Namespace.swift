@@ -66,6 +66,6 @@ public struct Namespace: DynamicProperty, Sendable {
     }
 
     public mutating func _bind(to context: BindingContext) {
-        storage = context.store.slot(for: context.key, initialValue: { ID.next() })
+        storage = context.slot(initialValue: { ID.next() })
     }
 }

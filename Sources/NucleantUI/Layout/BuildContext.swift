@@ -4,16 +4,16 @@
 //
 //  The state carried *down* a build pass. A value type: `child(_:_:)` hands a
 //  copy to a subtree, so an environment change made inside it can't leak back
-//  out to a sibling. The state store is the one shared thing, and it is a
-//  class for exactly that reason.
+//  out to a sibling. The records, the effects and the animations are shared,
+//  and they are classes for exactly that reason.
 //
 
 @MainActor
 public struct BuildContext {
 
     /// The structural path to the view being built — one index per level.
-    /// `@State` identity is derived from it. Moved only by `child(_:_:)` and
-    /// `move(to:)`, which keep the cursors below with it.
+    /// Moved only by `child(_:_:)` and `move(to:)`, which keep the cursors
+    /// below with it.
     private(set) var path: [Int] = []
 
     /// Where `path` stands among the positions of the tree — see
@@ -44,8 +44,6 @@ public struct BuildContext {
     /// See `LazyLayout.swift`.
     var lazyCursor: LazyBuildCursor?
 
-    let store: StateStore
-
     /// `onAppear` / `onDisappear` actions collected during this pass, run
     /// once the tree is built. Reference-boxed so a copied context still
     /// appends to one list.
@@ -74,14 +72,12 @@ public struct BuildContext {
 
     init(
         environment: EnvironmentValues,
-        store: StateStore,
         effects: EffectQueue,
         animations: AnimationStore,
         records: RebuildRecords,
         dirtyPaths: Set<[Int]> = []
     ) {
         self.environment = environment
-        self.store = store
         self.effects = effects
         self.animations = animations
         self.records = records
@@ -140,6 +136,12 @@ public struct BuildContext {
     /// `isDirty(under: path)`, for this context's own path.
     var isDirtyHereOrBelow: Bool { dirtyCursor != nil }
 
+    /// Where this context's path stands in the tree: what the view built
+    /// here holds as long as it stands — its state — is held there.
+    var position: ViewPosition {
+        records.position(at: path, cursor: recordCursor)
+    }
+
     /// What stood at this context's path before this rebuild began, if
     /// anything did — `RebuildRecords.candidate(at:)` for `path`, read off
     /// the cursor.
@@ -170,19 +172,16 @@ public struct BuildContext {
     }
 
     /// Bind every `@State` / `@Environment` on `view`, in place, before its
-    /// `body` runs. Returns the keys bound, so the view's record can release
-    /// them when the view goes away. The view does the walking, through what
-    /// `@View` generated.
-    func bindDynamicProperties<V: View>(of view: inout V) -> [StateKey] {
+    /// `body` runs — its state held at this context's position. The view
+    /// does the walking, through what `@View` generated.
+    func bindDynamicProperties<V: View>(of view: inout V) {
         let binder = DynamicPropertyBinder(
-            store: store,
+            position: position,
             environment: environment,
             path: path,
-            viewType: ObjectIdentifier(V.self),
-            viewID: view._viewID
+            owner: ViewIdentity(type: ObjectIdentifier(V.self), viewID: view._viewID)
         )
         view._bindDynamicProperties(binder)
-        return binder.keys.keys
     }
 }
 
@@ -640,8 +639,6 @@ final class RebuildRecords {
         /// `if`) records its child's node as its own; `replaceNode` keeps
         /// that true when the child is rebuilt on its own.
         var node: ViewNode
-        /// `@State` / `@Environment` slots this view bound.
-        let stateKeys: [StateKey]
         /// State this view read while its body ran; each slot has this
         /// view's path among its readers.
         var reads: [any AnyStateStorage]
@@ -690,10 +687,16 @@ final class RebuildRecords {
     }
 
     /// The position at `path`: `cursor`'s, if it is from this rebuild, or
-    /// else found from the root.
-    private func position(at path: [Int], cursor: Cursor?) -> ViewPosition? {
+    /// else found from the root — `nil` if there is none.
+    private func standing(at path: [Int], cursor: Cursor?) -> ViewPosition? {
         if let cursor, cursor.session == session { return cursor.position }
         return root.descendant(along: path)
+    }
+
+    /// The position at `path`, as `standing(at:cursor:)` finds it — made,
+    /// with any missing on the way, if there is none.
+    func position(at path: [Int], cursor: Cursor?) -> ViewPosition {
+        standing(at: path, cursor: cursor) ?? root.makeDescendant(along: path)
     }
 
     /// Start a rebuild: every entry filed so far becomes what stood before.
@@ -713,12 +716,12 @@ final class RebuildRecords {
     /// builder can either keep or replace — read off `cursor` when it
     /// stands at `path` in this rebuild.
     func candidate(at path: [Int], cursor: Cursor?) -> Candidate? {
-        position(at: path, cursor: cursor).flatMap { candidate(standingAt: $0) }
+        standing(at: path, cursor: cursor).flatMap { candidate(standingAt: $0) }
     }
 
     /// Whether nothing stood in slot `index` below `path` — `cursor`'s.
     func isNewChild(at index: Int, under path: [Int], cursor: Cursor?) -> Bool {
-        guard let child = position(at: path, cursor: cursor)?.child(index) else { return true }
+        guard let child = standing(at: path, cursor: cursor)?.child(index) else { return true }
         return candidate(standingAt: child) == nil
     }
 
@@ -827,7 +830,7 @@ final class RebuildRecords {
 
     /// File `entry` at `path` — `cursor`'s — as this rebuild's.
     func record(_ entry: Entry, at path: [Int], cursor: Cursor?) {
-        let position = position(at: path, cursor: cursor) ?? root.makeDescendant(along: path)
+        let position = position(at: path, cursor: cursor)
         position.record = entry
         position.session = session
         rebuilt.append(position)
@@ -867,7 +870,7 @@ final class RebuildRecords {
     /// by a container once its new children are built: whatever is left is
     /// a child it no longer has.
     func leftoverChildren(under path: [Int], cursor: Cursor?) -> [(Int, ViewNode)] {
-        guard let position = position(at: path, cursor: cursor) else { return [] }
+        guard let position = standing(at: path, cursor: cursor) else { return [] }
         var leftover: [(Int, ViewNode)] = []
         position.forEachChild { child in
             if let entry = child.record, child.session != session { leftover.append((child.key, entry.node)) }

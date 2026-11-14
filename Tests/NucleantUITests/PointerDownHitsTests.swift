@@ -43,7 +43,6 @@ struct PointerDownHitsTests {
     private func placedTree() -> ViewNode {
         var context = BuildContext(
             environment: EnvironmentValues(),
-            store: StateStore(),
             effects: EffectQueue(),
             animations: AnimationStore(),
             records: RebuildRecords()

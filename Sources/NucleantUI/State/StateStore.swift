@@ -93,9 +93,15 @@ struct StateReaders {
 
 }
 
-/// One `@State` value, living across rebuilds.
+/// What a position holds for one piece of a view's state, whatever its
+/// value's type: a `StateStorage`, told apart by its class.
 @MainActor
-final class StateStorage<Value>: AnyStateStorage {
+class StateSlot {}
+
+/// One `@State` value, living across rebuilds — held by the position of the
+/// view that declared it (`ViewPosition.stateSlot`).
+@MainActor
+final class StateStorage<Value>: StateSlot, AnyStateStorage {
 
     private(set) var value: Value
     private(set) var version: UInt32 = 0
@@ -202,39 +208,6 @@ final class StateStorage<Value>: AnyStateStorage {
     /// Read with no dependency recorded — for a write's read-modify-write,
     /// which must not make the *writer* a dependent.
     func peek() -> Value { value }
-}
-
-/// All the `@State` in one view tree, keyed by structural identity.
-///
-/// Slots are released by the view that declared them going away — the
-/// builder knows exactly which keys each view bound (`RebuildRecords`), so
-/// there is no end-of-pass sweep to get wrong for a scoped rebuild.
-@MainActor
-public final class StateStore {
-
-    private var slots: [StateKey: any AnyStateStorage] = [:]
-
-    init() {}
-
-    /// The slot for `key`, created from `initialValue` the first time it is
-    /// asked for. A type mismatch (the tree changed shape enough that a
-    /// different view now sits at this position) discards the old slot rather
-    /// than trapping.
-    func slot<Value>(for key: StateKey, initialValue: () -> Value) -> StateStorage<Value> {
-        if let existing = slots[key] as? StateStorage<Value> {
-            return existing
-        }
-        let created = StateStorage(initialValue(), ownerPath: key.path)
-        slots[key] = created
-        return created
-    }
-
-    /// Drop the state a departed view declared.
-    func release(_ keys: [StateKey]) {
-        for key in keys {
-            slots.removeValue(forKey: key)
-        }
-    }
 }
 
 /// Attributes each `@State` read to the view whose `body` is running.
