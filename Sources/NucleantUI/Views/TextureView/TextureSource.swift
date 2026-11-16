@@ -92,7 +92,9 @@ public enum TextureInputEvent: Sendable {
 ///
 /// Every write is a copy into an image the view owns, finished before the
 /// call returns — so what was written may be reused or recycled by the
-/// producer at once, and the view shows whole frames only.
+/// producer at once, and the view shows whole frames only. While the
+/// window is in the background writes are refused (they return false):
+/// nothing may reach the GPU then.
 @MainActor
 public final class ViewTexture<Node: NucleantContainerNode> {
     /// The view's frame, in points.
@@ -121,6 +123,15 @@ public final class ViewTexture<Node: NucleantContainerNode> {
     /// False once the view has let the texture go; writes are then refused.
     public internal(set) var isAttached = true
 
+    /// Whether a write lands now: the view still has the texture, and its
+    /// window is not in the background. Out of sight nothing may reach the
+    /// GPU — iOS refuses the work, and the device is lost with it — so a
+    /// write there is refused, and the first one after the window is back
+    /// lands. What the texture held before stays.
+    private var acceptsWrites: Bool {
+        isAttached && window?.scenePhase != .background
+    }
+
     let node: ExternalTextureNode<Node>
     let container: Node
     private unowned let engine: VulkanRenderEngine<Node>
@@ -148,7 +159,7 @@ public final class ViewTexture<Node: NucleantContainerNode> {
     /// texture's size when bigger; a smaller one leaves the rest as it was.
     @discardableResult
     public func write(ioSurface: UnsafeMutableRawPointer, x: Int = 0, y: Int = 0) -> Bool {
-        guard isAttached else { return false }
+        guard acceptsWrites else { return false }
         let written = engine.renderDevice.writeExternalTexture(node, ioSurface: ioSurface, x: x, y: y)
         if written { container.needsRender = true }
         return written
@@ -167,7 +178,7 @@ public final class ViewTexture<Node: NucleantContainerNode> {
         x: Int = 0,
         y: Int = 0
     ) -> Bool {
-        guard isAttached else { return false }
+        guard acceptsWrites else { return false }
         let written = engine.renderDevice.writeExternalTexture(
             node, bgra: pixels, width: width, height: height, bytesPerRow: bytesPerRow, x: x, y: y
         )
@@ -180,7 +191,7 @@ public final class ViewTexture<Node: NucleantContainerNode> {
     /// pixelHeight` (images are allocated in granules). `nil` before the
     /// first write. Blocks on the GPU: for tests and debugging only.
     public func readPixels() -> (width: Int, height: Int, bgra: [UInt8])? {
-        guard isAttached, let bytes = engine.renderDevice.readExternalTexture(node) else { return nil }
+        guard acceptsWrites, let bytes = engine.renderDevice.readExternalTexture(node) else { return nil }
         return (Int(node.width), Int(node.height), bytes)
     }
 }

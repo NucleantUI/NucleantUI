@@ -803,11 +803,12 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         #if os(Android)
         syncSoftKeyboard()
         #endif
-        // Out of sight, nothing is drawn. The pass above still runs, so the
-        // views hear what changed — their `onChange(of: scenePhase)` among
-        // it — but the engine records, submits and presents nothing, and the
-        // shaders' clocks wait with it. What changed meanwhile is on the
-        // first frame back, which `enter` runs.
+        // Out of sight, nothing reaches the GPU. The pass above still builds,
+        // so the views hear what changed — their `onChange(of: scenePhase)`
+        // among it — but places nothing (see `ViewHost.update`), and the
+        // engine records, submits and presents nothing, and the shaders'
+        // clocks wait with it. What changed meanwhile is on the first frame
+        // back, which `enter` runs. Texture writes wait too (`ViewTexture`).
         guard scenePhase != .background else { return }
         // Shaders are animated by definition: advance their clocks and
         // re-arm them every frame. This is the one thing on screen that is
@@ -885,23 +886,33 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             host.environment.displayScale = displayScale
             host.setSize(Size(width: w, height: h))
 
-            // The canvas is sized in pixels and fills the window, so it follows
-            // the swapchain, keeping the node's identity — the slot and its
-            // z-order survive.
-            if let engine = renderEngine {
-                if let canvas = windowCanvas, let renderNodes = shaderSlots?.renderNodes {
-                    if canvas.width != pixelWidth || canvas.height != pixelHeight {
-                        _ = renderNodes.resize(canvas, width: pixelWidth, height: pixelHeight)
-                        // The canvas is a new target at a new size — the tree
-                        // has to be repainted onto it, not just relaid out.
-                        host.invalidate()
-                    }
-                } else {
-                    // The first size arrived before the canvas could be built
-                    // (a zero-sized window at bring-up) — build it now.
-                    attachCanvas(engine: engine, width: pixelWidth, height: pixelHeight)
-                }
+            // Not in the background, where nothing may reach the GPU — iOS
+            // lays a scene out again for its snapshots there. The window
+            // fits its canvas once it is back.
+            if scenePhase != .background {
+                fitCanvas()
             }
+        }
+    }
+
+    /// Size the window canvas to `win_rect`. The canvas is sized in pixels
+    /// and fills the window, so it follows the swapchain, keeping the node's
+    /// identity — the slot and its z-order survive.
+    @MainActor
+    private func fitCanvas() {
+        guard let engine = renderEngine else { return }
+        let pixelWidth = win_rect.z, pixelHeight = win_rect.w
+        if let canvas = windowCanvas, let renderNodes = shaderSlots?.renderNodes {
+            if canvas.width != pixelWidth || canvas.height != pixelHeight {
+                _ = renderNodes.resize(canvas, width: pixelWidth, height: pixelHeight)
+                // The canvas is a new target at a new size — the tree has to
+                // be repainted onto it, not just relaid out.
+                host.invalidate()
+            }
+        } else {
+            // The first size arrived before the canvas could be built (a
+            // zero-sized window at bring-up) — build it now.
+            attachCanvas(engine: engine, width: pixelWidth, height: pixelHeight)
         }
     }
 
@@ -932,9 +943,14 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     private func enter(_ phase: ScenePhase) {
         let changed = MainActor.assumeIsolated {
             guard phase != scenePhase else { return false }
+            let wasInBackground = scenePhase == .background
             scenePhase = phase
             host.environment.scenePhase = phase
             host.invalidate()
+            // A resize while out of sight left the canvas at the old size.
+            if wasInBackground, win_rect.z > 0, win_rect.w > 0 {
+                fitCanvas()
+            }
             return true
         }
         if changed {
