@@ -195,7 +195,7 @@
 		777109A25264D7E9D66A67FF /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		7DCD7448B249A36D4E01542C /* CalculatorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalculatorApp.swift; sourceTree = "<group>"; };
 		7E36BAB18E0EBDD840469C8A /* Editor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Editor.swift; sourceTree = "<group>"; };
-		827E7874B284C1269528BB9E /* Photos.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Photos.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		827E7874B284C1269528BB9E /* Photos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Photos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		828ED88613A59BFCB7C219F2 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		86C6CECB90D63E2315980C4D /* ClickEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickEngine.swift; sourceTree = "<group>"; };
 		89163FEA939C2FB6ADAB25F4 /* Reader.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Reader.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -228,7 +228,7 @@
 		B5845CA5CDBABA43AA53CBC9 /* FinderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderApp.swift; sourceTree = "<group>"; };
 		BB17301193CF9949CFD97906 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		BB868199B5E0D9BB07F617F9 /* Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inspector.swift; sourceTree = "<group>"; };
-		BC93A5A5A0E3510F0E873A2F /* Bookmarks.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Bookmarks.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC93A5A5A0E3510F0E873A2F /* Bookmarks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bookmarks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4A56C62650CFE06109E5C9A /* CardFace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardFace.swift; sourceTree = "<group>"; };
 		C84ABBA0274F6D02B64F3619 /* RecipePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipePage.swift; sourceTree = "<group>"; };
 		C8C2941DBF771C5217EC385B /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
@@ -1202,7 +1202,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					2F024D7E6F1A16BFCC3B6396 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					31A81B9FCB51C1E0C70EB037 = {
@@ -1234,7 +1233,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					6DF0104C89CDD6B759F3582C = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					7D102039452452C42320DAD7 = {
@@ -1582,7 +1580,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1632,7 +1630,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1922,7 +1920,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2172,7 +2170,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

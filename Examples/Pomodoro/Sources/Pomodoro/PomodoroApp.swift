@@ -4,9 +4,15 @@
 //
 //  A focus timer with an analog clock. The one thing this app needs that
 //  no pointer event provides is a tick: a main-actor task that sleeps a
-//  second at a time writes `@State` once a second, and the framework
+//  second at a time writes the session once a second, and the framework
 //  rebuilds what read it on the next frame, the same as it would after a
 //  click.
+//
+//  The tick runs only while the window is active. Out of use — minimized
+//  or hidden on a Mac, in the app switcher or off screen on iOS — it stops
+//  (`.onChange(of: scenePhase)`), and on the way back the session catches
+//  up on the time it was away, from the clock rather than by counting
+//  ticks that never came.
 //
 //  The clock face and the progress ring are `PathShape`s; the hands are
 //  lines from the centre, so no rotation anchor arithmetic is needed.
@@ -17,9 +23,10 @@ import NucleantUI
 
 // MARK: - Ticking
 
-/// One process-wide one-second tick. Started once from `onAppear`; the
-/// callback is replaced rather than added to, so a rebuilt view that calls
-/// `start` again simply updates what a tick does.
+/// One process-wide one-second tick. Started from `onAppear` and again
+/// whenever the window is active again, stopped when it is not; the callback
+/// is replaced rather than added to, so a rebuilt view that calls `start`
+/// again simply updates what a tick does.
 ///
 /// A task rather than a Foundation `Timer`: a timer needs a run loop to
 /// fire it, and in the browser the page owns the event loop. `Task.sleep`
@@ -36,9 +43,15 @@ final class Ticker {
         task = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
                 Ticker.shared.onTick()
             }
         }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
     }
 }
 
@@ -72,18 +85,35 @@ enum Phase {
     }
 }
 
-struct Session: Equatable {
-    var phase = Phase.focus
-    var remaining = Phase.focus.length
+/// The timer: the phase it is in, the seconds left, the focus sessions done.
+@MainActor
+@Observable
+final class Session {
+    private(set) var phase = Phase.focus
+    private(set) var remaining = Phase.focus.length
     var isRunning = false
-    var completed = 0
+    private(set) var completed = 0
+
+    /// How long the window was last away while the timer ran, in seconds —
+    /// caught up when it came back. `nil` once the timer is reset or skipped.
+    private(set) var lastAway: Int?
+
+    /// When the window stopped being active with the timer running.
+    @ObservationIgnored private var leftAt: Date?
 
     var progress: Double { 1 - Double(remaining) / Double(phase.length) }
 
-    mutating func tick() {
-        guard isRunning else { return }
-        remaining -= 1
-        if remaining <= 0 {
+    func tick() {
+        advance(by: 1)
+    }
+
+    /// `seconds` of the running timer at once. A phase that runs out ends
+    /// and stops the timer, as one ending on a tick does; the rest of the
+    /// seconds go nowhere.
+    func advance(by seconds: Int) {
+        guard isRunning, seconds > 0 else { return }
+        remaining -= min(seconds, remaining)
+        if remaining == 0 {
             isRunning = false
             if phase == .focus {
                 completed += 1
@@ -95,17 +125,34 @@ struct Session: Equatable {
         }
     }
 
-    mutating func skip() {
+    func skip() {
         remaining = 1
         let wasRunning = isRunning
         isRunning = true
         tick()
         isRunning = wasRunning
+        lastAway = nil
     }
 
-    mutating func reset() {
+    func reset() {
         remaining = phase.length
         isRunning = false
+        lastAway = nil
+    }
+
+    /// The window is no longer active: no ticks come until it is back.
+    func leave(at date: Date) {
+        leftAt = isRunning ? date : nil
+        lastAway = nil
+    }
+
+    /// The window is active again: the time away, all at once.
+    func comeBack(at date: Date) {
+        guard let leftAt else { return }
+        self.leftAt = nil
+        let seconds = max(0, Int(date.timeIntervalSince(leftAt)))
+        lastAway = seconds
+        advance(by: seconds)
     }
 }
 
@@ -249,6 +296,7 @@ struct PomodoroView {
     @State private var session = Session()
     @State private var now = Date()
     @Environment(\.colorScheme) private var system
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 14) {
@@ -262,11 +310,25 @@ struct PomodoroView {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
-        .onAppear {
-            Ticker.shared.start {
+        .onAppear(perform: startTicking)
+        // Out of use, nothing is seen: stop ticking, and catch up from the
+        // clock once the window is in use again.
+        .onChange(of: scenePhase) { old, new in
+            if new == .active {
+                session.comeBack(at: Date())
                 now = Date()
-                session.tick()
+                startTicking()
+            } else if old == .active {
+                Ticker.shared.stop()
+                session.leave(at: Date())
             }
+        }
+    }
+
+    func startTicking() {
+        Ticker.shared.start {
+            now = Date()
+            session.tick()
         }
     }
 
@@ -310,6 +372,11 @@ struct PomodoroView {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 6)
+                if let away = session.lastAway {
+                    Text("· \(clockText(away)) away, caught up")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

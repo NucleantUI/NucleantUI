@@ -803,6 +803,12 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         #if os(Android)
         syncSoftKeyboard()
         #endif
+        // Out of sight, nothing is drawn. The pass above still runs, so the
+        // views hear what changed — their `onChange(of: scenePhase)` among
+        // it — but the engine records, submits and presents nothing, and the
+        // shaders' clocks wait with it. What changed meanwhile is on the
+        // first frame back, which `enter` runs.
+        guard scenePhase != .background else { return }
         // Shaders are animated by definition: advance their clocks and
         // re-arm them every frame. This is the one thing on screen that is
         // never idle, and it is opt-in — a tree with no `Shader` view in it
@@ -896,6 +902,43 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
                     attachCanvas(engine: engine, width: pixelWidth, height: pixelHeight)
                 }
             }
+        }
+    }
+
+    // MARK: - Phase
+
+    /// The phase the platform last put the window in — `\.scenePhase` in
+    /// its views. Every window starts out active.
+    private(set) var scenePhase = ScenePhase.active
+
+    public func on_phase_active() {
+        enter(.active)
+    }
+
+    public func on_phase_inactive() {
+        enter(.inactive)
+    }
+
+    public func on_phase_background() {
+        enter(.background)
+    }
+
+    /// Put `phase` into the root environment, so the views that read
+    /// `\.scenePhase` are built again with it, and run a frame for them now.
+    /// Not on the next tick: a window out of sight gets none — macOS stops
+    /// its display link while it is minimized or the app is hidden, iOS in
+    /// the background — so an `onChange(of: scenePhase)` would wait until
+    /// the window came back.
+    private func enter(_ phase: ScenePhase) {
+        let changed = MainActor.assumeIsolated {
+            guard phase != scenePhase else { return false }
+            scenePhase = phase
+            host.environment.scenePhase = phase
+            host.invalidate()
+            return true
+        }
+        if changed {
+            onFrame(0)
         }
     }
 

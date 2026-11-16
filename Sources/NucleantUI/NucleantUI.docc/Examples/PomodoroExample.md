@@ -14,6 +14,7 @@ A focus timer with an analog clock, progress rings and a saved plan.
 What it shows:
 
 - A Foundation `Timer` on the main run loop writing `@State` once a second.
+- The tick stopped while the window is out of use — minimized or the app hidden on macOS, in the app switcher or off screen on iOS — through `@Environment(\.scenePhase)` and `.onChange(of: scenePhase)`, and the session catching up on the time away from the clock once the window is active again.
 - An analog clock and progress rings drawn as `PathShape`s.
 - A plan of tasks saved between launches: an `@Observable` model owned through `@State` by a panel the ticker rebuilds every second, so the model is made once, not once a second.
 - `@Preview` functions for the clock face, the rings, the plan panel and the whole screen.
