@@ -235,6 +235,7 @@ extension DrawContext {
                 transformedClips == other.transformedClips
                     && shaderCanvasInput === other.shaderCanvasInput
                     && coordinateSpaces == other.coordinateSpaces
+                    && enclosingScroller === other.enclosingScroller
             ))
     }
 }

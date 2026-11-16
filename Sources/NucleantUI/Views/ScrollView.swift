@@ -37,7 +37,12 @@ extension ScrollView: BuiltinView {
         inner.stackAxis = nil
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
         return ContentNode(
-            content: ScrollContent(axes: axes, scroller: scroller),
+            content: ScrollContent(
+                axes: axes,
+                scroller: scroller,
+                targetBehavior: context.environment.scrollTargetBehavior,
+                environment: context.environment
+            ),
             children: [child]
         )
     }
@@ -46,6 +51,10 @@ extension ScrollView: BuiltinView {
 struct ScrollContent: NodeContent {
     let axes: Axis.Set
     let scroller: Scroller
+    /// Where a scroll may come to rest (`.scrollTargetBehavior`), and the
+    /// environment the behavior is asked in.
+    let targetBehavior: ScrollTargetBehaviorEntry?
+    let environment: EnvironmentValues
 
     /// A scroll view takes whatever it is offered — it is the clip, not the
     /// content, that decides its size.
@@ -67,6 +76,8 @@ struct ScrollContent: NodeContent {
         // Where the content is at this frame's time. Still moving on its
         // own, it is placed again next frame.
         scroller.axes = axes
+        scroller.targetBehavior = targetBehavior
+        scroller.environment = environment
         let store = AnimationStore.current
         let offset: Point
         if context.freezesMotion {
@@ -85,17 +96,23 @@ struct ScrollContent: NodeContent {
             inner.coordinateSpaces.append(CoordinateSpaceFrame(name: name, rect: rect, transform: context.transform))
         }
 
-        child.place(
-            in: Rect(
-                x: rect.minX - offset.x,
-                y: rect.minY - offset.y,
-                width: axes.contains(.horizontal) ? size.width : rect.width,
-                height: axes.contains(.vertical) ? size.height : rect.height
-            ),
-            proposal: contentProposal,
-            context: inner,
-            into: &list
+        // A scroll target layout inside reports its views to this one.
+        let contentRect = Rect(
+            x: rect.minX - offset.x,
+            y: rect.minY - offset.y,
+            width: axes.contains(.horizontal) ? size.width : rect.width,
+            height: axes.contains(.vertical) ? size.height : rect.height
         )
+        if !context.freezesMotion {
+            inner.enclosingScroller = scroller
+            scroller.beginPlacingContent(at: contentRect.origin)
+        }
+        child.place(in: contentRect, proposal: contentProposal, context: inner, into: &list)
+        // Resized, it may have been moved to where its target behavior
+        // rests: shown there next frame.
+        if !context.freezesMotion, scroller.endPlacingContent() {
+            store?.requestFrame()
+        }
     }
 
     var clipsChildren: Bool { true }

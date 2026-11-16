@@ -61,6 +61,26 @@ final class Scroller {
     /// How long a wheel has to be still for its scroll to be over.
     static let wheelIdleDelay = 0.15
 
+    /// Where `.scrollTargetBehavior` lets a scroll come to rest, and the
+    /// environment it is asked in. Set as it is placed.
+    var targetBehavior: ScrollTargetBehaviorEntry?
+    var environment = EnvironmentValues()
+
+    /// Where the scroll going on now began — the target a behavior is told
+    /// it started from.
+    private var gestureOrigin: Point = .zero
+
+    /// The views of its scroll target layout, in the content's own space,
+    /// as last placed; and those reported so far in the pass under way,
+    /// with where the content's origin is in it.
+    private(set) var targetFrames: [Rect] = []
+    private var placingTargetFrames: [Rect]?
+    private var contentOrigin: Point = .zero
+
+    /// Where it was, and in what viewport, before the viewport last changed
+    /// size — until a target behavior has said where to be in the new one.
+    private var resizedFrom: (offset: Point, viewport: Size)?
+
     /// Whether it is moving on its own: slowing down or springing back.
     var isMoving: Bool { horizontalMotion != nil || verticalMotion != nil }
 
@@ -87,6 +107,9 @@ final class Scroller {
     /// Placed in `viewport` with content of `contentSize`, at `time`: where
     /// the content is now.
     func place(viewport: Size, contentSize: Size, at time: Double) -> Point {
+        if targetBehavior != nil, self.viewport != .zero, viewport != self.viewport, resizedFrom == nil {
+            resizedFrom = (offset, self.viewport)
+        }
         self.viewport = viewport
         self.contentSize = contentSize
         if let dragOffset {
@@ -119,6 +142,80 @@ final class Scroller {
         }
     }
 
+    // MARK: - Targets
+
+    /// The content is about to be placed with its origin at `origin`, in
+    /// the space the target layout reports frames in.
+    func beginPlacingContent(at origin: Point) {
+        contentOrigin = origin
+        placingTargetFrames = nil
+    }
+
+    /// A scroll target layout inside was placed with its views at `frames`.
+    func addTargetFrames(_ frames: [Rect]) {
+        var placing = placingTargetFrames ?? []
+        for frame in frames {
+            placing.append(frame.offsetBy(dx: -contentOrigin.x, dy: -contentOrigin.y))
+        }
+        placingTargetFrames = placing
+    }
+
+    /// The content is placed. Resized at rest under a target behavior, it
+    /// goes where the behavior says for the new size — true then: placed
+    /// again, it shows there.
+    func endPlacingContent() -> Bool {
+        targetFrames = placingTargetFrames ?? []
+        placingTargetFrames = nil
+        guard let resized = resizedFrom else { return false }
+        resizedFrom = nil
+        guard !isDragging, !isMoving else { return false }
+        // Where it was, as far into the new size as into the old.
+        var proposed = resized.offset
+        for axis in [Axis.horizontal, .vertical] where resized.viewport[axis] > 0 {
+            proposed[axis] = resized.offset[axis] * viewport[axis] / resized.viewport[axis]
+        }
+        guard let target = restingPlace(proposing: clamped(proposed), from: clamped(proposed), velocity: .zero),
+              target != offset
+        else { return false }
+        offset = target
+        return true
+    }
+
+    /// Where a scroll that would come to rest at `proposed`, having begun
+    /// at `origin` and going at `velocity`, rests under the target
+    /// behavior; `nil` without one.
+    private func restingPlace(proposing proposed: Point, from origin: Point, velocity: Vector) -> Point? {
+        guard let behavior = targetBehavior else { return nil }
+        var target = ScrollTarget(rect: Rect(origin: proposed, size: viewport))
+        let context = ScrollTargetBehaviorContext(
+            originalTarget: ScrollTarget(rect: Rect(origin: origin, size: viewport)),
+            velocity: velocity,
+            contentSize: contentSize,
+            containerSize: viewport,
+            axes: axes,
+            environment: environment,
+            targetFrames: targetFrames
+        )
+        behavior.updateTarget(&target, context)
+        var resting = target.rect.origin
+        // The rect's anchor point at the viewport's same point.
+        if let anchor = target.anchor {
+            resting.x += anchor.x * (target.rect.width - viewport.width)
+            resting.y += anchor.y * (target.rect.height - viewport.height)
+        }
+        return clamped(resting)
+    }
+
+    /// Spring from where it is, at `velocity`, to rest at `target`.
+    private func settle(to target: Point, velocity: Vector, at time: Double) {
+        horizontalMotion = axes.contains(.horizontal)
+            ? .settling(from: offset.x, velocity: velocity.x, to: target.x, time: time, bounces: bouncesHorizontally)
+            : nil
+        verticalMotion = axes.contains(.vertical)
+            ? .settling(from: offset.y, velocity: velocity.y, to: target.y, time: time, bounces: bouncesVertically)
+            : nil
+    }
+
     // MARK: - A finger
 
     /// A finger came down on it. Moving on its own, it stops where it is —
@@ -147,6 +244,7 @@ final class Scroller {
             y: unbanded(offset.y, bounds: verticalBounds, dimension: viewport.height)
         )
         dragOffset = unbanded
+        gestureOrigin = clamped(offset)
         phase = .interacting
         tracker.reset()
         tracker.add(offset, at: time)
@@ -172,17 +270,26 @@ final class Scroller {
         let sampled = tracker.velocity(at: time)
         let velocity = Point(x: min(max(sampled.x, -limit), limit), y: min(max(sampled.y, -limit), limit))
         tracker.reset()
-        if axes.contains(.horizontal) {
-            horizontalMotion = .released(
-                at: offset.x, velocity: velocity.x, bounds: horizontalBounds,
-                time: time, bounces: bouncesHorizontally
-            )
-        }
-        if axes.contains(.vertical) {
-            verticalMotion = .released(
-                at: offset.y, velocity: velocity.y, bounds: verticalBounds,
-                time: time, bounces: bouncesVertically
-            )
+        // Where it would come to rest, moved where the target behavior says.
+        let natural = clamped(Point(
+            x: ScrollPhysics.projectedEnd(from: offset.x, velocity: velocity.x),
+            y: ScrollPhysics.projectedEnd(from: offset.y, velocity: velocity.y)
+        ))
+        if let target = restingPlace(proposing: natural, from: gestureOrigin, velocity: velocity) {
+            settle(to: target, velocity: velocity, at: time)
+        } else {
+            if axes.contains(.horizontal) {
+                horizontalMotion = .released(
+                    at: offset.x, velocity: velocity.x, bounds: horizontalBounds,
+                    time: time, bounces: bouncesHorizontally
+                )
+            }
+            if axes.contains(.vertical) {
+                verticalMotion = .released(
+                    at: offset.y, velocity: velocity.y, bounds: verticalBounds,
+                    time: time, bounces: bouncesVertically
+                )
+            }
         }
         phase = isMoving ? .decelerating : .idle
         Invalidator.shared.requestPlacement()
@@ -199,6 +306,8 @@ final class Scroller {
             horizontalMotion = nil
             verticalMotion = nil
         }
+        // The first event of a wheel scroll is where it began.
+        if phase != .interacting { gestureOrigin = offset }
         var next = offset
         if axes.contains(.horizontal) { next.x -= delta.x }
         if axes.contains(.vertical) { next.y -= delta.y }
@@ -220,7 +329,15 @@ final class Scroller {
     private func wheelStopped(_ generation: Int) {
         guard generation == wheelGeneration, dragOffset == nil, !isMoving else { return }
         guard phase == .interacting else { return }
-        phase = .idle
+        // Under a target behavior, it springs from where the wheel left it
+        // to where the behavior lets it rest.
+        let time = Self.now
+        if let target = restingPlace(proposing: offset, from: gestureOrigin, velocity: .zero), target != offset {
+            settle(to: target, velocity: .zero, at: time)
+            phase = .decelerating
+        } else {
+            phase = .idle
+        }
         Invalidator.shared.requestPlacement()
     }
 

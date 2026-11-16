@@ -927,19 +927,24 @@ public struct DrawContext: Sendable {
         let shaderCanvasInput: ShaderCanvasInput?
         let animation: Animation?
         let coordinateSpaces: [CoordinateSpaceFrame]
+        let enclosingScroller: Scroller?
 
-        static let none = Shared(transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [])
+        static let none = Shared(
+            transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [], enclosingScroller: nil
+        )
 
         init(
             transformedClips: [TransformedClip],
             shaderCanvasInput: ShaderCanvasInput?,
             animation: Animation?,
-            coordinateSpaces: [CoordinateSpaceFrame]
+            coordinateSpaces: [CoordinateSpaceFrame],
+            enclosingScroller: Scroller?
         ) {
             self.transformedClips = transformedClips
             self.shaderCanvasInput = shaderCanvasInput
             self.animation = animation
             self.coordinateSpaces = coordinateSpaces
+            self.enclosingScroller = enclosingScroller
         }
     }
 
@@ -951,7 +956,8 @@ public struct DrawContext: Sendable {
             guard newValue != shared.transformedClips else { return }
             shared = Shared(
                 transformedClips: newValue, shaderCanvasInput: shared.shaderCanvasInput,
-                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: shared.enclosingScroller
             )
         }
     }
@@ -965,7 +971,8 @@ public struct DrawContext: Sendable {
             guard newValue !== shared.shaderCanvasInput else { return }
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: newValue,
-                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: shared.enclosingScroller
             )
         }
     }
@@ -979,7 +986,8 @@ public struct DrawContext: Sendable {
             guard newValue != shared.animation else { return }
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
-                animation: newValue, coordinateSpaces: shared.coordinateSpaces
+                animation: newValue, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: shared.enclosingScroller
             )
         }
     }
@@ -993,7 +1001,23 @@ public struct DrawContext: Sendable {
             guard newValue != shared.coordinateSpaces else { return }
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
-                animation: shared.animation, coordinateSpaces: newValue
+                animation: shared.animation, coordinateSpaces: newValue,
+                enclosingScroller: shared.enclosingScroller
+            )
+        }
+    }
+
+    /// The innermost scroll view this is placed in, for a scroll target
+    /// layout inside to report its views to — and `nil` below one that has,
+    /// so a layout nested in it is not one too.
+    var enclosingScroller: Scroller? {
+        get { shared.enclosingScroller }
+        set {
+            guard newValue !== shared.enclosingScroller else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: newValue
             )
         }
     }
