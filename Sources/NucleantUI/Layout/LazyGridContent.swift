@@ -87,6 +87,15 @@ struct LazyGridContent: NodeContent {
             )
         }
 
+        // Where the runs left unbuilt are expected to be. They draw nothing.
+        for gap in arrangement.gaps {
+            var origin = rect.origin
+            origin[axis] += gap.lo
+            var size = rect.size
+            size[axis] = gap.hi - gap.lo
+            gap.node.place(in: Rect(origin: origin, size: size), proposal: .unspecified, context: context, into: &list)
+        }
+
         for (index, entry) in arrangement.placed.enumerated() where pinnedOffsets[index] == nil {
             put(entry, lineOffset: entry.lineOffset)
         }
@@ -200,6 +209,9 @@ struct LazyGridContent: NodeContent {
         }
         var placed: [Placed] = []
         var spans: [(tag: SectionTag?, lo: Double, hi: Double)] = []
+        /// Each run left unbuilt: the node standing in for it, and the
+        /// stretch of lines its units are expected to take.
+        var gaps: [(node: ViewNode, lo: Double, hi: Double)] = []
         var total: Size = .zero
     }
 
@@ -248,6 +260,7 @@ struct LazyGridContent: NodeContent {
 
         // Fill the lines.
         var lines: [Line] = []
+        var gaps: [(node: ViewNode, units: Range<Int>)] = []
         var current: [(node: ViewNode?, unit: Int)] = []
         func flush() {
             if !current.isEmpty { lines.append(.cells(current)) }
@@ -255,7 +268,8 @@ struct LazyGridContent: NodeContent {
         }
         for item in node.lazyItems(owner: owner) {
             switch item.kind {
-            case .gap:
+            case .gap(let gap):
+                gaps.append((node: gap, units: item.units))
                 for unit in item.units {
                     current.append((node: nil, unit: unit))
                     if current.count == resolved.count { flush() }
@@ -308,9 +322,11 @@ struct LazyGridContent: NodeContent {
 
         var result = Arrangement()
         var cursor = 0.0
+        var lineSpans: [(units: Range<Int>, lo: Double, hi: Double)] = []
         for (index, line) in lines.enumerated() {
             if index > 0 { cursor += lineSpacing }
             let extent = extents[index] ?? memory.extent(of: line.units.lowerBound) ?? estimate
+            lineSpans.append((units: line.units, lo: cursor, hi: cursor + extent))
             visibility?.visit(line.units, from: cursor, to: cursor + extent)
             switch line {
             case .spanning(let child, _):
@@ -345,6 +361,14 @@ struct LazyGridContent: NodeContent {
                 result.spans.append((tag: nil, lo: cursor, hi: cursor + extent))
             }
             cursor += extent
+        }
+
+        // Each gap from the line its first unit is in to the end of the line
+        // its last one is in.
+        for gap in gaps where !gap.units.isEmpty {
+            let lo = lineSpans.first { $0.units.contains(gap.units.lowerBound) }?.lo
+            let hi = lineSpans.last { $0.units.contains(gap.units.upperBound - 1) }?.hi
+            if let lo, let hi { result.gaps.append((node: gap.node, lo: lo, hi: hi)) }
         }
 
         result.total[axis] = cursor

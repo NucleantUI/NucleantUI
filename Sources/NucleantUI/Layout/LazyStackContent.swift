@@ -87,6 +87,15 @@ struct LazyStackContent: NodeContent {
             )
         }
 
+        // Where the runs left unbuilt are expected to be. They draw nothing.
+        for gap in arrangement.gaps {
+            var origin = rect.origin
+            origin[axis] += gap.lo
+            var size = rect.size
+            size[axis] = gap.hi - gap.lo
+            gap.node.place(in: Rect(origin: origin, size: size), proposal: .unspecified, context: context, into: &list)
+        }
+
         // The rows, then what is pinned over them — drawn last, so on top.
         for (index, entry) in arrangement.placed.enumerated() where pinnedOffsets[index] == nil {
             put(entry, at: entry.offset)
@@ -130,6 +139,9 @@ struct LazyStackContent: NodeContent {
         /// Every item's span along the axis, with its section tag — what
         /// pinning reads the sections' reach from.
         var spans: [(tag: SectionTag?, lo: Double, hi: Double)] = []
+        /// Each run left unbuilt: the node standing in for it, and the
+        /// stretch its units are expected to take.
+        var gaps: [(node: ViewNode, lo: Double, hi: Double)] = []
         var total: Size = .zero
     }
 
@@ -174,15 +186,18 @@ struct LazyStackContent: NodeContent {
         var first = true
         for item in items {
             switch item.kind {
-            case .gap:
+            case .gap(let gap):
+                var start: Double?
                 for unit in item.units {
                     if !first { cursor += resolvedSpacing }
                     first = false
                     let extent = memory.extent(of: unit) ?? estimate
                     visibility?.visit(unit..<(unit + 1), from: cursor, to: cursor + extent)
                     result.spans.append((tag: nil, lo: cursor, hi: cursor + extent))
+                    start = start ?? cursor
                     cursor += extent
                 }
+                result.gaps.append((node: gap, lo: start ?? cursor, hi: cursor))
             case .built(let nodes):
                 let start = cursor + (first ? 0 : resolvedSpacing)
                 for child in nodes {

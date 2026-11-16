@@ -81,8 +81,31 @@ final class Scroller {
     /// size — until a target behavior has said where to be in the new one.
     private var resizedFrom: (offset: Point, viewport: Size)?
 
-    /// Whether it is moving on its own: slowing down or springing back.
-    var isMoving: Bool { horizontalMotion != nil || verticalMotion != nil }
+    /// A scroll the app asked for, under way: from where it was to `to`,
+    /// along `animation`'s curve, since `start`.
+    private var programmatic: (from: Point, to: Point, animation: Animation, start: Double)?
+
+    /// A scroll the app asked for whose destination is worked out from the
+    /// content as it is placed — a view by its id, which a lazy container
+    /// may not have built yet — and again each pass until it holds still.
+    private var request: ScrollRequest?
+
+    struct ScrollRequest {
+        /// Where to go, from the scroll view's node as just placed; `nil`
+        /// while it cannot be told. Exact once what it scrolls to is built.
+        let resolve: @MainActor (Scroller, ViewNode) -> (offset: Point, isExact: Bool)?
+        let animation: Animation?
+        var started = false
+        var last: Point?
+        var passes = 0
+
+        /// Passes it is worked out again for, at most.
+        static let maximumPasses = 30
+    }
+
+    /// Whether it is moving on its own: slowing down, springing back, or
+    /// on its way where the app asked.
+    var isMoving: Bool { horizontalMotion != nil || verticalMotion != nil || programmatic != nil }
 
     /// Whether a finger is dragging it.
     var isDragging: Bool { dragOffset != nil }
@@ -126,6 +149,15 @@ final class Scroller {
 
     /// Sample both motions at `time`, ending the ones that are over.
     private func advance(to time: Double) {
+        if let scroll = programmatic {
+            let progress = scroll.animation.progress(after: time - scroll.start)
+            if progress.isFinished {
+                offset = scroll.to
+                programmatic = nil
+            } else {
+                offset = scroll.from + (scroll.to - scroll.from) * progress.fraction
+            }
+        }
         if var motion = horizontalMotion {
             let sample = motion.sample(at: time, bounds: horizontalBounds)
             offset.x = sample.position
@@ -140,6 +172,104 @@ final class Scroller {
             offset = clamped(offset)
             phase = .idle
         }
+    }
+
+    // MARK: - Where the app asks
+
+    /// Go to `target`: at once, or along `animation`'s curve — the
+    /// `animating` phase. A custom animation keeps state between frames and
+    /// has no curve to sample here, so it goes at once too.
+    func scroll(to target: Point, animation: Animation?, at time: Double) {
+        if isMoving { advance(to: time) }
+        horizontalMotion = nil
+        verticalMotion = nil
+        programmatic = nil
+        dragOffset = nil
+        let destination = clamped(target)
+        if let animation, destination != offset, animation.progress(after: .infinity).isFinished,
+           !animation.progress(after: 0).isFinished {
+            programmatic = (offset, destination, animation, time)
+            phase = .animating
+        } else {
+            offset = destination
+            phase = .idle
+        }
+        Invalidator.shared.requestPlacement()
+    }
+
+    /// Go where `resolve` says once the content is placed, and keep to it
+    /// as what it is worked out from settles.
+    func request(
+        _ resolve: @escaping @MainActor (Scroller, ViewNode) -> (offset: Point, isExact: Bool)?,
+        animation: Animation?
+    ) {
+        request = ScrollRequest(resolve: resolve, animation: animation)
+        Invalidator.shared.requestPlacement()
+    }
+
+    /// Where it now has to go, for a scroll on its way somewhere else: an
+    /// animated one ends there instead; one at rest goes there.
+    private func retarget(to target: Point) {
+        let destination = clamped(target)
+        if var scroll = programmatic {
+            scroll.to = destination
+            programmatic = scroll
+        } else if !isMoving, !isDragging {
+            offset = destination
+        }
+    }
+
+    /// The request in flight worked out again from the scroll view's node
+    /// as just placed — true when that moved it.
+    private func followRequest(node: ViewNode, at time: Double) -> Bool {
+        guard var current = request else { return false }
+        current.passes += 1
+        guard let resolved = current.resolve(self, node) else {
+            request = current.passes < ScrollRequest.maximumPasses ? current : nil
+            return false
+        }
+        let target = clamped(resolved.offset)
+        let moved: Bool
+        if !current.started {
+            current.started = true
+            scroll(to: target, animation: current.animation, at: time)
+            moved = true
+        } else {
+            moved = target != (programmatic?.to ?? offset)
+            if moved { retarget(to: target) }
+        }
+        // Found where it is built, and the same twice: done.
+        let settled = resolved.isExact && current.last == target
+        current.last = target
+        request = settled || current.passes >= ScrollRequest.maximumPasses ? nil : current
+        return moved
+    }
+
+    /// The offset that shows `rect`, in the content's own space: its
+    /// `anchor` point at the viewport's same point, or — without one — the
+    /// least move that shows all of it.
+    func offset(showing rect: Rect, anchor: UnitPoint?) -> Point {
+        var target = offset
+        for (axis, along) in [(Axis.horizontal, Axis.Set.horizontal), (.vertical, .vertical)] where axes.contains(along) {
+            let start = rect.origin[axis]
+            let length = rect.size[axis]
+            let visible = viewport[axis]
+            if let anchor {
+                let fraction = axis == .horizontal ? anchor.x : anchor.y
+                target[axis] = start + fraction * length - fraction * visible
+            } else if start < offset[axis] || length > visible {
+                target[axis] = start
+            } else if start + length > offset[axis] + visible {
+                target[axis] = start + length - visible
+            }
+        }
+        return clamped(target)
+    }
+
+    /// `rect`, a frame placed in this pass's layout space, in the content's
+    /// own.
+    func contentRect(_ rect: Rect) -> Rect {
+        rect.offsetBy(dx: -contentOrigin.x, dy: -contentOrigin.y)
     }
 
     // MARK: - Targets
@@ -163,9 +293,10 @@ final class Scroller {
     /// The content is placed. Resized at rest under a target behavior, it
     /// goes where the behavior says for the new size — true then: placed
     /// again, it shows there.
-    func endPlacingContent() -> Bool {
+    func endPlacingContent(node: ViewNode, at time: Double) -> Bool {
         targetFrames = placingTargetFrames ?? []
         placingTargetFrames = nil
+        if request != nil { return followRequest(node: node, at: time) }
         guard let resized = resizedFrom else { return false }
         resizedFrom = nil
         guard !isDragging, !isMoving else { return false }
@@ -227,6 +358,8 @@ final class Scroller {
         advance(to: time)
         horizontalMotion = nil
         verticalMotion = nil
+        programmatic = nil
+        request = nil
         phase = .interacting
         beginDrag(at: time)
         return true
@@ -236,6 +369,8 @@ final class Scroller {
     func beginDrag(at time: Double) {
         horizontalMotion = nil
         verticalMotion = nil
+        programmatic = nil
+        request = nil
         wheelGeneration += 1
         // Caught past an edge, the finger takes it from where it shows: as
         // far past as the rubber band would have dragged it there.
@@ -305,7 +440,9 @@ final class Scroller {
             advance(to: time)
             horizontalMotion = nil
             verticalMotion = nil
+            programmatic = nil
         }
+        request = nil
         // The first event of a wheel scroll is where it began.
         if phase != .interacting { gestureOrigin = offset }
         var next = offset

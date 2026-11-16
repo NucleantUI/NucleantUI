@@ -250,6 +250,7 @@ extension DrawContext {
 extension StackContent { static var placesPurely: Bool { true } }
 extension ZStackContent { static var placesPurely: Bool { true } }
 extension GroupContent { static var placesPurely: Bool { true } }
+extension ForEachContent { static var placesPurely: Bool { true } }
 extension PaddingContent { static var placesPurely: Bool { true } }
 extension FrameContent { static var placesPurely: Bool { true } }
 extension FramedContent { static var placesPurely: Bool { true } }

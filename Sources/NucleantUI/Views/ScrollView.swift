@@ -110,7 +110,7 @@ struct ScrollContent: NodeContent {
         child.place(in: contentRect, proposal: contentProposal, context: inner, into: &list)
         // Resized, it may have been moved to where its target behavior
         // rests: shown there next frame.
-        if !context.freezesMotion, scroller.endPlacingContent() {
+        if !context.freezesMotion, scroller.endPlacingContent(node: node, at: store?.now ?? Scroller.now) {
             store?.requestFrame()
         }
     }

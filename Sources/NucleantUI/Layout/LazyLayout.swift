@@ -154,11 +154,15 @@ extension ForEach {
         let slots = rows.rowSlots(for: ID.self)
         var built: [(index: Int, node: ViewNode, isNew: Bool)] = []
         built.reserveCapacity(upper - lower)
+        var ids: [ID] = []
+        ids.reserveCapacity(upper - lower)
         var position = data.index(data.startIndex, offsetBy: lower)
         for offset in lower..<upper {
             let element = data[position]
             position = data.index(after: position)
-            let index = slots.slot(for: identify(element))
+            let id = identify(element)
+            ids.append(id)
+            let index = slots.slot(for: id)
             let isNew = rows.isNewChild(at: index)
             let node = rows.child(index) { ctx in
                 buildNode(ForEachRow(element: element, build: build), &ctx)
@@ -177,15 +181,31 @@ extension ForEach {
             children.append(ContentNode(content: LazyGapContent(owner: cursor.owner, start: start + upper, count: count - upper)))
         }
         cursor.position = start + count
-        return ContentNode(content: GroupContent(), children: children)
+        // An element out of the window is found by its place in the data.
+        let unitOfID: (ID) -> Int? = { [data, id] wanted in
+            var unit = start
+            for element in data {
+                if element[keyPath: id] == wanted { return unit }
+                unit += 1
+            }
+            return nil
+        }
+        return ContentNode(
+            content: ForEachContent(ids: ids, rows: built.map(\.node), unitOfID: unitOfID),
+            children: children
+        )
     }
 
     /// Every element built, under the cursor: each is a section whose own
     /// rows are what the window is over, and which count their own units.
     private func makeExpandedLazyNode(_ context: inout BuildContext, cursor: LazyBuildCursor) -> ViewNode {
         let slots = context.rowSlots(for: ID.self)
+        var ids: [ID] = []
+        ids.reserveCapacity(data.count)
         let built = data.map { element in
-            let index = slots.slot(for: identify(element))
+            let id = identify(element)
+            ids.append(id)
+            let index = slots.slot(for: id)
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
                 buildNode(ForEachRow(element: element, build: build), &ctx)
@@ -193,7 +213,10 @@ extension ForEach {
             return (index: index, node: node, isNew: isNew)
         }
         slots.forgetGone(from: context.position, built: built.count)
-        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
+        return ContentNode(
+            content: ForEachContent(ids: ids, rows: built.map(\.node), unitOfID: nil),
+            children: context.transitionChildren(built)
+        )
     }
 }
 
@@ -204,7 +227,10 @@ extension ForEach {
 struct LazyItem {
     enum Kind {
         case built([ViewNode])
-        case gap
+        /// A run left unbuilt, and the node standing in for it — placed
+        /// where its units are expected, so a scroll to one of them knows
+        /// where to go.
+        case gap(ViewNode)
     }
     let kind: Kind
     let units: Range<Int>
@@ -219,7 +245,7 @@ extension ViewNode {
         var next = 0
         for child in layoutChildren {
             if let gap = child.content(as: LazyGapContent.self), gap.owner == owner {
-                items.append(LazyItem(kind: .gap, units: gap.units))
+                items.append(LazyItem(kind: .gap(child), units: gap.units))
                 next = gap.units.upperBound
             } else if let tag = child.lazyTag, tag.owner == owner {
                 if let last = items.last, last.units == tag.unit..<(tag.unit + 1), case .built(let nodes) = last.kind {
