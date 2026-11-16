@@ -332,15 +332,25 @@ public final class Invalidator {
         noteTransaction()
     }
 
+    /// Something placed moved without any view changing — a scroll view's
+    /// offset under a finger: the next frame lays the tree out and places
+    /// it again, and builds nothing for it.
+    private(set) var needsPlacement = false
+
+    func requestPlacement() {
+        needsPlacement = true
+    }
+
     var isDirty: Bool { needsFullRebuild || !dirtyPaths.isEmpty }
 
     /// Take the accumulated work and clear it.
-    func consume() -> (full: Bool, paths: Set<[Int]>, transaction: Transaction?) {
+    func consume() -> (full: Bool, paths: Set<[Int]>, placement: Bool, transaction: Transaction?) {
         defer {
             needsFullRebuild = false
             dirtyPaths.removeAll(keepingCapacity: true)
+            needsPlacement = false
             transaction = nil
         }
-        return (needsFullRebuild, dirtyPaths, transaction)
+        return (needsFullRebuild, dirtyPaths, needsPlacement, transaction)
     }
 }

@@ -163,6 +163,16 @@ public final class ViewHost {
     private var isScrolling = false
     private var touchStart: Point = .zero
 
+    /// The scroll targets under the touch in flight, innermost first — the
+    /// one the touch scrolls is picked from them by the way it moves — and
+    /// the one it scrolls, once it does.
+    private var scrollChain: [HitTarget] = []
+    private var activeScroll: HitTarget?
+
+    /// Whether the touch in flight went down on a scroll view moving on its
+    /// own and stopped it — a press that is no tap, whatever follows.
+    private var caughtScroll = false
+
     /// How far a finger travels before it is a scroll rather than a tap that
     /// wobbled. A drag-taking view (a fader) is never pre-empted by this; a
     /// press-only one (a button) is released without its tap once the finger
@@ -238,7 +248,7 @@ public final class ViewHost {
         let work = Invalidator.shared.consume()
         let full = needsFullRebuild || work.full
         // Something still moving is laid out again even with nothing dirty.
-        guard full || !work.paths.isEmpty || needsRepaint || animations.wantsFrame else { return false }
+        guard full || !work.paths.isEmpty || needsRepaint || work.placement || animations.wantsFrame else { return false }
         guard size.width > 0, size.height > 0 else { return false }
         needsFullRebuild = false
         needsRepaint = false
@@ -577,9 +587,30 @@ public final class ViewHost {
             isScrolling = false
             pressSerial += 1
             scrollTarget = hits?.scroll
+            scrollChain = hits?.scroll?.scrollChain(at: point) ?? []
+            activeScroll = nil
             dragSourceHit = hits?.dragSource
             contextMenuHit = hits?.contextMenu
             pressLeaf = .some(hits?.pressLeaf)
+            // A finger on a scroll view still moving stops it, and the
+            // press is the scroll view's: what is under it is not pressed
+            // and not tapped, and moving the finger drags it on at once.
+            // The gestures around still hear of the finger, for a second
+            // one that pinches.
+            let now = Scroller.now
+            if let caught = scrollChain.first(where: { $0.scroller?.catchMotion(at: now) == true }) {
+                InputTrace.log("down \(id) \(point) — caught a moving scroll view")
+                activeScroll = caught
+                isScrolling = true
+                caughtScroll = true
+                dragSourceHit = nil
+                contextMenuHit = nil
+                gestures[id] = nil
+                let chain = rootNode?.pressChain(at: point) ?? PressChain()
+                arena.pointerDown(id, at: point, chain: chain, pressReports: false)
+                return
+            }
+            caughtScroll = false
             if contextMenuHit != nil || (dragSourceHit != nil && scrollTarget != nil) {
                 // A finger resting on a view with a menu opens it; on a
                 // draggable row of a list, moving scrolls and resting drags.
@@ -631,6 +662,10 @@ public final class ViewHost {
 
     public func pointerUp(id: Int = 0, at point: Point) {
         if id == primaryPointer {
+            // A press that only stopped a scroll view taps nothing.
+            if caughtScroll, activeScroll != nil {
+                arena.cancelPointer(id)
+            }
             releasePrimary(at: point)
             if let session = dragSession {
                 dragSession = nil
@@ -696,6 +731,11 @@ public final class ViewHost {
         primaryPointer = nil
         pointerLocation = point
         pressSerial += 1
+        // Let go of while scrolling, it carries on on its own.
+        activeScroll?.scroller?.endDrag(at: Scroller.now)
+        activeScroll = nil
+        caughtScroll = false
+        scrollChain = []
         scrollTarget = nil
         isScrolling = false
         dragSourceHit = nil
@@ -722,20 +762,33 @@ public final class ViewHost {
                 return
             }
             if isScrolling {
-                scrollTarget?.target.onScroll?(Point(x: point.x - previous.x, y: point.y - previous.y))
+                let delta = Point(x: point.x - previous.x, y: point.y - previous.y)
+                if let scroller = activeScroll?.scroller {
+                    scroller.drag(by: delta, at: Scroller.now)
+                } else {
+                    activeScroll?.onScroll?(delta)
+                }
                 return
             }
             let takesDrags = (gestures[id]?.hit.target.takesDrags ?? false) || arena.followsDrags(of: id)
-            if let scrollTarget, !takesDrags {
+            if scrollTarget != nil, !takesDrags {
                 let dx = point.x - touchStart.x
                 let dy = point.y - touchStart.y
-                if (dx * dx + dy * dy).squareRoot() >= Self.scrollSlop {
+                if (dx * dx + dy * dy).squareRoot() >= Self.scrollSlop,
+                   let target = scrollChain.scrollTarget(along: Point(x: dx, y: dy)) {
                     InputTrace.log("scroll begins at \(point)")
                     isScrolling = true
+                    activeScroll = target
                     // The press was a scroll all along: let the view go
                     // without a tap.
                     releasePrimaryGesture()
-                    scrollTarget.target.onScroll?(Point(x: dx, y: dy))
+                    if let scroller = target.scroller {
+                        let now = Scroller.now
+                        scroller.beginDrag(at: now)
+                        scroller.drag(by: Point(x: dx, y: dy), at: now)
+                    } else {
+                        target.onScroll?(Point(x: dx, y: dy))
+                    }
                     return
                 }
             }
@@ -820,6 +873,11 @@ public final class ViewHost {
     /// `.draggable` or a held context menu.
     private func gestureClaimed(_ pointers: Set<Int>) {
         guard let id = primaryPointer, pointers.contains(id) else { return }
+        // A scroll the finger was dragging is let go of where it is.
+        activeScroll?.scroller?.endDrag(at: Scroller.now)
+        activeScroll = nil
+        isScrolling = false
+        caughtScroll = false
         scrollTarget = nil
         dragSourceHit = nil
         contextMenuHit = nil
@@ -1184,14 +1242,17 @@ public final class ViewHost {
         needsFullRebuild = true
     }
 
-    /// A scroll wheel / trackpad delta at the last known pointer position.
+    /// A scroll wheel / trackpad delta at the last known pointer position:
+    /// for the innermost scroll view under it that scrolls that way.
     public func scroll(dx: Double, dy: Double) {
-        guard let hit = rootNode?.hitTest(pointerLocation, matching: { $0.handlesScroll }) else {
+        guard let hit = rootNode?.hitTest(pointerLocation, matching: { $0.handlesScroll }),
+              let target = hit.scrollChain(at: pointerLocation).scrollTarget(along: Point(x: dx, y: dy))
+        else {
             InputTrace.log("scroll (\(dx), \(dy)) at \(pointerLocation) — no target")
             return
         }
         InputTrace.log("scroll (\(dx), \(dy)) at \(pointerLocation)")
-        hit.target.onScroll?(Point(x: dx, y: dy))
+        target.onScroll?(Point(x: dx, y: dy))
     }
 
     // MARK: - Trackpad gestures
