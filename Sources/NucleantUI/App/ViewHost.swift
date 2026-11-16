@@ -277,7 +277,13 @@ public final class ViewHost {
         }
 
         let built = PerfTrace.isEnabled ? DispatchTime.now().uptimeNanoseconds : 0
-        let windowRedrawn = layoutAndRender()
+        // In the background the tree is built — its `onChange`s and effects
+        // run — but not placed. Placing is what makes, resizes and retires
+        // render nodes, and out of sight nothing may reach the GPU: iOS
+        // refuses the work and loses the device with it. The window's way
+        // back changes the phase, so that pass rebuilds from the root and
+        // lays everything out.
+        let windowRedrawn = environment.scenePhase == .background ? false : layoutAndRender()
         animations.endPass()
 
         if PerfTrace.isEnabled {
