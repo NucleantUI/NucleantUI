@@ -23,9 +23,16 @@
 /// ```
 ///
 /// A view gets the phase of the window it is in. What moves a window from
-/// one phase to another is the platform's: on macOS a window is inactive
-/// while it is minimized and in the background while the app is hidden;
-/// behind other windows, or with another app in front, it is still active.
+/// one phase to another is the platform's:
+///
+/// - On macOS a window is inactive while it is minimized and in the
+///   background while the app is hidden; behind other windows, or with
+///   another app in front, it is still active.
+/// - On iOS a window goes as its scene: inactive in the app switcher, under
+///   Control Center or a call, and on its way to or from the background;
+///   in the background once it is off screen — another app, the Home
+///   Screen, the device locked.
+///
 /// Where the platform doesn't say, the window stays active.
 ///
 /// The phases are ordered: `background < inactive < active`.

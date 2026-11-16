@@ -926,8 +926,9 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     /// Put `phase` into the root environment, so the views that read
     /// `\.scenePhase` are built again with it, and run a frame for them now.
     /// Not on the next tick: a window out of sight gets none — macOS stops
-    /// its display link while it is minimized or the app is hidden — so an
-    /// `onChange(of: scenePhase)` would wait until the window came back.
+    /// its display link while it is minimized or the app is hidden, iOS in
+    /// the background — so an `onChange(of: scenePhase)` would wait until
+    /// the window came back.
     private func enter(_ phase: ScenePhase) {
         let changed = MainActor.assumeIsolated {
             guard phase != scenePhase else { return false }

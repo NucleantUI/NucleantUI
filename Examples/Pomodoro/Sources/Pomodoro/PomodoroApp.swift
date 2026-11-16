@@ -8,10 +8,11 @@
 //  rebuilds what read it on the next frame, the same as it would after a
 //  click.
 //
-//  The tick runs only while the window is active. Minimized or hidden, it
-//  stops (`.onChange(of: scenePhase)`), and on the way back the session
-//  catches up on the time it was away, from the clock rather than by
-//  counting ticks that never came.
+//  The tick runs only while the window is active. Out of use — minimized
+//  or hidden on a Mac, in the app switcher or off screen on iOS — it stops
+//  (`.onChange(of: scenePhase)`), and on the way back the session catches
+//  up on the time it was away, from the clock rather than by counting
+//  ticks that never came.
 //
 //  The clock face and the progress ring are `PathShape`s; the hands are
 //  lines from the centre, so no rotation anchor arithmetic is needed.
@@ -310,8 +311,8 @@ struct PomodoroView {
         .background(Theme.background)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
         .onAppear(perform: startTicking)
-        // Minimized or hidden, nothing is seen: stop ticking, and catch up
-        // from the clock once the window is in use again.
+        // Out of use, nothing is seen: stop ticking, and catch up from the
+        // clock once the window is in use again.
         .onChange(of: scenePhase) { old, new in
             if new == .active {
                 session.comeBack(at: Date())
