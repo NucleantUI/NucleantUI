@@ -657,6 +657,12 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
                 nucleantLogError("NucleantUI: surface recreated with no engine — canvas not attached\n")
                 return
             }
+            // The `TextureView`s' textures belong to the old engine, which
+            // is freed once this returns, and their sources write into them
+            // from outside any pass — a video's next frame may already be
+            // queued. Detached first, so those writes are refused: the next
+            // pass hands each source a texture on the new engine.
+            shaderSlots?.textures.detachAll()
             paintClearColor()
             attachCanvas(engine: engine, width: win_rect.z, height: win_rect.w)
         }

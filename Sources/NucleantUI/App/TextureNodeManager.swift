@@ -236,6 +236,23 @@ final class TextureNodeManager<N: NucleantContainerNode> {
         }
     }
 
+    /// The engine these textures belong to is going away (the window's
+    /// surface was rebuilt, and the engine with it). Each texture refuses
+    /// writes from now on, and its source hears now — outside any pass —
+    /// that it is gone, so nothing writes into it before the next pass hands
+    /// the source a texture on the new engine.
+    func detachAll() {
+        let detached = entries.values
+        entries.removeAll()
+        notifications.removeAll()
+        for entry in detached {
+            entry.texture.isAttached = false
+        }
+        for entry in detached {
+            entry.didDisappear(entry.texture)
+        }
+    }
+
     func destroyAll() {
         for entry in entries.values { retire(entry) }
         entries.removeAll()
