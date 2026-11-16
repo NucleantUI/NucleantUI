@@ -8,9 +8,8 @@ destination.
 Each target compiles its example's sources where they are,
 `../<Name>/Sources/<Name>`, unchanged, and depends on the enclosing
 checkout as a local package (`path: ../..`), as the example's own
-`Package.swift` does. The Nucleant packages under it resolve the way
-`swift build` resolves them: GitHub, or the sibling checkouts with
-`NUCLEANT_LOCAL_DEV=1` (see `localDev` in [Package.swift](../../Package.swift)).
+`Package.swift` does. The Nucleant packages under it resolve from GitHub,
+the way `swift build` resolves them.
 
 ## Building
 
