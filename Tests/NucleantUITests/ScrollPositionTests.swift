@@ -2,7 +2,8 @@
 //  ScrollPositionTests.swift
 //  NucleantUITests
 //
-//  `.scrollPosition(_:)` and `.scrollPosition(id:)`: a value written to the
+//  `ScrollPosition` as a value, then `.scrollPosition(_:)` and
+//  `.scrollPosition(id:)` on a hosted scroll view: a value written to the
 //  binding scrolls there; the user scrolling writes back where it is.
 //
 
@@ -10,13 +11,92 @@ import Foundation
 import Testing
 @testable import NucleantUI
 
-@MainActor
-final class PositionProbe {
-    var position: Binding<ScrollPosition>?
-    var scrolledID: Binding<Int?>?
-    var rows: Binding<Int>?
-    var top = 0.0
+struct ScrollPositionValueTests {
+
+    @Test func madeForAnIDTypeAloneItIsWhereverTheUserPutsIt() {
+        let position = ScrollPosition(idType: Int.self)
+        #expect(position.edge == nil)
+        #expect(position.point == nil)
+        #expect(position.viewID == nil)
+        #expect(position.isPositionedByUser == false)
+    }
+
+    @Test(arguments: Edge.allCases)
+    func madeAtAnEdgeItIsAtThatEdge(edge: Edge) {
+        #expect(ScrollPosition(edge: edge).edge == edge)
+    }
+
+    @Test func madeAtAPointOrAnXAndYItIsAtThatPoint() {
+        #expect(ScrollPosition(point: Point(x: 3, y: 4)).point == Point(x: 3, y: 4))
+        #expect(ScrollPosition(x: 1, y: 2).point == Point(x: 1, y: 2))
+    }
+
+    @Test func madeAtAnXOrAYAloneItHasNoPoint() {
+        #expect(ScrollPosition(x: 5).point == nil)
+        #expect(ScrollPosition(y: 5).point == nil)
+        #expect(ScrollPosition(x: 5) != ScrollPosition(y: 5))
+    }
+
+    @Test func madeAtAViewItHasThatViewsIDOfItsTypeOnly() {
+        let position = ScrollPosition(id: 42, anchor: .top)
+        #expect(position.viewID == AnyHashable(42))
+        #expect(position.viewID(type: Int.self) == 42)
+        #expect(position.viewID(type: String.self) == nil)
+    }
+
+    enum Move: CaseIterable {
+        case edge, point, xAndY, x, y, view
+
+        func apply(to position: inout ScrollPosition) {
+            switch self {
+            case .edge: position.scrollTo(edge: .bottom)
+            case .point: position.scrollTo(point: Point(x: 0, y: 10))
+            case .xAndY: position.scrollTo(x: 0, y: 10)
+            case .x: position.scrollTo(x: 10)
+            case .y: position.scrollTo(y: 10)
+            case .view: position.scrollTo(id: 9)
+            }
+        }
+    }
+
+    @Test(arguments: Move.allCases)
+    func scrolledSomewhereByTheAppItIsNoLongerWhereTheUserPutIt(move: Move) {
+        var position = ScrollPosition(idType: Int.self).scrolledByUser(to: AnyHashable(3))
+        move.apply(to: &position)
+        #expect(position.isPositionedByUser == false)
+        #expect(position != ScrollPosition(idType: Int.self).scrolledByUser(to: AnyHashable(3)))
+    }
+
+    @Test func positionedByTheUserItForgetsItsEdgeAndPointButKeepsItsView() {
+        var atEdge = ScrollPosition(edge: .bottom)
+        atEdge.isPositionedByUser = true
+        #expect(atEdge.edge == nil)
+
+        var atPoint = ScrollPosition(point: Point(x: 0, y: 40))
+        atPoint.isPositionedByUser = true
+        #expect(atPoint.point == nil)
+
+        var atView = ScrollPosition(id: 3)
+        atView.isPositionedByUser = true
+        #expect(atView.viewID(type: Int.self) == 3)
+    }
+
+    @Test func scrolledByTheUserItSaysSoAndNamesTheViewInFront() {
+        let position = ScrollPosition(idType: Int.self, edge: .top).scrolledByUser(to: AnyHashable(7))
+        #expect(position.isPositionedByUser)
+        #expect(position.edge == nil)
+        #expect(position.viewID(type: Int.self) == 7)
+    }
+
+    @Test func positionsAreEqualWhenTheySayTheSameForTheSameIDType() {
+        #expect(ScrollPosition(idType: Int.self, edge: .top) == ScrollPosition(idType: Int.self, edge: .top))
+        #expect(ScrollPosition(idType: Int.self, edge: .top) != ScrollPosition(idType: Int.self, edge: .bottom))
+        #expect(ScrollPosition(idType: Int.self) != ScrollPosition(idType: String.self))
+        #expect(ScrollPosition(id: 1) != ScrollPosition(id: 1, anchor: .top))
+    }
 }
+
+// MARK: - Hosted
 
 @View
 struct PositionedRows {
@@ -71,91 +151,118 @@ extension HostedViews {
     @MainActor
     @Suite struct ScrollPositions {
 
-        private func frames(_ count: Int, _ harness: Harness) async {
-            for _ in 0..<count { await harness.settle(1.0 / 60) }
+        enum Destination: CaseIterable {
+            case bottomEdge, y, nearestView, viewAtItsTop
+
+            func write(to position: inout ScrollPosition) {
+                switch self {
+                case .bottomEdge: position.scrollTo(edge: .bottom)
+                case .y: position.scrollTo(y: 300)
+                case .nearestView: position.scrollTo(id: 40)
+                case .viewAtItsTop: position.scrollTo(id: 70, anchor: .top)
+                }
+            }
+
+            /// Where the content's top is then, of 100 rows 50 tall in 200.
+            var top: Double {
+                switch self {
+                case .bottomEdge: -4800
+                case .y: -300
+                // Row 40 is at 2000…2050: the least move shows it.
+                case .nearestView: -1850
+                case .viewAtItsTop: -3500
+                }
+            }
         }
 
-        @Test func writtenToItScrollsToTheEdgeThePointOrTheView() async {
+        @Test(arguments: Destination.allCases)
+        func writtenToItScrollsWhereItSays(destination: Destination) async throws {
             let probe = PositionProbe()
             let harness = Harness(PositionedRows(probe: probe, initial: ScrollPosition(idType: Int.self)))
-            #expect(probe.top == 0)
+            let position = try #require(probe.position)
 
-            probe.position?.wrappedValue.scrollTo(edge: .bottom)
-            await frames(3, harness)
-            #expect(probe.top == -4800)
-
-            probe.position?.wrappedValue.scrollTo(y: 300)
-            await frames(3, harness)
-            #expect(probe.top == -300)
-
-            // Row 40 is at 2000…2050: the least move shows it.
-            probe.position?.wrappedValue.scrollTo(id: 40)
-            await frames(10, harness)
-            #expect(probe.top == -1850)
-
-            probe.position?.wrappedValue.scrollTo(id: 70, anchor: .top)
-            await frames(10, harness)
-            #expect(probe.top == -3500)
-            #expect(probe.position?.wrappedValue.viewID(type: Int.self) == 70)
+            destination.write(to: &position.wrappedValue)
+            await harness.frames(10)
+            #expect(probe.top == destination.top)
         }
 
         @Test func itStartsWhereTheInitialPositionSays() async {
             let probe = PositionProbe()
             let harness = Harness(PositionedRows(probe: probe, initial: ScrollPosition(id: 30, anchor: .top)))
-            await frames(10, harness)
+            await harness.frames(10)
             #expect(probe.top == -1500)
         }
 
-        @Test func atTheBottomEdgeItStaysThereAsTheContentGrows() async {
+        @Test func atTheBottomEdgeItStaysThereAsTheContentGrows() async throws {
             let probe = PositionProbe()
             let harness = Harness(PositionedRows(probe: probe, initial: ScrollPosition(idType: Int.self, edge: .bottom)))
-            await frames(3, harness)
-            #expect(probe.top == -4800)
+            let rows = try #require(probe.rows)
+            await harness.frames(3)
+            try #require(probe.top == -4800)
 
-            probe.rows?.wrappedValue = 120
-            await frames(5, harness)
+            rows.wrappedValue = 120
+            await harness.frames(5)
             #expect(probe.top == -5800)
         }
 
-        @Test func scrolledByTheUserItSaysSoAndWhichViewIsInFront() async {
+        @Test func scrolledByTheUserItSaysSoAndWhichViewIsInFront() async throws {
             let probe = PositionProbe()
             let harness = Harness(PositionedRows(probe: probe, initial: ScrollPosition(idType: Int.self, edge: .top)))
             harness.host.scrollsOnDrag = true
-            await frames(2, harness)
+            let binding = try #require(probe.position)
+            await harness.frames(2)
 
-            harness.host.pointerDown(at: Point(x: 100, y: 190))
-            harness.host.pointerMoved(to: Point(x: 100, y: 60))
-            harness.host.pointerMoved(to: Point(x: 100, y: -70))
-            harness.host.pointerUp(at: Point(x: 100, y: -70))
-            await frames(3, harness)
-            #expect(probe.top == -260)
+            harness.drag(from: Point(x: 100, y: 190), by: Point(x: 0, y: -260))
+            await harness.frames(3)
+            try #require(probe.top == -260)
 
-            let position = probe.position?.wrappedValue
-            #expect(position?.isPositionedByUser == true)
-            #expect(position?.edge == nil)
-            // 260 down, row 5 (250…300) is the first in view.
-            #expect(position?.viewID(type: Int.self) == 5)
+            let position = binding.wrappedValue
+            #expect(position.isPositionedByUser)
+            #expect(position.edge == nil)
+            #expect(position.viewID(type: Int.self) == 5, "260 down, row 5 (250…300) is the first in view")
 
-            // Handed back, it does not move.
-            await frames(3, harness)
-            #expect(probe.top == -260)
+            await harness.frames(3)
+            #expect(probe.top == -260, "handed back, it does not move")
         }
 
-        @Test func anIDBindingFollowsTheUserAndScrollsWhenWritten() async {
+        @Test func anIDBindingFollowsTheUser() async throws {
             let probe = PositionProbe()
             let harness = Harness(PositionedByID(probe: probe))
+            let scrolledID = try #require(probe.scrolledID)
             harness.host.pointerMoved(to: center)
 
             harness.host.scroll(dx: 0, dy: -520)
             harness.host.update()
-            await frames(3, harness)
-            #expect(probe.scrolledID?.wrappedValue == 10)
+            await harness.frames(3)
+            #expect(scrolledID.wrappedValue == 10, "520 down, row 10 (500…550) is the first in view")
+        }
 
-            probe.scrolledID?.wrappedValue = 70
-            await frames(3, harness)
-            // Row 70 is at 3500…3550: the least move shows it.
+        @Test func anIDWrittenToTheBindingIsScrolledToAndKept() async throws {
+            let probe = PositionProbe()
+            let harness = Harness(PositionedByID(probe: probe))
+            let scrolledID = try #require(probe.scrolledID)
+
+            scrolledID.wrappedValue = 70
+            await harness.frames(3)
+            #expect(probe.top == -3350, "row 70 is at 3500…3550: the least move shows it")
+            #expect(scrolledID.wrappedValue == 70)
+        }
+
+        @Test func anIDWrittenWhileTheUsersScrollIsReportedIsNotReplacedByTheViewInFront() async throws {
+            let probe = PositionProbe()
+            let harness = Harness(PositionedByID(probe: probe))
+            let scrolledID = try #require(probe.scrolledID)
+            harness.host.pointerMoved(to: center)
+            harness.host.scroll(dx: 0, dy: -520)
+            await harness.frames(2)
+            try #require(scrolledID.wrappedValue == 10)
+
+            // The wheel's scroll is still going on (it is over once the
+            // wheel has been still a moment) when the app writes.
+            scrolledID.wrappedValue = 70
+            await harness.frames(3)
             #expect(probe.top == -3350)
-            #expect(probe.scrolledID?.wrappedValue == 70)
+            #expect(scrolledID.wrappedValue == 70, "row 67 is the first in view there, but 70 was asked for")
         }
     }
 }

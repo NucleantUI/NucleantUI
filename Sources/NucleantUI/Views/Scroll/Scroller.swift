@@ -114,10 +114,21 @@ final class Scroller {
         var started = false
         var last: Point?
         var passes = 0
+        /// Passes in a row it was worked out exactly to `last`.
+        var stable = 0
 
         /// Passes it is worked out again for, at most.
-        static let maximumPasses = 30
+        static let maximumPasses = 60
+
+        /// Passes in a row an exact answer has to hold for it to be done: a
+        /// lazy container may build and measure around what was found
+        /// for a frame or two after it is reached, moving it.
+        static let stablePasses = 5
     }
+
+    /// Whether a scroll the app asked for is still being worked out — the
+    /// scroll view is placed again each frame until it is.
+    var hasPendingRequest: Bool { request != nil }
 
     /// Whether it is moving on its own: slowing down, springing back, or
     /// on its way where the app asked.
@@ -257,8 +268,9 @@ final class Scroller {
             moved = target != (programmatic?.to ?? offset)
             if moved { retarget(to: target) }
         }
-        // Found where it is built, and the same twice: done.
-        let settled = resolved.isExact && current.last == target
+        // Found where it is built, and the same for a few passes: done.
+        current.stable = resolved.isExact && current.last == target ? current.stable + 1 : 0
+        let settled = current.stable >= ScrollRequest.stablePasses
         current.last = target
         request = settled || current.passes >= ScrollRequest.maximumPasses ? nil : current
         return moved

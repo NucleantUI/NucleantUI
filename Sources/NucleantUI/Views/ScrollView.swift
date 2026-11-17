@@ -128,7 +128,8 @@ struct ScrollContent: NodeContent {
         child.place(in: contentRect, proposal: contentProposal, context: inner, into: &list)
         // Resized, it may have been moved to where its target behavior
         // rests: shown there next frame.
-        if !context.freezesMotion, scroller.endPlacingContent(node: node, at: store?.now ?? Scroller.now) {
+        if !context.freezesMotion,
+           scroller.endPlacingContent(node: node, at: store?.now ?? Scroller.now) || scroller.hasPendingRequest {
             store?.requestFrame()
         }
         // Where the user has scrolled it, for the scroll position bindings.
