@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import Observation
 import Testing
 @testable import NucleantUI
 
@@ -147,6 +148,54 @@ struct PositionedByID {
     }
 }
 
+/// A header and rows that carry ids of their own — not a `ForEach`'s — in
+/// a scroll target layout, its position kept by the view above it.
+@View
+struct IdentifiedParts {
+    let probe: PositionProbe
+    @Binding var position: ScrollPosition
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                Color.red.frame(height: 300).id("header")
+                ForEach(0..<20, id: \.self) { row in
+                    Color.blue.frame(height: 50).id("row \(row)")
+                }
+            }
+            .scrollTargetLayout()
+            .onGeometryChange(for: Double.self) { $0.frame(in: .scrollView).minY } action: { probe.top = $0 }
+        }
+        .scrollPosition($position, anchor: .top)
+    }
+}
+
+/// Whether `KeptPartsPosition` shows its scroll view — off and on is a tab
+/// left and opened again.
+@MainActor
+@Observable
+final class PartsSwitch {
+    var shows = true
+}
+
+/// Keeps the position of the `IdentifiedParts` it shows, as a root keeps
+/// a tab's.
+@View
+struct KeptPartsPosition {
+    let probe: PositionProbe
+    let toggle: PartsSwitch
+    @State private var position = ScrollPosition(idType: String.self, edge: .top)
+
+    var body: some View {
+        let _ = probe.position = $position
+        if toggle.shows {
+            IdentifiedParts(probe: probe, position: $position)
+        } else {
+            Color.gray
+        }
+    }
+}
+
 extension HostedViews {
     @MainActor
     @Suite struct ScrollPositions {
@@ -263,6 +312,42 @@ extension HostedViews {
             await harness.frames(3)
             #expect(probe.top == -3350)
             #expect(scrolledID.wrappedValue == 70, "row 67 is the first in view there, but 70 was asked for")
+        }
+
+        @Test func theViewInFrontIsFoundByAnIDOfItsOwn() async throws {
+            let probe = PositionProbe()
+            let toggle = PartsSwitch()
+            let harness = Harness(KeptPartsPosition(probe: probe, toggle: toggle))
+            harness.host.scrollsOnDrag = true
+            let binding = try #require(probe.position)
+            await harness.frames(2)
+
+            harness.drag(from: Point(x: 100, y: 190), by: Point(x: 0, y: -160))
+            await harness.frames(3)
+            try #require(probe.top == -160)
+            #expect(binding.wrappedValue.viewID(type: String.self) == "header", "the header is under the top")
+
+            harness.drag(from: Point(x: 100, y: 190), by: Point(x: 0, y: -200))
+            await harness.frames(3)
+            try #require(probe.top == -360)
+            #expect(binding.wrappedValue.viewID(type: String.self) == "row 1", "row 1 (350…400) is under the top")
+        }
+
+        @Test func builtAgainItGoesBackToTheViewThePositionNames() async throws {
+            let probe = PositionProbe()
+            let toggle = PartsSwitch()
+            let harness = Harness(KeptPartsPosition(probe: probe, toggle: toggle))
+            harness.host.scrollsOnDrag = true
+            await harness.frames(2)
+            harness.drag(from: Point(x: 100, y: 190), by: Point(x: 0, y: -360))
+            await harness.frames(3)
+            try #require(probe.top == -360)
+
+            toggle.shows = false
+            await harness.frames(2)
+            toggle.shows = true
+            await harness.frames(3)
+            #expect(probe.top == -350, "row 1 at the top")
         }
     }
 }

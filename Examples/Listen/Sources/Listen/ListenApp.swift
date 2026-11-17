@@ -72,28 +72,34 @@ struct RootView {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if tab == .listenNow {
-                NavigationStack {
-                    ListenNowScreen(
-                        catalog: .shared,
-                        player: player,
-                        position: $listenNowPosition,
-                        bottomInset: bottomInset,
-                        isScrolling: $isScrolling
-                    )
-                }
-            } else if tab == .search {
-                NavigationStack {
-                    SearchScreen(catalog: .shared, player: player, bottomInset: bottomInset)
-                }
-            } else {
-                NavigationStack {
-                    FriendsScreen(feed: feed, player: player, bottomInset: bottomInset)
+            // Under Now Playing, the tabs take no presses: what is not a
+            // control there would otherwise reach the page under it.
+            Group {
+                if tab == .listenNow {
+                    NavigationStack {
+                        ListenNowScreen(
+                            catalog: .shared,
+                            player: player,
+                            position: $listenNowPosition,
+                            bottomInset: bottomInset,
+                            isScrolling: $isScrolling
+                        )
+                    }
+                } else if tab == .search {
+                    NavigationStack {
+                        SearchScreen(catalog: .shared, player: player, bottomInset: bottomInset)
+                    }
+                } else {
+                    NavigationStack {
+                        FriendsScreen(feed: feed, player: player, bottomInset: bottomInset)
+                    }
                 }
             }
+            .allowsHitTesting(!showsNowPlaying)
             BottomChrome(player: player, tab: $tab, isCollapsed: isScrolling) {
                 withAnimation(.smooth) { showsNowPlaying = true }
             }
+            .allowsHitTesting(!showsNowPlaying)
             if showsNowPlaying {
                 NowPlayingScreen(player: player) {
                     withAnimation(.smooth) { showsNowPlaying = false }
@@ -197,8 +203,10 @@ struct MiniPlayer {
 
     var body: some View {
         if let album = player.album, let track = player.track {
+            // The whole bar opens Now Playing — a press anywhere on it is the
+            // bar's, not the page's under it — with the controls over it.
             ZStack(alignment: .top) {
-                HStack(spacing: 12) {
+                Button(action: open) {
                     HStack(spacing: 12) {
                         Cover(album: album, size: 44, showsTitle: false)
                         VStack(alignment: .leading, spacing: 2) {
@@ -207,8 +215,13 @@ struct MiniPlayer {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .padding(.leading, 14)
+                    .padding(.trailing, 110)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
-                    .onTapGesture(perform: open)
+                    .foregroundStyle(Theme.ink)
+                }
+                HStack(spacing: 4) {
                     Button { player.toggle() } label: {
                         Glyph(kind: player.isPlaying ? .pause : .play, size: 22).padding(8).foregroundStyle(Theme.ink)
                     }
@@ -216,10 +229,11 @@ struct MiniPlayer {
                         Glyph(kind: .next, size: 22).padding(8).foregroundStyle(Theme.ink)
                     }
                 }
-                .padding(.horizontal, 14)
-                .frame(height: Self.height)
+                .padding(.trailing, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 ProgressLine(progress: player.progress)
             }
+            .frame(height: Self.height)
         }
     }
 }

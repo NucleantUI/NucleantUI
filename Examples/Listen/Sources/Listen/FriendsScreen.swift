@@ -123,8 +123,11 @@ struct ActivityRow {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         Text(activity.friend).font(.system(size: 15, weight: .bold))
-                        Text("is listening to").font(.system(size: 15)).foregroundStyle(Theme.faint)
-                        Spacer()
+                        Text("is listening to")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.faint)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Text(ago(activity.date)).font(.caption).foregroundStyle(Theme.faint)
                         Circle()
                             .fill(Theme.accent)

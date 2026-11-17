@@ -94,8 +94,9 @@ public struct ScrollPosition: @unchecked Sendable {
     /// The id type of the views it reports the user scrolling to.
     private let idType: ObjectIdentifier
 
-    /// That type's id of a view of the scroll target layout, if it has one.
-    let identify: @MainActor @Sendable (ViewNode) -> AnyHashable?
+    /// That type's id of a view of the scroll target layout, if it has one,
+    /// and how to find the view by it again.
+    let target: @MainActor @Sendable (ViewNode) -> ScrollTargetIdentity?
 
     /// Where the view `place` names stands, for its own id type.
     private var findView: (@MainActor @Sendable (ViewNode) -> IdentifiedPlace?)?
@@ -103,7 +104,11 @@ public struct ScrollPosition: @unchecked Sendable {
     private init<T: Hashable & Sendable>(idType: T.Type, place: Place) {
         self.place = place
         self.idType = ObjectIdentifier(T.self)
-        self.identify = { node in node.scrollTargetID(as: T.self).map(AnyHashable.init) }
+        self.target = { node in
+            node.scrollTargetID(as: T.self).map { id in
+                ScrollTargetIdentity(id: AnyHashable(id)) { node in node.place(identifiedBy: id) }
+            }
+        }
     }
 
     /// Creates a new scroll position to a view with a provided identity value.
@@ -266,13 +271,17 @@ public struct ScrollPosition: @unchecked Sendable {
     }
 
     /// This position after the user scrolled the scroll view so that
-    /// `scrolledTo` — of the id type it reports — is the view in front.
-    func scrolledByUser(to scrolledTo: AnyHashable?) -> ScrollPosition {
+    /// `scrolledTo` — of the id type it reports — is the view in front,
+    /// found again by `find`.
+    func scrolledByUser(
+        to scrolledTo: AnyHashable?,
+        finding find: (@MainActor @Sendable (ViewNode) -> IdentifiedPlace?)? = nil
+    ) -> ScrollPosition {
         var next = self
         next.place = .automatic
         next.positionedByUser = true
         next.scrolledViewID = scrolledTo
-        next.findView = nil
+        next.findView = find
         return next
     }
 
@@ -281,6 +290,13 @@ public struct ScrollPosition: @unchecked Sendable {
     func viewPlace(in node: ViewNode) -> IdentifiedPlace? {
         findView?(node)
     }
+}
+
+/// A view of a scroll target layout by its id of a position's id type,
+/// and how to find it again by that id.
+struct ScrollTargetIdentity {
+    let id: AnyHashable
+    let find: @MainActor @Sendable (ViewNode) -> IdentifiedPlace?
 }
 
 extension ScrollPosition: Equatable {
@@ -319,6 +335,10 @@ extension View {
     /// The anchor picks the view reported — the one under that point of
     /// the scroll view; without one, the first in view — and aligns a view
     /// scrolled to that has no anchor of its own.
+    ///
+    /// Kept above a scroll view that goes away — on a tab that is closed —
+    /// the position the user scrolled to puts the scroll view built again
+    /// back at the view that was in front.
     public func scrollPosition(_ position: Binding<ScrollPosition>, anchor: UnitPoint? = nil) -> some View {
         _ModifierView(content: self, modifier: ScrollPositionModifier(position: position, anchor: anchor))
     }
@@ -472,10 +492,19 @@ extension Scroller {
     /// modifier's, for a view position with none of its own.
     func follow(_ position: ScrollPosition, anchor: UnitPoint?, animation: Animation?) {
         guard position != lastPosition else { return }
+        let isFirst = lastPosition == nil
         lastPosition = position
         switch position.place {
         case .automatic:
-            break
+            // Where the user had scrolled, handed to a scroll view that has
+            // followed nothing yet — one built again, a tab opened again:
+            // back to the view in front then.
+            guard isFirst, position.isPositionedByUser else { break }
+            request({ scroller, node in
+                guard let place = position.viewPlace(in: node) else { return nil }
+                let rect = scroller.contentRect(place.frame(along: scroller.axes))
+                return (scroller.offset(showing: rect, anchor: anchor), place.isBuilt)
+            }, animation: nil)
         case .edge(let edge):
             pin(to: edge, animation: animation)
         case .point(let point):
@@ -502,8 +531,8 @@ extension Scroller {
     /// binding — `nil` when that is the value it already has.
     func reportedPosition(anchor: UnitPoint?) -> ScrollPosition? {
         guard let last = lastPosition else { return nil }
-        let front = positionedView(anchor: anchor).flatMap(last.identify)
-        let next = last.scrolledByUser(to: front)
+        let front = positionedView(anchor: anchor).flatMap(last.target)
+        let next = last.scrolledByUser(to: front?.id, finding: front?.find)
         guard next != last else { return nil }
         lastPosition = next
         return next
