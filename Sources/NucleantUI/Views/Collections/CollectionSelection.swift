@@ -12,8 +12,14 @@ import Dispatch
 import Foundation
 
 /// The selection a list or a table edits.
+///
+/// `@usableFromInline`, with its `Storage`: `List` and `Table` store it, so
+/// a module using them may need its metadata accessor, for the reason
+/// given on `_StateProperty.Initial`.
+@usableFromInline
 struct CollectionSelection<Value: Hashable>: ViewInput {
 
+    @usableFromInline
     enum Storage {
         case none
         case single(Binding<Value>)
@@ -89,6 +95,7 @@ struct CollectionSelection<Value: Hashable>: ViewInput {
     }
 
     /// Same kind of selection through the same binding.
+    @usableFromInline
     func _isEquivalent(to other: CollectionSelection<Value>) -> Bool {
         switch (storage, other.storage) {
         case (.none, .none): return true
