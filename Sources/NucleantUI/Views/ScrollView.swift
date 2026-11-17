@@ -93,9 +93,24 @@ struct ScrollContent: NodeContent {
     let environment: EnvironmentValues
 
     /// A scroll view takes whatever it is offered — it is the clip, not the
-    /// content, that decides its size.
+    /// content, that decides its size. Offered no length along an axis it
+    /// does not scroll — a sideways shelf in a page that scrolls down — it
+    /// is as long as its content there, with its margins.
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
-        proposal.replacingUnspecifiedDimensions()
+        var size = proposal.replacingUnspecifiedDimensions()
+        let fitsWidth = proposal.width == nil && !axes.contains(.horizontal)
+        let fitsHeight = proposal.height == nil && !axes.contains(.vertical)
+        guard fitsWidth || fitsHeight, let child = node.singleChild else { return size }
+        var contentProposal = ProposedSize(
+            width: proposal.width.map { max(0, $0 - margins.horizontal) },
+            height: proposal.height.map { max(0, $0 - margins.vertical) }
+        )
+        if axes.contains(.vertical) { contentProposal.height = nil }
+        if axes.contains(.horizontal) { contentProposal.width = nil }
+        let content = child.sizeThatFits(contentProposal)
+        if fitsWidth { size.width = content.width + margins.horizontal }
+        if fitsHeight { size.height = content.height + margins.vertical }
+        return size
     }
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {

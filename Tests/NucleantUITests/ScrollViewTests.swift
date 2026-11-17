@@ -75,9 +75,50 @@ struct NestedScrolls {
     }
 }
 
+/// A sideways shelf of 100-tall cards in a page that scrolls down, with
+/// `margin` above and below its cards and, when given, a `height` of its
+/// own; a marker under it reports where it starts.
+@View
+struct ShelfInPage {
+    let probe: ScrollProbe
+    let margin: Double
+    let height: Double?
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            Color.green.frame(width: 100, height: 100)
+                        }
+                    }
+                }
+                .contentMargins(.vertical, margin)
+                .frame(height: height)
+                Color.blue.frame(height: 50)
+                    .onGeometryChange(for: Double.self) { $0.frame(in: .scrollView(axis: .vertical)).minY } action: { probe.top = $0 }
+            }
+        }
+    }
+}
+
 extension HostedViews {
     @MainActor
     @Suite struct ScrollViews {
+
+        @Test(arguments: [(0.0, 100.0), (10, 120)])
+        func offeredNoHeightASidewaysScrollViewIsAsTallAsItsContent(margin: Double, top: Double) {
+            let probe = ScrollProbe()
+            _ = Harness(ShelfInPage(probe: probe, margin: margin, height: nil))
+            #expect(probe.top == top)
+        }
+
+        @Test func offeredAHeightItTakesIt() {
+            let probe = ScrollProbe()
+            _ = Harness(ShelfInPage(probe: probe, margin: 0, height: 160))
+            #expect(probe.top == 160)
+        }
 
         @Test func pulledPastTheTopItFollowsByTheRubberBandAndSpringsBack() async {
             let probe = ScrollProbe()
