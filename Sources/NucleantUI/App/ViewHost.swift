@@ -169,6 +169,10 @@ public final class ViewHost {
     private var scrollChain: [HitTarget] = []
     private var activeScroll: HitTarget?
 
+    /// The scroll view the touch in flight went down on, tracking it until
+    /// it scrolls one or lifts.
+    private var trackedScroller: Scroller?
+
     /// Whether the touch in flight went down on a scroll view moving on its
     /// own and stopped it — a press that is no tap, whatever follows.
     private var caughtScroll = false
@@ -611,6 +615,8 @@ public final class ViewHost {
                 return
             }
             caughtScroll = false
+            trackedScroller = scrollChain.first?.scroller
+            trackedScroller?.beginTracking()
             if contextMenuHit != nil || (dragSourceHit != nil && scrollTarget != nil) {
                 // A finger resting on a view with a menu opens it; on a
                 // draggable row of a list, moving scrolls and resting drags.
@@ -731,7 +737,10 @@ public final class ViewHost {
         primaryPointer = nil
         pointerLocation = point
         pressSerial += 1
-        // Let go of while scrolling, it carries on on its own.
+        // Let go of while scrolling, it carries on on its own; one only
+        // touched is no longer tracked.
+        trackedScroller?.endTracking()
+        trackedScroller = nil
         activeScroll?.scroller?.endDrag(at: Scroller.now)
         activeScroll = nil
         caughtScroll = false
@@ -779,6 +788,8 @@ public final class ViewHost {
                     InputTrace.log("scroll begins at \(point)")
                     isScrolling = true
                     activeScroll = target
+                    if trackedScroller !== target.scroller { trackedScroller?.endTracking() }
+                    trackedScroller = nil
                     // The press was a scroll all along: let the view go
                     // without a tap.
                     releasePrimaryGesture()

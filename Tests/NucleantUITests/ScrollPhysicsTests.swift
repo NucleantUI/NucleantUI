@@ -33,13 +33,13 @@ private func run(
 struct RubberBandTests {
 
     @Test func aHundredPointsPastTheEdgeOfTwoHundredShowsUIScrollViewsFortyThree() {
-        let shown = ScrollPhysics.rubberBand(100, dimension: 200)
+        let shown = RubberBand(dimension: 200).shown(dragged: 100)
         #expect(abs(shown - 43.14) < 0.01, "UIScrollView's rubber band: (1 − 1/(100·0.55/200 + 1))·200")
     }
 
     @Test(arguments: [0.5, 30, 100, 150, 900, 50_000])
     func theContentFollowsByLessThanTheFingerAndNeverAsFarAsTheViewport(dragged: Double) {
-        let shown = ScrollPhysics.rubberBand(dragged, dimension: 200)
+        let shown = RubberBand(dimension: 200).shown(dragged: dragged)
         #expect(shown > 0)
         #expect(shown < dragged)
         #expect(shown < 200)
@@ -47,23 +47,23 @@ struct RubberBandTests {
 
     @Test(arguments: [0.5, 30, 100, 150, 900])
     func pastEitherEdgeItBandsTheSame(dragged: Double) {
-        #expect(ScrollPhysics.rubberBand(-dragged, dimension: 200) == -ScrollPhysics.rubberBand(dragged, dimension: 200))
+        #expect(RubberBand(dimension: 200).shown(dragged: -dragged) == -RubberBand(dimension: 200).shown(dragged: dragged))
     }
 
     @Test(arguments: [-900.0, -30, 0.5, 30, 100, 150, 900])
     func whatTheBandShowsIsUndoneToWhatWasDragged(dragged: Double) {
-        let shown = ScrollPhysics.rubberBand(dragged, dimension: 200)
-        let undone = ScrollPhysics.dragDistance(showing: shown, dimension: 200)
+        let shown = RubberBand(dimension: 200).shown(dragged: dragged)
+        let undone = RubberBand(dimension: 200).dragged(shown: shown)
         #expect(abs(undone - dragged) < 1e-6)
     }
 
     @Test func aViewportWithNoLengthBandsNothing() {
-        #expect(ScrollPhysics.rubberBand(100, dimension: 0) == 0)
-        #expect(ScrollPhysics.dragDistance(showing: 40, dimension: 0) == 0)
+        #expect(RubberBand(dimension: 0).shown(dragged: 100) == 0)
+        #expect(RubberBand(dimension: 0).dragged(shown: 40) == 0)
     }
 
     @Test func showingAsFarAsTheViewportUndoesToAFiniteDrag() {
-        let dragged = ScrollPhysics.dragDistance(showing: 250, dimension: 200)
+        let dragged = RubberBand(dimension: 200).dragged(shown: 250)
         #expect(dragged.isFinite)
         #expect(dragged > 0)
     }
@@ -77,7 +77,7 @@ struct ScrollAxisMotionTests {
 
     @Test(arguments: [-3000.0, -500, 0, 500, 3000])
     func flungItComesToRestWhereItsSpeedCarriesIt(velocity: Double) {
-        #expect(ScrollPhysics.projectedEnd(from: 1000, velocity: velocity) == 1000 + velocity / ScrollPhysics.decay)
+        #expect(ScrollAxisMotion.projectedEnd(from: 1000, velocity: velocity) == 1000 + velocity / ScrollPhysics.decay)
     }
 
     @Test(arguments: [0.0, 0.4, -0.4])
@@ -90,7 +90,7 @@ struct ScrollAxisMotionTests {
         let motion = try #require(ScrollAxisMotion.released(at: 5000, velocity: velocity, bounds: 0...10_000, time: 0, bounces: true))
         let result = run(motion, bounds: 0...10_000)
         #expect(result.finished)
-        #expect(abs(result.final - ScrollPhysics.projectedEnd(from: 5000, velocity: velocity)) < 0.5)
+        #expect(abs(result.final - ScrollAxisMotion.projectedEnd(from: 5000, velocity: velocity)) < 0.5)
         // Always the same way, and slower each frame — until the last, where
         // it is put on its projected end: what is left at half a point a
         // second, and that frame's own way at it.

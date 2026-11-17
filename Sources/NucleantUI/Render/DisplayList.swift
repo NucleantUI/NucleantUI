@@ -929,10 +929,11 @@ public struct DrawContext: Sendable {
         let coordinateSpaces: [CoordinateSpaceFrame]
         let enclosingScroller: Scroller?
         let scrollSafeAreaPadding: EdgeInsets
+        let scrollObservers: ScrollObserver?
 
         static let none = Shared(
             transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [],
-            enclosingScroller: nil, scrollSafeAreaPadding: EdgeInsets()
+            enclosingScroller: nil, scrollSafeAreaPadding: EdgeInsets(), scrollObservers: nil
         )
 
         init(
@@ -941,7 +942,8 @@ public struct DrawContext: Sendable {
             animation: Animation?,
             coordinateSpaces: [CoordinateSpaceFrame],
             enclosingScroller: Scroller?,
-            scrollSafeAreaPadding: EdgeInsets
+            scrollSafeAreaPadding: EdgeInsets,
+            scrollObservers: ScrollObserver?
         ) {
             self.transformedClips = transformedClips
             self.shaderCanvasInput = shaderCanvasInput
@@ -949,6 +951,7 @@ public struct DrawContext: Sendable {
             self.coordinateSpaces = coordinateSpaces
             self.enclosingScroller = enclosingScroller
             self.scrollSafeAreaPadding = scrollSafeAreaPadding
+            self.scrollObservers = scrollObservers
         }
     }
 
@@ -962,7 +965,8 @@ public struct DrawContext: Sendable {
                 transformedClips: newValue, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
-                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: shared.scrollObservers
             )
         }
     }
@@ -978,7 +982,8 @@ public struct DrawContext: Sendable {
                 transformedClips: shared.transformedClips, shaderCanvasInput: newValue,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
-                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: shared.scrollObservers
             )
         }
     }
@@ -994,7 +999,8 @@ public struct DrawContext: Sendable {
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: newValue, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
-                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: shared.scrollObservers
             )
         }
     }
@@ -1010,7 +1016,8 @@ public struct DrawContext: Sendable {
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: newValue,
                 enclosingScroller: shared.enclosingScroller,
-                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: shared.scrollObservers
             )
         }
     }
@@ -1026,7 +1033,8 @@ public struct DrawContext: Sendable {
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: newValue,
-                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: shared.scrollObservers
             )
         }
     }
@@ -1042,7 +1050,26 @@ public struct DrawContext: Sendable {
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
-                scrollSafeAreaPadding: newValue
+                scrollSafeAreaPadding: newValue,
+                scrollObservers: shared.scrollObservers
+            )
+        }
+    }
+
+    /// What the observing modifiers above (`.onScrollGeometryChange`,
+    /// `.onScrollPhaseChange`, …) ask of the first scroll view placed
+    /// below them, newest first — and `nil` inside a scroll view, so one
+    /// nested in it is not asked.
+    var scrollObservers: ScrollObserver? {
+        get { shared.scrollObservers }
+        set {
+            guard newValue !== shared.scrollObservers else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: newValue
             )
         }
     }

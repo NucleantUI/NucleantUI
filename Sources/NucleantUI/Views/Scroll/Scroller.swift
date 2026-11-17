@@ -56,7 +56,50 @@ final class Scroller {
     /// initial anchor.
     private var hasBeenPlaced = false
 
-    private(set) var phase: ScrollPhase = .idle
+    private(set) var phase: ScrollPhase = .idle {
+        didSet {
+            guard phase != oldValue else { return }
+            phaseChanges.append(PhaseChange(
+                old: oldValue,
+                new: phase,
+                velocity: phase == .decelerating ? releaseVelocity : nil
+            ))
+            // Placed again, the scroll view hands the change on.
+            Invalidator.shared.requestPlacement()
+        }
+    }
+
+    /// One change of phase, and — into `decelerating` — the speed the
+    /// finger let go at.
+    struct PhaseChange: Equatable {
+        let old: ScrollPhase
+        let new: ScrollPhase
+        let velocity: Vector?
+    }
+
+    /// The phases it went through since the scroll view last took them:
+    /// a phase can come and go between two frames.
+    private(set) var phaseChanges: [PhaseChange] = []
+
+    /// How fast the finger let it go, for the change into `decelerating`.
+    private var releaseVelocity: Vector?
+
+    /// The phase changes since the last time, emptied.
+    func takePhaseChanges() -> [PhaseChange] {
+        defer { phaseChanges.removeAll(keepingCapacity: true) }
+        return phaseChanges
+    }
+
+    /// A finger came down on it: it may be about to scroll.
+    func beginTracking() {
+        if phase == .idle { phase = .tracking }
+    }
+
+    /// The finger it was tracking lifted without scrolling it, or went to
+    /// another scroll view.
+    func endTracking() {
+        if phase == .tracking { phase = .idle }
+    }
 
     /// While a finger drags it: where the finger puts the content with no
     /// rubber band. `offset` is this with the part past an edge banded.
@@ -328,15 +371,23 @@ final class Scroller {
             scroll(to: target, animation: current.animation, at: time)
             moved = true
         } else {
-            moved = target != (programmatic?.to ?? offset)
+            // Measured against content placed at an offset part of the way
+            // there, the same place comes out a rounding error apart.
+            moved = !Self.isSamePlace(target, programmatic?.to ?? offset)
             if moved { retarget(to: target) }
         }
         // Found where it is built, and the same for a few passes: done.
-        current.stable = resolved.isExact && current.last == target ? current.stable + 1 : 0
+        let same = current.last.map { Self.isSamePlace($0, target) } ?? false
+        current.stable = resolved.isExact && same ? current.stable + 1 : 0
         let settled = current.stable >= ScrollRequest.stablePasses
         current.last = target
         request = settled || current.passes >= ScrollRequest.maximumPasses ? nil : current
         return moved
+    }
+
+    /// Whether two offsets are the same place, but for rounding.
+    private static func isSamePlace(_ a: Point, _ b: Point) -> Bool {
+        abs(a.x - b.x) < 1e-6 && abs(a.y - b.y) < 1e-6
     }
 
     /// The offset that shows `rect`, in the content's own space, in the
@@ -567,10 +618,11 @@ final class Scroller {
         let sampled = tracker.velocity(at: time)
         let velocity = Point(x: min(max(sampled.x, -limit), limit), y: min(max(sampled.y, -limit), limit))
         tracker.reset()
+        releaseVelocity = velocity
         // Where it would come to rest, moved where the target behavior says.
         let natural = clamped(Point(
-            x: ScrollPhysics.projectedEnd(from: offset.x, velocity: velocity.x),
-            y: ScrollPhysics.projectedEnd(from: offset.y, velocity: velocity.y)
+            x: ScrollAxisMotion.projectedEnd(from: offset.x, velocity: velocity.x),
+            y: ScrollAxisMotion.projectedEnd(from: offset.y, velocity: velocity.y)
         ))
         if let target = restingPlace(proposing: natural, from: gestureOrigin, velocity: velocity) {
             settle(to: target, velocity: velocity, at: time)
@@ -672,21 +724,21 @@ final class Scroller {
     private func banded(_ value: Double, bounds: ClosedRange<Double>, dimension: Double, bounces: Bool) -> Double {
         if value < bounds.lowerBound {
             guard bounces else { return bounds.lowerBound }
-            return bounds.lowerBound + ScrollPhysics.rubberBand(value - bounds.lowerBound, dimension: dimension)
+            return bounds.lowerBound + RubberBand(dimension: dimension).shown(dragged: value - bounds.lowerBound)
         }
         if value > bounds.upperBound {
             guard bounces else { return bounds.upperBound }
-            return bounds.upperBound + ScrollPhysics.rubberBand(value - bounds.upperBound, dimension: dimension)
+            return bounds.upperBound + RubberBand(dimension: dimension).shown(dragged: value - bounds.upperBound)
         }
         return value
     }
 
     private func unbanded(_ value: Double, bounds: ClosedRange<Double>, dimension: Double) -> Double {
         if value < bounds.lowerBound {
-            return bounds.lowerBound + ScrollPhysics.dragDistance(showing: value - bounds.lowerBound, dimension: dimension)
+            return bounds.lowerBound + RubberBand(dimension: dimension).dragged(shown: value - bounds.lowerBound)
         }
         if value > bounds.upperBound {
-            return bounds.upperBound + ScrollPhysics.dragDistance(showing: value - bounds.upperBound, dimension: dimension)
+            return bounds.upperBound + RubberBand(dimension: dimension).dragged(shown: value - bounds.upperBound)
         }
         return value
     }

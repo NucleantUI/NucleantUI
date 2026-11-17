@@ -134,6 +134,7 @@ struct ScrollContent: NodeContent {
         // `.scrollView(axis:)` for each axis it scrolls along.
         var inner = context.clipped(to: rect)
         inner.scrollSafeAreaPadding = EdgeInsets()
+        inner.scrollObservers = nil
         for name in [ScrollViewSpaceName(axis: nil)]
             + (axes.contains(.horizontal) ? [ScrollViewSpaceName(axis: .horizontal)] : [])
             + (axes.contains(.vertical) ? [ScrollViewSpaceName(axis: .vertical)] : []) {
@@ -169,6 +170,23 @@ struct ScrollContent: NodeContent {
         if !context.freezesMotion,
            scroller.endPlacingContent(node: node, at: store?.now ?? Scroller.now) || scroller.hasPendingRequest {
             store?.requestFrame()
+        }
+        // What the observing modifiers above asked to see, for the first
+        // scroll view placed under them.
+        if !context.freezesMotion {
+            let changes = scroller.takePhaseChanges()
+            var observer = context.scrollObservers
+            if observer != nil {
+                let observation = ScrollObservation(
+                    scroller: scroller,
+                    geometry: ScrollGeometry(contentOffset: offset, contentSize: size, contentInsets: insets, containerSize: rect.size),
+                    phaseChanges: changes
+                )
+                while let current = observer {
+                    if current.claim() { current.observe(observation) }
+                    observer = current.next
+                }
+            }
         }
         // Where the user has scrolled it, for the scroll position bindings.
         if !context.freezesMotion, scroller.userScrolled {

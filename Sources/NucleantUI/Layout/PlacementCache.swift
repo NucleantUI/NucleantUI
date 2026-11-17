@@ -237,6 +237,7 @@ extension DrawContext {
                     && coordinateSpaces == other.coordinateSpaces
                     && enclosingScroller === other.enclosingScroller
                     && scrollSafeAreaPadding == other.scrollSafeAreaPadding
+                    && scrollObservers === other.scrollObservers
             ))
     }
 }

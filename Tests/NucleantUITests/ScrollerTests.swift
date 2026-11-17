@@ -74,7 +74,7 @@ struct ScrollerTests {
         scroller.bouncesVertically = bounces
         scroller.beginDrag(at: 0)
         scroller.drag(by: Point(x: 0, y: 100), at: 0.01)
-        let expected = bounces ? -ScrollPhysics.rubberBand(100, dimension: 200) : 0
+        let expected = bounces ? -RubberBand(dimension: 200).shown(dragged: 100) : 0
         #expect(abs(scroller.offset.y - expected) < 1e-9)
     }
 
@@ -90,7 +90,7 @@ struct ScrollerTests {
 
         settle(scroller, from: 0.3, content: Size(width: 200, height: 10_000))
         #expect(scroller.phase == .idle)
-        #expect(abs(scroller.offset.y - ScrollPhysics.projectedEnd(from: 50, velocity: 1000)) < 1)
+        #expect(abs(scroller.offset.y - ScrollAxisMotion.projectedEnd(from: 50, velocity: 1000)) < 1)
     }
 
     @Test func heldStillBeforeLiftingItStaysWhereItIs() {
@@ -409,5 +409,75 @@ struct ScrollerTests {
         scroller.scroll(to: Point(x: 0, y: 800), animation: nil, at: 0)
         _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: 500), at: 1)
         #expect(scroller.offset.y == 300)
+    }
+}
+
+@MainActor
+struct ScrollerPhaseTests {
+
+    private func makeScroller(content: Double = 1000) -> Scroller {
+        let scroller = Scroller()
+        _ = scroller.place(viewport: Size(width: 200, height: 200), contentSize: Size(width: 200, height: content), at: 0)
+        _ = scroller.takePhaseChanges()
+        return scroller
+    }
+
+    private func phases(_ changes: [Scroller.PhaseChange]) -> [ScrollPhase] {
+        guard let first = changes.first else { return [] }
+        return [first.old] + changes.map(\.new)
+    }
+
+    @Test func aFingerThatRestsAndLiftsIsTrackedAndLetGo() {
+        let scroller = makeScroller()
+        scroller.beginTracking()
+        scroller.endTracking()
+        #expect(phases(scroller.takePhaseChanges()) == [.idle, .tracking, .idle])
+    }
+
+    @Test func aFingerThatScrollsGoesFromTrackingToInteracting() {
+        let scroller = makeScroller()
+        scroller.beginTracking()
+        scroller.beginDrag(at: 0)
+        scroller.drag(by: Point(x: 0, y: -40), at: 0.01)
+        scroller.endDrag(at: 0.5)
+        #expect(phases(scroller.takePhaseChanges()) == [.idle, .tracking, .interacting, .idle])
+    }
+
+    @Test func flungItDeceleratesAtTheSpeedItWasLetGoAtThenRests() throws {
+        let scroller = makeScroller(content: 10_000)
+        scroller.beginDrag(at: 0)
+        for index in 1...5 { scroller.drag(by: Point(x: 0, y: -10), at: Double(index) * 0.01) }
+        scroller.endDrag(at: 0.05)
+        var time = 0.05
+        while scroller.isMoving, time < 10 {
+            time += 1.0 / 60
+            _ = scroller.place(viewport: Size(width: 200, height: 200), contentSize: Size(width: 200, height: 10_000), at: time)
+        }
+        let changes = scroller.takePhaseChanges()
+        #expect(phases(changes) == [.idle, .interacting, .decelerating, .idle])
+        let release = try #require(changes.first { $0.new == .decelerating })
+        let velocity = try #require(release.velocity)
+        #expect(abs(velocity.y - 1000) < 1, "50 points over 50 ms")
+        #expect(changes.filter { $0.new != .decelerating }.allSatisfy { $0.velocity == nil })
+    }
+
+    @Test func aScrollAlongAnAnimationIsAnimatingUntilItArrives() {
+        let scroller = makeScroller()
+        scroller.scroll(to: Point(x: 0, y: 300), animation: .linear(duration: 0.5), at: 0)
+        _ = scroller.place(viewport: Size(width: 200, height: 200), contentSize: Size(width: 200, height: 1000), at: 1)
+        #expect(phases(scroller.takePhaseChanges()) == [.idle, .animating, .idle])
+    }
+
+    @Test func aScrollAtOnceChangesNoPhase() {
+        let scroller = makeScroller()
+        scroller.scroll(to: Point(x: 0, y: 300), animation: nil, at: 0)
+        #expect(scroller.takePhaseChanges().isEmpty)
+    }
+
+    @Test func takingTheChangesEmptiesThem() {
+        let scroller = makeScroller()
+        scroller.beginTracking()
+        #expect(scroller.takePhaseChanges().count == 1)
+        #expect(scroller.takePhaseChanges().isEmpty)
     }
 }

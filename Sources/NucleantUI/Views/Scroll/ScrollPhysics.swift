@@ -52,30 +52,30 @@ enum ScrollPhysics {
 
     /// Closer than this to where it is going, in points, it has arrived.
     static let restingDistance = 0.25
+}
 
-    /// How far the content shows for `overshoot` points dragged past an
-    /// edge, in a viewport `dimension` long.
-    static func rubberBand(_ overshoot: Double, dimension: Double) -> Double {
+/// The rubber band along one axis of a viewport `dimension` long: how far
+/// past an edge the content shows for a finger dragged so far past it, and
+/// back.
+struct RubberBand {
+    let dimension: Double
+
+    /// How far the content shows for `dragged` points dragged past an edge.
+    func shown(dragged: Double) -> Double {
         guard dimension > 0 else { return 0 }
-        let magnitude = abs(overshoot)
-        let shown = (1 - 1 / (magnitude * rubberBandCoefficient / dimension + 1)) * dimension
-        return overshoot < 0 ? -shown : shown
+        let magnitude = abs(dragged)
+        let shown = (1 - 1 / (magnitude * ScrollPhysics.rubberBandCoefficient / dimension + 1)) * dimension
+        return dragged < 0 ? -shown : shown
     }
 
     /// How far a finger must have dragged past an edge for the content to
-    /// show `shown` points past it — the rubber band undone, for a press
-    /// that catches the content while it bounces.
-    static func dragDistance(showing shown: Double, dimension: Double) -> Double {
+    /// show `shown` points past it — for a press that catches the content
+    /// while it bounces.
+    func dragged(shown: Double) -> Double {
         guard dimension > 0 else { return 0 }
         let magnitude = min(abs(shown), dimension * 0.999)
-        let dragged = (dimension / rubberBandCoefficient) * (1 / (1 - magnitude / dimension) - 1)
+        let dragged = (dimension / ScrollPhysics.rubberBandCoefficient) * (1 / (1 - magnitude / dimension) - 1)
         return shown < 0 ? -dragged : dragged
-    }
-
-    /// Where content let go of at `position`, moving at `velocity`, comes to
-    /// rest with nothing in its way.
-    static func projectedEnd(from position: Double, velocity: Double) -> Double {
-        position + velocity / decay
     }
 }
 
@@ -103,6 +103,12 @@ struct ScrollAxisMotion: Equatable {
         self.bounces = bounces
     }
 
+    /// Where content let go of at `position`, moving at `velocity`, comes to
+    /// rest with nothing in its way.
+    static func projectedEnd(from position: Double, velocity: Double) -> Double {
+        position + velocity / ScrollPhysics.decay
+    }
+
     /// Let go at `position` moving at `velocity`, with the content able to
     /// rest anywhere in `bounds`: slowing down, or — let go past an edge,
     /// and not about to come back in on its own — springing back to it.
@@ -115,7 +121,7 @@ struct ScrollAxisMotion: Equatable {
     ) -> ScrollAxisMotion? {
         if !bounds.contains(position) {
             let edge = position < bounds.lowerBound ? bounds.lowerBound : bounds.upperBound
-            let end = ScrollPhysics.projectedEnd(from: position, velocity: velocity)
+            let end = ScrollAxisMotion.projectedEnd(from: position, velocity: velocity)
             // Flung back in hard enough to come to rest inside: it slows
             // down through the edge rather than springing at it.
             let comesBackIn = (edge == bounds.lowerBound && end > edge) || (edge == bounds.upperBound && end < edge)
@@ -181,7 +187,7 @@ struct ScrollAxisMotion: Equatable {
                 return sample(at: time, bounds: bounds)
             }
             if abs(speed) < ScrollPhysics.restingSpeed {
-                now = ScrollPhysics.projectedEnd(from: position, velocity: velocity)
+                now = ScrollAxisMotion.projectedEnd(from: position, velocity: velocity)
                 speed = 0
                 return (now, 0, true)
             }
