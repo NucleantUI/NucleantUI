@@ -28,14 +28,19 @@
 //
 //  What is kept goes when anything in the subtree changes: a graft, a child
 //  replaced or leaving drops it from there up to the root (`ViewNode`). A
-//  view leaving anywhere turns keeping off for the pass, and a forced
-//  rebuild drops everything kept.
+//  view leaving anywhere turns keeping off for as long as it leaves, and a
+//  node placed meanwhile drops what it kept: its nodes are placed anew,
+//  perhaps somewhere else, while what it kept stays where it was drawn. A
+//  forced rebuild drops everything kept.
 //
 //  A kept subtree placed again at another origin — scrolled, or moved by a
 //  stack around it — the same size, under the same proposal and context,
 //  draws what it drew moved by as much: its commands are moved rather than
 //  drawn again, and what placing left on its nodes (their frames, for hit
-//  testing) is moved with them. Only while every clip it is drawn under is
+//  testing) is moved with them — every node below it, including those of
+//  kept subtrees inside it, whose records stay as they were: drawn from
+//  those again, their nodes are moved from where they are, not by the
+//  record's distance a second time. Only while every clip it is drawn under is
 //  the context's — one from outside, which stays where it is — and the
 //  context's transform only moves: a clip of its own would move with it,
 //  and a turned or scaled space would not move it as it moves its rect.
@@ -157,6 +162,7 @@ final class PlacementRecorder {
             switch likeness {
             case .same:
                 list.append(contentsOf: kept)
+                bringNodes(of: node, to: rect)
                 if PerfTrace.isEnabled { PerfTrace.placementsKept += 1 }
                 return
             case .moved(let dx, let dy) where record.isMovable:
@@ -165,7 +171,7 @@ final class PlacementRecorder {
                 nextKept += 1
                 moved.markKept(nextKept)
                 list.append(contentsOf: moved)
-                node.movePlacement(dx: dx, dy: dy)
+                bringNodes(of: node, to: rect)
                 node.placed = PlacementRecord(rect: rect, proposal: proposal, context: context, epoch: epoch).keeping(moved)
                 if PerfTrace.isEnabled { PerfTrace.placementsMoved += 1 }
                 return
@@ -205,6 +211,17 @@ final class PlacementRecorder {
         for child in frame.pending {
             child.node.placed = child.record.keeping(keep(child.range, of: list))
         }
+    }
+
+    /// Move the nodes of `node`'s subtree, drawn from what it kept, to where
+    /// it is placed now. Where they stand is where it was last placed —
+    /// unless a kept subtree around it was drawn moved since, which took
+    /// them along but left this one's record as it was: they are moved from
+    /// where they are, never by the record's distance a second time.
+    private func bringNodes(of node: ViewNode, to rect: Rect) {
+        let dx = rect.minX - node.frame.minX, dy = rect.minY - node.frame.minY
+        guard dx != 0 || dy != 0 else { return }
+        node.movePlacement(dx: dx, dy: dy)
     }
 
     /// The commands in `range` of `list`, kept: a list of their own, with a

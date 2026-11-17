@@ -21,8 +21,10 @@
 //  parent's motion on top of its own.
 //
 //  A leaf that fills its box (a shape, a color) is drawn at the sizes in
-//  between; text keeps its new size and only its center travels, since it
-//  would otherwise reflow at every frame.
+//  between; text keeps its new size, since it would otherwise reflow at
+//  every frame, and travels by whichever of its edges and its middle moved
+//  least — a label whose text changed stays on the edge it is aligned to
+//  rather than sliding by half the change.
 //
 //  Transitions are not motion of this kind: a view arriving or leaving has
 //  its transition's body built around it, and the body's modifiers animate
@@ -59,11 +61,18 @@ extension ViewNode {
         defer { layoutRect = target }
 
         if store.isCommitPass, let animation = context.animation, let last = layoutRect, last != target {
-            let resizes = !traits.contains(.keepsSizeWhileMoving)
-            let offset = NodeMotion.Offset(
-                AnimatablePair(last.midX - target.midX, last.midY - target.midY),
-                AnimatablePair(resizes ? last.width - target.width : 0, resizes ? last.height - target.height : 0)
-            )
+            let offset = traits.contains(.keepsSizeWhileMoving)
+                ? NodeMotion.Offset(
+                    AnimatablePair(
+                        Self.leastShift(from: last.minX, last.maxX, to: target.minX, target.maxX),
+                        Self.leastShift(from: last.minY, last.maxY, to: target.minY, target.maxY)
+                    ),
+                    AnimatablePair(0, 0)
+                )
+                : NodeMotion.Offset(
+                    AnimatablePair(last.midX - target.midX, last.midY - target.midY),
+                    AnimatablePair(last.width - target.width, last.height - target.height)
+                )
             // Moved by next to nothing: what is under way, if anything,
             // carries on.
             let isStill = abs(offset.first.first) < 0.01 && abs(offset.first.second) < 0.01
@@ -105,6 +114,22 @@ extension ViewNode {
             }
         }
         return (frame, children.isEmpty ? frame : target)
+    }
+
+    /// How far a node that keeps its new size starts from where layout puts
+    /// it, along one axis: as far as whichever of its two edges and its
+    /// middle moved least. A label aligned to its leading edge whose text
+    /// got shorter stays on that edge, one centered stays on its middle —
+    /// neither slides by half the change; moved and no other change, all
+    /// three are the same.
+    private static func leastShift(from lastMin: Double, _ lastMax: Double, to min: Double, _ max: Double) -> Double {
+        let leading = lastMin - min
+        let middle = (lastMin + lastMax) / 2 - (min + max) / 2
+        let trailing = lastMax - max
+        var least = middle
+        if abs(leading) < abs(least) { least = leading }
+        if abs(trailing) < abs(least) { least = trailing }
+        return least
     }
 
     /// `rect` moved by `offset`.

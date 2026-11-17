@@ -43,7 +43,7 @@ public final class ViewHost {
     /// What the window canvas holds. A pass whose list comes out identical
     /// — a change that landed entirely inside a per-view node — leaves the
     /// canvas alone: nothing redrawn, nothing rasterized.
-    private var windowContent: DisplayList?
+    private(set) var windowContent: DisplayList?
 
     /// The canvas must be painted whatever the list says: it is new, or a
     /// new target after a resize, or the host was told to start over.

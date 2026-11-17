@@ -10,6 +10,8 @@
 //  it is drawn in turns, or it would start moving there.
 //
 
+import Foundation
+import Observation
 import Testing
 @testable import NucleantUI
 
@@ -147,7 +149,8 @@ struct PlacementCacheTests {
     }
 
     @Test func whatMovesIsPlacedEveryPassAndWhatStandsStillBesideItIsKept() {
-        let moving = leaf(moving: true), still = leaf()
+        let count = Count()
+        let moving = leaf(moving: true), still = ContentNode(content: CountedSwatch(count: count))
         let root = stack(moving, still)
         let first = place(root)
         _ = place(root)
@@ -156,11 +159,11 @@ struct PlacementCacheTests {
         #expect(still.placed?.list != nil, "kept on its own, beside what moves")
 
         moving.frame = .zero
-        still.frame = .zero
+        let placed = count.value
         let third = place(root)
         #expect(third == first)
         #expect(moving.frame != .zero, "placed again")
-        #expect(still.frame == .zero, "appended")
+        #expect(count.value == placed, "appended")
     }
 
     @Test func aKindThatDoesNotPlacePurelyIsPlacedEveryPass() {
@@ -286,6 +289,49 @@ struct PlacementCacheTests {
         #expect(animating.count.value == placed + placedOnce, "under an animation: placed")
     }
 
+    @Test func placedWithoutBeingKeptWhatWasKeptGoes() {
+        let (root, swatch, count) = keptSwatch()
+        let there = Rect(x: 20, y: 30, width: 100, height: 100)
+        // Placed there with what it kept left out — as every node is while
+        // a view is leaving, or under a frozen context.
+        var frozen = DrawContext()
+        frozen.freezesMotion = true
+        _ = place(root, in: there, context: frozen)
+        #expect(root.placed == nil, "what it kept was drawn where it no longer is")
+
+        let placed = count.value
+        _ = place(root, in: there)
+        #expect(count.value == placed + placedOnce, "placed again, not drawn moved from where it was")
+        #expect(swatch.frame == Rect(x: 65, y: 75, width: 10, height: 10))
+    }
+
+    @Test func keptInsideWhatWasDrawnMovedItIsNotMovedTwice() {
+        let swatch = leaf()
+        let inner = stack(swatch)
+        let root = stack(inner, leaf(moving: true))
+        // Something beside it moves: the inner stack is kept on its own.
+        _ = place(root)
+        _ = place(root)
+        #expect(inner.placed?.list != nil)
+        // Nothing moves any more: the root keeps itself, the inner stack's
+        // list in it.
+        root.replaceChild(at: 1, with: leaf())
+        _ = place(root)
+        _ = place(root)
+        #expect(root.placed?.list != nil)
+
+        // Drawn moved: its nodes, the inner stack's among them, moved too.
+        let there = Rect(x: 20, y: 30, width: 100, height: 100)
+        _ = place(root, in: there)
+        #expect(swatch.frame == Rect(x: 65, y: 75, width: 10, height: 10))
+
+        // Placed again for a change beside the inner stack, which is drawn
+        // from what it kept — and is where it was, not moved once more.
+        root.replaceChild(at: 1, with: leaf())
+        _ = place(root, in: there)
+        #expect(swatch.frame == Rect(x: 65, y: 75, width: 10, height: 10))
+    }
+
     @Test func whatKeepsMovingIsKeptOnTheWay() {
         let count = Count()
         let root = ContentNode(content: ZStackContent(alignment: .center), children: (0..<3).map { _ in
@@ -297,5 +343,82 @@ struct PlacementCacheTests {
         let placed = count.value
         _ = place(root, in: Rect(x: 0, y: 25, width: 100, height: 100))
         #expect(count.value == placed, "and drawn moved the next time")
+    }
+}
+
+/// A short or a tall panel over a count and a slider, scrolling, as the
+/// inspector of an app whose parameters change with what is chosen. The
+/// slider does not place purely, so the stack is never kept as a whole: the
+/// count keeps what it draws on its own.
+@MainActor
+@Observable
+private final class Panels {
+    var isTall = false
+    var count = 0
+    /// How far along the slider is.
+    var level = 0.5
+}
+
+@View
+private struct PanelOverCount {
+    let panels: Panels
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                if panels.isTall {
+                    Color.blue.frame(width: 50, height: 120)
+                } else {
+                    Color.blue.frame(width: 50, height: 20)
+                }
+                Text("\(panels.count) tiles")
+                Slider(value: Binding.constant(panels.level))
+            }
+        }
+    }
+}
+
+extension HostedViews {
+    @MainActor
+    @Suite struct PlacementCacheInAWindow {
+
+        /// Where the count is drawn.
+        private func count(_ harness: Harness) throws -> Double {
+            let list = try #require(harness.host.windowContent)
+            let drawn = list.commands.lazy.compactMap { command -> Rect? in
+                guard case .text(let draw) = command, draw.string.hasSuffix(" tiles") else { return nil }
+                return draw.frame
+            }.first
+            return try #require(drawn).minY
+        }
+
+        @Test func movedWhileAViewLeftItStartsTheNextAnimationWhereItIs() async throws {
+            let panels = Panels()
+            let harness = Harness(PanelOverCount(panels: panels), size: Size(width: 200, height: 300))
+            // The slider moved a little: the count, placed as it was again,
+            // is kept.
+            for level in [0.6, 0.7] {
+                panels.level = level
+                await harness.frames(1)
+            }
+            #expect(try count(harness) == 20)
+
+            // The short panel fades out as the tall one comes: the count
+            // moves down while a view is leaving.
+            withAnimation(.spring(duration: 0.3)) { panels.isTall = true }
+            harness.host.update()
+            await harness.frames(60)
+            #expect(try count(harness) == 120)
+
+            // Counted again, it is drawn anew — from where it stands.
+            withAnimation(.spring(duration: 0.3)) { panels.count += 1 }
+            harness.host.update()
+            var shown: [Double] = []
+            for _ in 0..<10 {
+                shown.append(try count(harness))
+                await harness.frames(1)
+            }
+            #expect(shown.allSatisfy { $0 == 120 }, "the count stays where it is: \(shown)")
+        }
     }
 }
