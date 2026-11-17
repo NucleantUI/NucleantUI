@@ -68,10 +68,22 @@ struct ScrollerTests {
         #expect(scroller.isDragging)
     }
 
-    @Test(arguments: [true, false])
-    func pastTheTopTheFingerPullsByTheRubberBandOnlyWhenItBounces(bounces: Bool) {
-        let scroller = makeScroller()
-        scroller.bouncesVertically = bounces
+    @Test(arguments: [
+        (ScrollBounceBehavior.automatic, 100.0, true),
+        (.always, 100, true),
+        (.basedOnSize, 1000, true),
+        (.basedOnSize, 100, false),
+    ])
+    func pastTheTopTheFingerPullsByTheRubberBandOnlyWhenItBounces(
+        behavior: ScrollBounceBehavior,
+        contentHeight: Double,
+        bounces: Bool
+    ) {
+        let scroller = Scroller()
+        scroller.verticalBounce = behavior
+        _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: contentHeight), at: 0)
+        #expect(scroller.bouncesVertically == bounces)
+
         scroller.beginDrag(at: 0)
         scroller.drag(by: Point(x: 0, y: 100), at: 0.01)
         let expected = bounces ? -RubberBand(dimension: 200).shown(dragged: 100) : 0

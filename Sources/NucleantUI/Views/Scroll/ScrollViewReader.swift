@@ -180,7 +180,15 @@ enum IdentifiedPlace {
     func frame(along axes: Axis.Set) -> Rect {
         switch self {
         case .view(let node):
-            return node.frame
+            // A transparent node — a `ForEach` row that carries an `.id` of
+            // its own, a `Group` of views — is never placed itself: the box
+            // around the views it stands for.
+            guard node.isTransparent else { return node.frame }
+            var frame: Rect?
+            for child in node.layoutChildren {
+                frame = frame.map { $0.union(child.frame) } ?? child.frame
+            }
+            return frame ?? node.frame
         case .unbuilt(let gap, let index, let count):
             var frame = gap.frame
             let axis: Axis

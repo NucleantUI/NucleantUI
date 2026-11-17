@@ -70,10 +70,22 @@ public final class HitTarget {
     /// Whether a move of `delta` is one this target scrolls by: along its
     /// one axis more than across it, or any way for both.
     func scrolls(along delta: Point) -> Bool {
-        if scrollAxes.contains(.horizontal), scrollAxes.contains(.vertical) { return true }
-        if scrollAxes.contains(.vertical) { return abs(delta.y) >= abs(delta.x) }
-        if scrollAxes.contains(.horizontal) { return abs(delta.x) > abs(delta.y) }
+        let axes = movingAxes
+        if axes.contains(.horizontal), axes.contains(.vertical) { return true }
+        if axes.contains(.vertical) { return abs(delta.y) >= abs(delta.x) }
+        if axes.contains(.horizontal) { return abs(delta.x) > abs(delta.y) }
         return false
+    }
+
+    /// The axes it can be moved along now: a scroll view's, less any it has
+    /// nothing to scroll along and does not bounce along
+    /// (`.scrollBounceBehavior(.basedOnSize)`).
+    var movingAxes: Axis.Set {
+        guard let scroller else { return scrollAxes }
+        var axes = Axis.Set()
+        if scroller.moves(along: .horizontal) { axes.insert(.horizontal) }
+        if scroller.moves(along: .vertical) { axes.insert(.vertical) }
+        return axes
     }
 
     var handlesPointer: Bool {
@@ -156,10 +168,11 @@ extension Hit where Value == HitTarget {
 
 extension Array where Element == HitTarget {
     /// The innermost of these scroll targets that a move of `delta` is for;
-    /// the innermost of all when none of them scrolls that way.
+    /// the innermost that can move at all when none of them scrolls that
+    /// way, and none when none can.
     @MainActor
     func scrollTarget(along delta: Point) -> HitTarget? {
-        first { $0.scrolls(along: delta) } ?? first
+        first { $0.scrolls(along: delta) } ?? first { !$0.movingAxes.isEmpty }
     }
 }
 

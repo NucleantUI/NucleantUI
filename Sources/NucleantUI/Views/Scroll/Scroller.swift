@@ -28,9 +28,53 @@ final class Scroller {
     var axes: Axis.Set = .vertical
 
     /// Whether it may be dragged past an edge, and bounce back, along each
-    /// axis. Set as it is placed.
-    var bouncesHorizontally = true
-    var bouncesVertically = true
+    /// axis (`.scrollBounceBehavior`). Set as it is placed.
+    var horizontalBounce = ScrollBounceBehavior.automatic
+    var verticalBounce = ScrollBounceBehavior.automatic
+
+    /// Whether it bounces along each axis, for its content as last placed.
+    var bouncesHorizontally: Bool {
+        horizontalBounce.bounces(contentIsLonger: horizontalBounds.upperBound > horizontalBounds.lowerBound)
+    }
+
+    var bouncesVertically: Bool {
+        verticalBounce.bounces(contentIsLonger: verticalBounds.upperBound > verticalBounds.lowerBound)
+    }
+
+    /// Whether a finger or a wheel can move it along `axis`: one it scrolls,
+    /// with content longer than it there or bouncing even so.
+    func moves(along axis: Axis) -> Bool {
+        switch axis {
+        case .horizontal:
+            axes.contains(.horizontal) && (horizontalBounds.upperBound > horizontalBounds.lowerBound || bouncesHorizontally)
+        case .vertical:
+            axes.contains(.vertical) && (verticalBounds.upperBound > verticalBounds.lowerBound || bouncesVertically)
+        }
+    }
+
+    /// Whether it moves to keep the content in place as sizes change, in
+    /// the pass being placed (`Transaction.scrollContentOffsetAdjustmentBehavior`).
+    /// Set as it is placed.
+    var adjustsContentOffset = true
+
+    /// What a finger scrolling it does to the on-screen keyboard
+    /// (`.scrollDismissesKeyboard`). Set as it is placed.
+    var keyboardDismissal = ScrollDismissesKeyboardMode.automatic
+
+    /// Whether a finger scrolling it puts the keyboard away now: as the
+    /// drag begins, or — `onRelease` — as it lets go, moving the content
+    /// down toward the keyboard.
+    func dismissesKeyboard(onRelease: Bool) -> Bool {
+        switch keyboardDismissal.kind {
+        case .automatic, .immediately:
+            return !onRelease
+        case .interactively:
+            guard onRelease, axes.contains(.vertical), let velocity = releaseVelocity else { return false }
+            return velocity.dy < 0
+        case .never:
+            return false
+        }
+    }
 
     /// The size it shows the content in, and the content's size, as last
     /// placed.
@@ -245,10 +289,11 @@ final class Scroller {
         } else if isMoving {
             advance(to: time)
         } else {
-            // At rest, it keeps its place as the sizes change — and rests
-            // inside: content that shrank, or a viewport that grew, takes it
-            // back to the edge.
-            if request == nil { offset = keptPlace(from: before) }
+            // At rest, it keeps its place as the sizes change — unless the
+            // change asked it to stay where it is — and rests inside:
+            // content that shrank, or a viewport that grew, takes it back to
+            // the edge.
+            if request == nil, adjustsContentOffset { offset = keptPlace(from: before) }
             offset = clamped(offset)
         }
         return offset
@@ -498,6 +543,13 @@ final class Scroller {
         targetFrames = placingTargets?.frames ?? []
         placingTargets = nil
         if request != nil { return followRequest(node: node, at: time) }
+        // Told to stay where it is: no longer at the edge it was pinned to,
+        // nor moved where its target behavior rests in a resized viewport.
+        if !adjustsContentOffset {
+            if let pinnedEdge, offset(at: pinnedEdge) != offset { self.pinnedEdge = nil }
+            resizedFrom = nil
+            return false
+        }
         if let pinnedEdge, !isDragging, !isMoving {
             let pinned = offset(at: pinnedEdge)
             if pinned != offset {

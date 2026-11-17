@@ -157,6 +157,20 @@ public final class ViewHost {
     /// which scrolls with its wheel and drags only what asks for drags.
     public var scrollsOnDrag = false
 
+    /// Whether the platform shows a keyboard on screen while a view that
+    /// takes text has the keys — what a finger scrolling a scroll view
+    /// puts away by taking them (`.scrollDismissesKeyboard`). Off where the
+    /// keyboard is one you type on, which a scroll never takes the keys
+    /// from.
+    public var hasSoftKeyboard = false
+
+    /// Whether the press in flight, on a scroll view's content with the
+    /// on-screen keyboard up, takes the keys from the text field only once
+    /// it lifts without having scrolled: a press elsewhere takes them as it
+    /// goes down, but a scroll leaves the keyboard to the scroll view
+    /// (`.scrollDismissesKeyboard`).
+    private var clearsFocusOnLift = false
+
     /// The innermost scrollable node under the touch that is in flight, and
     /// whether that touch has turned into a scroll.
     private var scrollTarget: HitResult?
@@ -586,7 +600,10 @@ public final class ViewHost {
             let hits = rootNode?.pointerDownHits(
                 at: point, scroll: scrollsOnDrag, contextMenu: opensContextMenuOnLongPress
             )
-            updateFocus(to: hits?.focus?.value)
+            let found = hits?.focus?.value
+            clearsFocusOnLift = found == nil && hits?.scroll != nil
+                && hasSoftKeyboard && focusedTextInput != .none
+            if !clearsFocusOnLift { updateFocus(to: found) }
             touchStart = point
             isScrolling = false
             pressSerial += 1
@@ -607,6 +624,7 @@ public final class ViewHost {
                 activeScroll = caught
                 isScrolling = true
                 caughtScroll = true
+                clearsFocusOnLift = false
                 dragSourceHit = nil
                 contextMenuHit = nil
                 gestures[id] = nil
@@ -672,6 +690,9 @@ public final class ViewHost {
             if caughtScroll, activeScroll != nil {
                 arena.cancelPointer(id)
             }
+            // A press on a scroll view's content that never scrolled it
+            // takes the keys now, as one anywhere else did going down.
+            if clearsFocusOnLift { updateFocus(to: nil) }
             releasePrimary(at: point)
             if let session = dragSession {
                 dragSession = nil
@@ -735,13 +756,17 @@ public final class ViewHost {
     /// next one goes down.
     private func releasePrimary(at point: Point) {
         primaryPointer = nil
+        clearsFocusOnLift = false
         pointerLocation = point
         pressSerial += 1
         // Let go of while scrolling, it carries on on its own; one only
         // touched is no longer tracked.
         trackedScroller?.endTracking()
         trackedScroller = nil
-        activeScroll?.scroller?.endDrag(at: Scroller.now)
+        let released = activeScroll?.scroller
+        let wasDragged = released?.isDragging == true
+        released?.endDrag(at: Scroller.now)
+        if wasDragged, let released { dismissSoftKeyboard(for: released, onRelease: true) }
         activeScroll = nil
         caughtScroll = false
         scrollChain = []
@@ -788,6 +813,7 @@ public final class ViewHost {
                     InputTrace.log("scroll begins at \(point)")
                     isScrolling = true
                     activeScroll = target
+                    clearsFocusOnLift = false
                     if trackedScroller !== target.scroller { trackedScroller?.endTracking() }
                     trackedScroller = nil
                     // The press was a scroll all along: let the view go
@@ -797,6 +823,7 @@ public final class ViewHost {
                         let now = Scroller.now
                         scroller.beginDrag(at: now)
                         scroller.drag(by: Point(x: dx, y: dy), at: now)
+                        dismissSoftKeyboard(for: scroller, onRelease: false)
                     } else {
                         target.onScroll?(Point(x: dx, y: dy))
                     }
@@ -1034,6 +1061,17 @@ public final class ViewHost {
     /// delegate took a press.
     func clearFocus() {
         setFocus(nil)
+    }
+
+    /// A finger scrolling `scroller` began to (or, `onRelease`, let go):
+    /// the on-screen keyboard put away if the scroll view says so
+    /// (`.scrollDismissesKeyboard`) — by taking the keys from the view that
+    /// takes text — where the platform shows one, while it is up.
+    private func dismissSoftKeyboard(for scroller: Scroller, onRelease: Bool) {
+        guard hasSoftKeyboard, focusedTextInput != .none,
+              scroller.dismissesKeyboard(onRelease: onRelease)
+        else { return }
+        clearFocus()
     }
 
     // MARK: - Keys

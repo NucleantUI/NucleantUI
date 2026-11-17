@@ -32,6 +32,33 @@ struct ReaderRows {
     }
 }
 
+/// Twenty-five 40-tall rows that carry an `.id` of their own besides their
+/// `ForEach` id, then twenty-five of two 20-tall views each.
+@View
+struct ReaderWrappedRows {
+    let probe: ReaderProbe
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            let _ = probe.proxy = proxy
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(0..<25, id: \.self) { row in
+                        Color.blue.frame(height: 40).id("row \(row)")
+                    }
+                    ForEach(25..<50, id: \.self) { _ in
+                        Group {
+                            Color.green.frame(height: 20)
+                            Color.green.frame(height: 20)
+                        }
+                    }
+                }
+                .onGeometryChange(for: Double.self) { $0.frame(in: .scrollView).minY } action: { probe.top = $0 }
+            }
+        }
+    }
+}
+
 @View
 struct ReaderLazyRows {
     let probe: ReaderProbe
@@ -97,6 +124,31 @@ extension HostedViews {
             proxy.scrollTo(row, anchor: anchor)
             await harness.frames(2)
             #expect(probe.top == top)
+        }
+
+        @Test func aRowThatCarriesAnIDOfItsOwnIsFoundByEither() async throws {
+            let probe = ReaderProbe()
+            let harness = Harness(ReaderWrappedRows(probe: probe))
+            let proxy = try #require(probe.proxy)
+
+            proxy.scrollTo(10, anchor: .top)
+            await harness.frames(2)
+            #expect(probe.top == -400, "by its ForEach id")
+
+            proxy.scrollTo("row 5", anchor: .top)
+            await harness.frames(2)
+            #expect(probe.top == -200, "by its own")
+        }
+
+        @Test func aRowOfSeveralViewsIsTheBoxAroundThem() async throws {
+            let probe = ReaderProbe()
+            let harness = Harness(ReaderWrappedRows(probe: probe))
+            let proxy = try #require(probe.proxy)
+
+            // Row 30's two views are at 1200…1220 and 1220…1240.
+            proxy.scrollTo(30, anchor: .bottom)
+            await harness.frames(2)
+            #expect(probe.top == -1040)
         }
 
         @Test func aRowAlreadyInViewIsNotMovedTo() async throws {

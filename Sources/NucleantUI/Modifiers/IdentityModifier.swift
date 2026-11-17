@@ -25,9 +25,10 @@ public struct _IdentifiedView<Content: View, ID: Hashable> {
     let content: Content
     let id: ID
 
-    init(content: Content, id: ID) {
+    init(content: Content, id: ID, _viewID: ViewID = #viewID) {
         self.content = content
         self.id = id
+        self._viewID = _viewID
     }
 
     public var body: Never { bodyUnavailable() }

@@ -13,6 +13,12 @@
 /// the platform says, inside its ends. Where it is and how it moves is kept
 /// in a `Scroller` of its own (Scroll/Scroller.swift): scrolling places the
 /// content again and rebuilds nothing.
+///
+/// Through the environment, `.scrollBounceBehavior` says whether it bounces
+/// when its content fits, `.scrollDisabled` takes it out of the user's
+/// reach (not the app's), `.scrollClipDisabled` lets its content draw past
+/// its edges, and `.scrollDismissesKeyboard` whether a finger scrolling it
+/// puts the on-screen keyboard away.
 @View
 public struct ScrollView<Content: View> {
     public let axes: Axis.Set
@@ -116,12 +122,20 @@ struct ScrollContent: NodeContent {
 
         // Where the content is at this frame's time. Still moving on its
         // own, it is placed again next frame.
+        let store = AnimationStore.current
         scroller.axes = axes
         scroller.targetBehavior = targetBehavior
         scroller.environment = environment
         scroller.initialAnchor = anchors.anchor(for: .initialOffset)
         scroller.sizeChangeAnchor = anchors.anchor(for: .sizeChanges)
-        let store = AnimationStore.current
+        scroller.horizontalBounce = environment.horizontalScrollBounceBehavior
+        scroller.verticalBounce = environment.verticalScrollBounceBehavior
+        scroller.keyboardDismissal = environment.scrollDismissesKeyboardMode
+        scroller.adjustsContentOffset = store?.transaction.scrollContentOffsetAdjustmentBehavior.role != .disabled
+        // Disabled under a finger: let go of where it is.
+        if !environment.isScrollEnabled, scroller.isDragging, !context.freezesMotion {
+            scroller.endDrag(at: store?.now ?? Scroller.now)
+        }
         let offset: Point
         if context.freezesMotion {
             offset = scroller.offset
@@ -131,8 +145,14 @@ struct ScrollContent: NodeContent {
         }
 
         // The visible rect is the scroll view's own space: `.scrollView`, and
-        // `.scrollView(axis:)` for each axis it scrolls along.
-        var inner = context.clipped(to: rect)
+        // `.scrollView(axis:)` for each axis it scrolls along. Cut to its
+        // frame — or, `.scrollClipDisabled`, to one viewport out from each
+        // edge, so a lazy stack inside still has a clip to build rows for.
+        var inner = environment.scrollClipDisabled
+            ? context.clipped(to: rect.insetBy(EdgeInsets(
+                top: -rect.height, leading: -rect.width, bottom: -rect.height, trailing: -rect.width
+            )))
+            : context.clipped(to: rect)
         inner.scrollSafeAreaPadding = EdgeInsets()
         inner.scrollObservers = nil
         for name in [ScrollViewSpaceName(axis: nil)]
@@ -199,12 +219,16 @@ struct ScrollContent: NodeContent {
         }
     }
 
+    /// What it draws past its frame with its clip off takes no taps.
     var clipsChildren: Bool { true }
 
     var hitTarget: HitTarget? {
+        // `.scrollDisabled`: no target, so a finger or a wheel goes to a
+        // scroll view around it.
+        guard environment.isScrollEnabled else { return nil }
         // Scroll only — a scroll view swallows no taps, so its children keep
         // receiving them (hit testing tries children first regardless).
-        HitTarget(scroller: scroller, axes: axes) { [scroller] delta in
+        return HitTarget(scroller: scroller, axes: axes) { [scroller] delta in
             scroller.wheel(by: delta, at: Scroller.now)
         }
     }
