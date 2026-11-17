@@ -67,7 +67,7 @@ struct ScrollTargetLayoutContent: NodeContent {
         var inner = context
         inner.enclosingScroller = nil
         child.place(in: rect, proposal: proposal, context: inner, into: &list)
-        scroller.addTargetFrames(Self.targetViews(of: child).map(\.frame))
+        scroller.addTargets(Self.targetViews(of: child))
     }
 
     /// The views of the layout `node` is or wraps: down through the

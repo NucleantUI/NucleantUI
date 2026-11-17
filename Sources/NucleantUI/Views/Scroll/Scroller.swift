@@ -70,12 +70,28 @@ final class Scroller {
     /// it started from.
     private var gestureOrigin: Point = .zero
 
-    /// The views of its scroll target layout, in the content's own space,
-    /// as last placed; and those reported so far in the pass under way,
-    /// with where the content's origin is in it.
+    /// The views of its scroll target layout as last placed — their nodes,
+    /// and their frames in the content's own space — and those reported so
+    /// far in the pass under way, with where the content's origin is in it.
+    private(set) var targetNodes: [ViewNode] = []
     private(set) var targetFrames: [Rect] = []
-    private var placingTargetFrames: [Rect]?
+    private var placingTargets: (nodes: [ViewNode], frames: [Rect])?
     private var contentOrigin: Point = .zero
+
+    /// Moved by the user since where it is was last reported to a scroll
+    /// position binding.
+    private(set) var userScrolled = false
+
+    /// An edge a scroll position put it at, which it keeps to as the
+    /// content changes size — until the user scrolls it, or the app moves
+    /// it somewhere else.
+    private var pinnedEdge: Edge?
+
+    /// The `ScrollPosition` it was last given or reported, so a binding
+    /// handing it back is not taken for a new one — and the same for the id
+    /// of `.scrollPosition(id:)`.
+    var lastPosition: ScrollPosition?
+    var lastPositionID: AnyHashable?
 
     /// Where it was, and in what viewport, before the viewport last changed
     /// size — until a target behavior has said where to be in the new one.
@@ -181,6 +197,7 @@ final class Scroller {
     /// has no curve to sample here, so it goes at once too.
     func scroll(to target: Point, animation: Animation?, at time: Double) {
         if isMoving { advance(to: time) }
+        userScrolled = false
         horizontalMotion = nil
         verticalMotion = nil
         programmatic = nil
@@ -204,6 +221,8 @@ final class Scroller {
         animation: Animation?
     ) {
         request = ScrollRequest(resolve: resolve, animation: animation)
+        pinnedEdge = nil
+        userScrolled = false
         Invalidator.shared.requestPlacement()
     }
 
@@ -266,6 +285,57 @@ final class Scroller {
         return clamped(target)
     }
 
+    /// The offset that shows the content's `edge`, held where it is along
+    /// the other axis.
+    func offset(at edge: Edge) -> Point {
+        var target = offset
+        switch edge {
+        case .top: target.y = verticalBounds.lowerBound
+        case .bottom: target.y = verticalBounds.upperBound
+        case .leading: target.x = horizontalBounds.lowerBound
+        case .trailing: target.x = horizontalBounds.upperBound
+        }
+        return clamped(target)
+    }
+
+    /// Go to `edge` once the content is placed, and keep to it as the
+    /// content changes size.
+    func pin(to edge: Edge, animation: Animation?) {
+        request({ scroller, _ in (scroller.offset(at: edge), true) }, animation: animation)
+        pinnedEdge = edge
+    }
+
+    /// The view of its scroll target layout a scroll position names: with
+    /// no anchor the first one in view, else the one under the anchor's
+    /// point of the viewport (the nearest, between two).
+    func positionedView(anchor: UnitPoint?) -> ViewNode? {
+        guard !targetNodes.isEmpty else { return nil }
+        let visible = Rect(origin: offset, size: viewport)
+        guard let anchor else {
+            for (index, frame) in targetFrames.enumerated()
+            where frame.maxX > visible.minX && frame.minX < visible.maxX
+                && frame.maxY > visible.minY && frame.minY < visible.maxY {
+                return targetNodes[index]
+            }
+            return nil
+        }
+        let point = Point(x: offset.x + anchor.x * viewport.width, y: offset.y + anchor.y * viewport.height)
+        var best: (index: Int, distance: Double)?
+        for (index, frame) in targetFrames.enumerated() {
+            let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
+            let dy = max(frame.minY - point.y, 0, point.y - frame.maxY)
+            let distance = dx * dx + dy * dy
+            if best == nil || distance < best!.distance { best = (index, distance) }
+        }
+        return best.map { targetNodes[$0.index] }
+    }
+
+    /// Reported where it is after the user moved it: the next report waits
+    /// for the next move, once it has come to rest.
+    func noteUserScrollReported() {
+        if phase == .idle { userScrolled = false }
+    }
+
     /// `rect`, a frame placed in this pass's layout space, in the content's
     /// own.
     func contentRect(_ rect: Rect) -> Rect {
@@ -278,25 +348,34 @@ final class Scroller {
     /// the space the target layout reports frames in.
     func beginPlacingContent(at origin: Point) {
         contentOrigin = origin
-        placingTargetFrames = nil
+        placingTargets = nil
     }
 
-    /// A scroll target layout inside was placed with its views at `frames`.
-    func addTargetFrames(_ frames: [Rect]) {
-        var placing = placingTargetFrames ?? []
-        for frame in frames {
-            placing.append(frame.offsetBy(dx: -contentOrigin.x, dy: -contentOrigin.y))
+    /// A scroll target layout inside was placed with `views`.
+    func addTargets(_ views: [ViewNode]) {
+        var placing = placingTargets ?? ([], [])
+        for view in views {
+            placing.nodes.append(view)
+            placing.frames.append(view.frame.offsetBy(dx: -contentOrigin.x, dy: -contentOrigin.y))
         }
-        placingTargetFrames = placing
+        placingTargets = placing
     }
 
     /// The content is placed. Resized at rest under a target behavior, it
     /// goes where the behavior says for the new size — true then: placed
     /// again, it shows there.
     func endPlacingContent(node: ViewNode, at time: Double) -> Bool {
-        targetFrames = placingTargetFrames ?? []
-        placingTargetFrames = nil
+        targetNodes = placingTargets?.nodes ?? []
+        targetFrames = placingTargets?.frames ?? []
+        placingTargets = nil
         if request != nil { return followRequest(node: node, at: time) }
+        if let pinnedEdge, !isDragging, !isMoving {
+            let pinned = offset(at: pinnedEdge)
+            if pinned != offset {
+                offset = pinned
+                return true
+            }
+        }
         guard let resized = resizedFrom else { return false }
         resizedFrom = nil
         guard !isDragging, !isMoving else { return false }
@@ -380,6 +459,8 @@ final class Scroller {
         )
         dragOffset = unbanded
         gestureOrigin = clamped(offset)
+        pinnedEdge = nil
+        userScrolled = true
         phase = .interacting
         tracker.reset()
         tracker.add(offset, at: time)
@@ -453,6 +534,10 @@ final class Scroller {
         let generation = wheelGeneration
         let moved = next != offset
         offset = next
+        if moved {
+            pinnedEdge = nil
+            userScrolled = true
+        }
         if moved || phase != .idle {
             phase = .interacting
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.wheelIdleDelay) { [weak self] in

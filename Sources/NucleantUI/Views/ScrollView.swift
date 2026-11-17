@@ -36,12 +36,25 @@ extension ScrollView: BuiltinView {
         // a `Spacer` inside doesn't stretch along the enclosing stack's.
         inner.stackAxis = nil
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
+        // A scroll position the app wrote is taken now, so it is gone to
+        // once this pass has placed the content.
+        let environment = context.environment
+        let animation = context.transaction.disablesAnimations ? nil : context.transaction.animation
+        let position = environment.scrollPosition
+        if let position {
+            scroller.follow(position.position.wrappedValue, anchor: position.anchor, animation: animation)
+        }
+        let positionID = environment.scrollPositionID
+        positionID?.follow(scroller, animation)
         return ContentNode(
             content: ScrollContent(
                 axes: axes,
                 scroller: scroller,
-                targetBehavior: context.environment.scrollTargetBehavior,
-                environment: context.environment
+                targetBehavior: environment.scrollTargetBehavior,
+                position: position,
+                positionID: positionID,
+                effects: context.effects,
+                environment: environment
             ),
             children: [child]
         )
@@ -54,6 +67,11 @@ struct ScrollContent: NodeContent {
     /// Where a scroll may come to rest (`.scrollTargetBehavior`), and the
     /// environment the behavior is asked in.
     let targetBehavior: ScrollTargetBehaviorEntry?
+    /// The bindings `.scrollPosition` hands it, told where the user scrolls
+    /// it once each pass is placed.
+    let position: ScrollPositionEntry?
+    let positionID: ScrollPositionIDEntry?
+    let effects: EffectQueue
     let environment: EnvironmentValues
 
     /// A scroll view takes whatever it is offered — it is the clip, not the
@@ -112,6 +130,15 @@ struct ScrollContent: NodeContent {
         // rests: shown there next frame.
         if !context.freezesMotion, scroller.endPlacingContent(node: node, at: store?.now ?? Scroller.now) {
             store?.requestFrame()
+        }
+        // Where the user has scrolled it, for the scroll position bindings.
+        if !context.freezesMotion, scroller.userScrolled {
+            if let position, let next = scroller.reportedPosition(anchor: position.anchor) {
+                let binding = position.position
+                effects.afterPass { binding.wrappedValue = next }
+            }
+            positionID?.report(scroller, effects)
+            scroller.noteUserScrollReported()
         }
     }
 

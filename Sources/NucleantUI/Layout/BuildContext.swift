@@ -253,6 +253,12 @@ final class EffectQueue {
         pending.append { action(previous, value) }
     }
 
+    /// Queue `action` to run once the pass is placed — a scroll view
+    /// writing back where the user scrolled it.
+    func afterPass(_ action: @escaping () -> Void) {
+        pending.append(action)
+    }
+
     func noteBuiltDuringLayout() {
         builtDuringLayout = true
     }
