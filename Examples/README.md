@@ -15,7 +15,7 @@ a target, built from the same sources.
 
 To start your own app from one, copy the directory and change the
 dependency to
-`.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.3.2"))`.
+`.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.3.4"))`.
 
 | Example | Kind of app | What it shows |
 | --- | --- | --- |
