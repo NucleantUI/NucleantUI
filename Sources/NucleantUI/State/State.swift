@@ -63,6 +63,14 @@ public struct _StateProperty<Value> {
         var pending: Value?
     }
 
+    /// `@usableFromInline` because it is part of `_StateProperty`'s layout.
+    /// A module with `@State` in a generic view lays the storage out
+    /// itself and copies it field by field, which calls this type's metadata
+    /// accessor. Internal, that symbol is hidden: it links while
+    /// NucleantUI's objects are linked one by one, and not from the single
+    /// prelinked object Xcode makes of the package product, where hidden
+    /// symbols are local.
+    @usableFromInline
     enum Initial {
         case value(Value)
         /// Main actor: what it makes is usually an `@Observable` model,

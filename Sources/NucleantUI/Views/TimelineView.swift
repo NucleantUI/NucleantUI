@@ -183,9 +183,15 @@ public struct TimelineView<Schedule: TimelineSchedule, Content: View> {
 /// to another. The closure is how the parent's current values reach the
 /// content — it captures them — so a timeline whose parent re-ran must run
 /// the new one, not keep the last build's.
+///
+/// `@usableFromInline`: `TimelineView` stores it, so a module using one may
+/// need its metadata accessor, for the reason given on
+/// `_StateProperty.Initial`.
+@usableFromInline
 struct TimelineContent<Schedule: TimelineSchedule, Content: View>: ViewInput {
     let build: (TimelineViewDefaultContext) -> Content
 
+    @usableFromInline
     func _isEquivalent(to other: TimelineContent<Schedule, Content>) -> Bool { false }
 }
 

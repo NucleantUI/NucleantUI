@@ -346,6 +346,10 @@ where T.TableRowValue == F.TableRowValue {
     public typealias TableColumnSortComparator = T.TableColumnSortComparator
     public typealias TableColumnBody = Never
 
+    /// `@usableFromInline`: part of this public type's layout, so a module
+    /// using it may need its metadata accessor, for the reason given on
+    /// `_StateProperty.Initial`.
+    @usableFromInline
     enum Storage {
         case first(T)
         case second(F)
@@ -507,6 +511,10 @@ where T.TableRowValue == F.TableRowValue {
     public typealias TableRowValue = T.TableRowValue
     public typealias TableRowBody = Never
 
+    /// `@usableFromInline`: part of this public type's layout, so a module
+    /// using it may need its metadata accessor, for the reason given on
+    /// `_StateProperty.Initial`.
+    @usableFromInline
     enum Storage {
         case first(T)
         case second(F)
