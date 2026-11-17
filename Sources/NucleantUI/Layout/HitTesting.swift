@@ -16,6 +16,15 @@ public final class HitTarget {
     let onTap: (@MainActor (Point) -> Void)?
     let onScroll: (@MainActor (Point) -> Void)?
 
+    /// A `ScrollView`'s own motion: a finger drags it through this, and it
+    /// carries on and bounces back on its own once let go. `nil` for
+    /// anything else that scrolls, which takes every move as `onScroll`.
+    let scroller: Scroller?
+
+    /// The axes `onScroll` and `scroller` move along — what tells nested
+    /// scroll views which of them a move is for.
+    let scrollAxes: Axis.Set
+
     /// How far the pointer must travel before a drag starts reporting.
     let minimumDragDistance: Double
     let onDragChanged: (@MainActor (DragGesture.Value) -> Void)?
@@ -37,8 +46,46 @@ public final class HitTarget {
         self.onRelease = onRelease
         self.onTap = onTap
         self.onScroll = onScroll
+        self.scroller = nil
+        self.scrollAxes = [.horizontal, .vertical]
         self.onDragChanged = onDragChanged
         self.onDragEnded = onDragEnded
+    }
+
+    /// A scroll view's target: the wheel through `onScroll`, a finger
+    /// through `scroller`.
+    init(scroller: Scroller, axes: Axis.Set, onScroll: @escaping @MainActor (Point) -> Void) {
+        self.isEnabled = true
+        self.minimumDragDistance = 0
+        self.onPress = nil
+        self.onRelease = nil
+        self.onTap = nil
+        self.onScroll = onScroll
+        self.scroller = scroller
+        self.scrollAxes = axes
+        self.onDragChanged = nil
+        self.onDragEnded = nil
+    }
+
+    /// Whether a move of `delta` is one this target scrolls by: along its
+    /// one axis more than across it, or any way for both.
+    func scrolls(along delta: Point) -> Bool {
+        let axes = movingAxes
+        if axes.contains(.horizontal), axes.contains(.vertical) { return true }
+        if axes.contains(.vertical) { return abs(delta.y) >= abs(delta.x) }
+        if axes.contains(.horizontal) { return abs(delta.x) > abs(delta.y) }
+        return false
+    }
+
+    /// The axes it can be moved along now: a scroll view's, less any it has
+    /// nothing to scroll along and does not bounce along
+    /// (`.scrollBounceBehavior(.basedOnSize)`).
+    var movingAxes: Axis.Set {
+        guard let scroller else { return scrollAxes }
+        var axes = Axis.Set()
+        if scroller.moves(along: .horizontal) { axes.insert(.horizontal) }
+        if scroller.moves(along: .vertical) { axes.insert(.vertical) }
+        return axes
     }
 
     var handlesPointer: Bool {
@@ -101,6 +148,32 @@ struct PointerDownHits {
 
 extension Hit where Value == HitTarget {
     var target: HitTarget { value }
+
+    /// This scroll target and every one around it that `point` is inside,
+    /// innermost first — nested scroll views, for a move to find the one it
+    /// is for.
+    func scrollChain(at point: Point) -> [HitTarget] {
+        var chain = [target]
+        var node = self.node.parent
+        while let current = node {
+            if current.traits.contains(.hitTarget), let target = current.content.hitTarget,
+               target.isEnabled, target.handlesScroll, current.contains(windowPoint: point) {
+                chain.append(target)
+            }
+            node = current.parent
+        }
+        return chain
+    }
+}
+
+extension Array where Element == HitTarget {
+    /// The innermost of these scroll targets that a move of `delta` is for;
+    /// the innermost that can move at all when none of them scrolls that
+    /// way, and none when none can.
+    @MainActor
+    func scrollTarget(along delta: Point) -> HitTarget? {
+        first { $0.scrolls(along: delta) } ?? first { !$0.movingAxes.isEmpty }
+    }
 }
 
 extension ViewNode {

@@ -44,6 +44,25 @@ public struct Transaction {
     /// ```
     public var tracksVelocity = false
 
+    /// The behavior a scroll view will have regarding content offset
+    /// adjustments for the current transaction.
+    ///
+    /// A scroll view may automatically adjust its content offset
+    /// based on the current context. The absolute offset may be adjusted
+    /// to keep content in relatively the same place. For example,
+    /// when scrolled to the bottom, a scroll view may keep the bottom
+    /// edge scrolled to the bottom when the overall size of its content
+    /// changes.
+    ///
+    /// Use this property to disable these kinds of adjustments when needed.
+    ///
+    /// ```swift
+    /// var transaction = Transaction()
+    /// transaction.scrollContentOffsetAdjustmentBehavior = .disabled
+    /// withTransaction(transaction) { messages.insert(older, at: 0) }
+    /// ```
+    public var scrollContentOffsetAdjustmentBehavior: ScrollContentOffsetAdjustmentBehavior = .automatic
+
     /// `withAnimation(_:_:completion:)` callbacks waiting on this change.
     var completions: [AnimationCompletion] = []
 
@@ -62,6 +81,11 @@ public struct Transaction {
         }
         isContinuous = isContinuous || later.isContinuous
         tracksVelocity = tracksVelocity || later.tracksVelocity
+        // A change that asked for the offset to stay is served by a frame
+        // that leaves it.
+        if later.scrollContentOffsetAdjustmentBehavior.role == .disabled {
+            scrollContentOffsetAdjustmentBehavior = .disabled
+        }
         completions += later.completions
     }
 }

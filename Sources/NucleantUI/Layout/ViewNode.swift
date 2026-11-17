@@ -392,6 +392,10 @@ class ViewNode {
             }
             return
         }
+        // Placed without the recorder — while a view is leaving, or under a
+        // frozen context: what it kept was drawn where its nodes may no
+        // longer be.
+        placed = nil
         placeFresh(in: rect, proposal: proposal, context: context, store: store, into: &list)
     }
 

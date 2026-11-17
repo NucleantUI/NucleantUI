@@ -81,8 +81,12 @@ extension ForEach: BuiltinView {
         // The id, not the ordinal, gives a row its slot — so a row keeps
         // its state when the collection is reordered.
         let slots = context.rowSlots(for: ID.self)
+        var ids: [ID] = []
+        ids.reserveCapacity(data.count)
         let built = data.map { element in
-            let index = slots.slot(for: identify(element))
+            let id = identify(element)
+            ids.append(id)
+            let index = slots.slot(for: id)
             let isNew = context.isNewChild(at: index)
             let node = context.child(index) { ctx in
                 buildNode(ForEachRow(element: element, build: build), &ctx)
@@ -92,6 +96,65 @@ extension ForEach: BuiltinView {
         slots.forgetGone(from: context.position, built: built.count)
         // Rows added come in with their transition (a fade, without one);
         // rows removed go out with it.
-        return ContentNode(content: GroupContent(), children: context.transitionChildren(built))
+        return ContentNode(
+            content: ForEachContent(ids: ids, rows: built.map(\.node), unitOfID: nil),
+            children: context.transitionChildren(built)
+        )
+    }
+}
+
+/// A `ForEach`'s node: its rows dissolve into the layout around it, as a
+/// group's do, and it knows which row is which element's — for scrolling to
+/// a view by its id (`ScrollViewReader`, `.scrollPosition(id:)`).
+struct ForEachContent<ID: Hashable>: NodeContent {
+    /// The ids of the rows built, in order, and their nodes — each the
+    /// row's own, inside any transition slot standing over it.
+    let ids: [ID]
+    let rows: [ViewNode]
+
+    /// Under a lazy container: the unit of the element with an id, built
+    /// or not — `nil` for an id it does not have.
+    let unitOfID: ((ID) -> Int?)?
+
+    var isTransparent: Bool { true }
+
+    /// The node of the row for `id`, if it is built.
+    func row(for id: ID) -> ViewNode? {
+        guard let index = ids.firstIndex(of: id) else { return nil }
+        return rows[index]
+    }
+
+    /// The id of the row whose node is `node`, or which `node` stands over.
+    func id(of node: ViewNode) -> ID? {
+        for (index, row) in rows.enumerated() {
+            var probe: ViewNode? = row
+            while let current = probe {
+                if current === node { return ids[index] }
+                probe = current.parent
+                if probe?.content(as: ForEachContent<ID>.self) != nil { break }
+            }
+        }
+        return nil
+    }
+
+    func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
+        // Only reached as the root or the sole child of a modifier —
+        // otherwise the parent flattened it away. Sized as a ZStack would
+        // be, so several rows still get a sensible box.
+        let children = node.layoutChildren
+        guard !children.isEmpty else { return .zero }
+        var result = Size.zero
+        for child in children {
+            let size = child.sizeThatFits(proposal)
+            result.width = max(result.width, size.width)
+            result.height = max(result.height, size.height)
+        }
+        return result
+    }
+
+    func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        for child in node.layoutChildren {
+            child.place(in: rect, proposal: proposal, context: context, into: &list)
+        }
     }
 }

@@ -16,7 +16,25 @@ public typealias Point = SIMD2<Double>
 /// `x`/`y`, so a size adds straight onto a point.
 public typealias Size = SIMD2<Double>
 
+/// A direction and length: SwiftUI's `CGVector` — how fast a scroll view
+/// is moving, say. `dx`/`dy` name the same two lanes as `x`/`y`.
+public typealias Vector = SIMD2<Double>
+
 extension SIMD2 where Scalar == Double {
+    public init(dx: Double, dy: Double) {
+        self.init(dx, dy)
+    }
+
+    public var dx: Double {
+        get { x }
+        set { x = newValue }
+    }
+
+    public var dy: Double {
+        get { y }
+        set { y = newValue }
+    }
+
     public init(width: Double, height: Double) {
         self.init(width, height)
     }

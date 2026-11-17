@@ -161,6 +161,8 @@ targets:
       - path: Support/BundleModule.swift
   Issues:
     templates: [Example, ExampleSources]
+  Listen:
+    templates: [Example, ExampleSources]
   Metronome:
     templates: [Example, ExampleSources]
     dependencies:

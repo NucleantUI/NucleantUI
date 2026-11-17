@@ -623,6 +623,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
         // Android has no pointer: the same two gestures iOS substitutes.
         host.scrollsOnDrag = true
+        // Text is typed on the soft keyboard `syncSoftKeyboard` asks for.
+        host.hasSoftKeyboard = true
         host.opensContextMenuOnLongPress = true
         // Points-to-pixels, from the display. Android reports it as
         // `DisplayMetrics.density` and only Java can read it, so the Activity
