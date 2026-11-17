@@ -17,6 +17,8 @@ final class ScrollProbe {
     /// The top of the content in the scroll view's space: minus the offset.
     var top = 0.0
     var leading = 0.0
+    /// The content's width, where a test lays it out across the scroll view.
+    var width = 0.0
     var builds = 0
     var taps = 0
 }

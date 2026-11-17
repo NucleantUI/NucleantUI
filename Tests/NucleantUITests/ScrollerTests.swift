@@ -310,6 +310,100 @@ struct ScrollerTests {
         #expect(scroller.targetFrames == [Rect(x: 0, y: 200, width: 50, height: 50)])
     }
 
+    // MARK: - Insets and anchors
+
+    /// A scroller placed for the first time, at time 0, over content
+    /// 1000 tall in 200, with `insets` and the anchors given.
+    private func makeScroller(
+        insets: EdgeInsets = EdgeInsets(),
+        initial: UnitPoint? = nil,
+        sizeChanges: UnitPoint? = nil
+    ) -> Scroller {
+        let scroller = Scroller()
+        scroller.initialAnchor = initial
+        scroller.sizeChangeAnchor = sizeChanges
+        _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: 1000), insets: insets, at: 0)
+        return scroller
+    }
+
+    @Test func insetsLetItRestBeforeTheStartAndPastTheEndByAsMuch() {
+        let scroller = makeScroller(insets: EdgeInsets(top: 20, leading: 0, bottom: 30, trailing: 0))
+        #expect(scroller.verticalBounds == -20...830)
+        #expect(scroller.offset.y == -20, "it starts with the content its top inset in")
+        #expect(scroller.container == Size(width: 200, height: 150))
+        #expect(scroller.containerOrigin == Point(x: 0, y: 20))
+    }
+
+    @Test func contentShorterThanTheContainerRestsAtTheStartOnly() {
+        let scroller = Scroller()
+        _ = scroller.place(
+            viewport: Self.viewport, contentSize: Size(width: 200, height: 100),
+            insets: EdgeInsets(top: 20, leading: 0, bottom: 20, trailing: 0), at: 0
+        )
+        #expect(scroller.verticalBounds == -20 ... -20)
+    }
+
+    @Test(arguments: [(UnitPoint?.none, 0.0), (.top, 0), (.center, 400), (.bottom, 800)])
+    func itStartsAtTheInitialAnchorsPointOfItsRange(anchor: UnitPoint?, offset: Double) {
+        #expect(makeScroller(initial: anchor).offset.y == offset)
+    }
+
+    @Test func theInitialAnchorCountsTheFirstTimeOnly() {
+        let scroller = makeScroller(initial: .bottom)
+        scroller.scroll(to: Point(x: 0, y: 100), animation: nil, at: 0)
+        _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: 1000), at: 1)
+        #expect(scroller.offset.y == 100)
+    }
+
+    @Test(arguments: [(UnitPoint?.none, 300.0), (.top, 300), (.center, 400), (.bottom, 500)])
+    func asTheContentGrowsItKeepsItsDistanceFromTheSizeChangeAnchor(anchor: UnitPoint?, offset: Double) {
+        let scroller = makeScroller(sizeChanges: anchor)
+        scroller.scroll(to: Point(x: 0, y: 300), animation: nil, at: 0)
+        _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: 1200), at: 1)
+        #expect(scroller.offset.y == offset)
+    }
+
+    @Test func atTheBottomWithABottomAnchorNewContentKeepsItAtTheBottom() throws {
+        let scroller = makeScroller(initial: .bottom, sizeChanges: .bottom)
+        try #require(scroller.offset.y == 800)
+        for height in [1100.0, 1500, 1501] {
+            _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: height), at: 1)
+            #expect(scroller.offset.y == height - 200)
+        }
+    }
+
+    @Test func movingTheSizesWhileAFingerDragsItKeepsToTheFinger() {
+        let scroller = makeScroller(sizeChanges: .bottom)
+        scroller.beginDrag(at: 0)
+        scroller.drag(by: Point(x: 0, y: -100), at: 0.01)
+        _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: 1200), at: 0.02)
+        #expect(scroller.offset.y == 100)
+    }
+
+    @Test(arguments: [(UnitPoint?.none, 470.0), (.top, 580), (.bottom, 470)])
+    func showingARectCountsTheInsets(anchor: UnitPoint?, offset: Double) {
+        // The container is 160 tall, 20 down; the row is at 600…650. Its
+        // bottom at the container's: 650 − 160 − 20. Its top at the
+        // container's: 600 − 20.
+        let scroller = makeScroller(insets: EdgeInsets(top: 20, leading: 0, bottom: 20, trailing: 0))
+        #expect(scroller.offset(showing: Rect(x: 0, y: 600, width: 200, height: 50), anchor: anchor).y == offset)
+    }
+
+    @Test func aTargetBehaviorIsToldTheContainerInsideTheInsets() {
+        let insets = EdgeInsets(top: 0, leading: 0, bottom: 40, trailing: 0)
+        let scroller = makeScroller(insets: insets)
+        scroller.targetBehavior = ScrollTargetBehaviorEntry(.paging)
+        scroller.beginDrag(at: 0)
+        scroller.drag(by: Point(x: 0, y: -100), at: 0.01)
+        scroller.endDrag(at: 0.5)
+        var time = 0.5
+        while scroller.isMoving, time < 10 {
+            time += 1.0 / 60
+            _ = scroller.place(viewport: Self.viewport, contentSize: Size(width: 200, height: 1000), insets: insets, at: time)
+        }
+        #expect(scroller.offset.y == 160, "pages of the 160-tall container: 100 is past half of one")
+    }
+
     @Test func atRestItIsTakenBackInsideWhenTheContentShrinks() {
         let scroller = makeScroller()
         scroller.scroll(to: Point(x: 0, y: 800), animation: nil, at: 0)

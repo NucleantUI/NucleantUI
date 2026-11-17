@@ -928,9 +928,11 @@ public struct DrawContext: Sendable {
         let animation: Animation?
         let coordinateSpaces: [CoordinateSpaceFrame]
         let enclosingScroller: Scroller?
+        let scrollSafeAreaPadding: EdgeInsets
 
         static let none = Shared(
-            transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [], enclosingScroller: nil
+            transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [],
+            enclosingScroller: nil, scrollSafeAreaPadding: EdgeInsets()
         )
 
         init(
@@ -938,13 +940,15 @@ public struct DrawContext: Sendable {
             shaderCanvasInput: ShaderCanvasInput?,
             animation: Animation?,
             coordinateSpaces: [CoordinateSpaceFrame],
-            enclosingScroller: Scroller?
+            enclosingScroller: Scroller?,
+            scrollSafeAreaPadding: EdgeInsets
         ) {
             self.transformedClips = transformedClips
             self.shaderCanvasInput = shaderCanvasInput
             self.animation = animation
             self.coordinateSpaces = coordinateSpaces
             self.enclosingScroller = enclosingScroller
+            self.scrollSafeAreaPadding = scrollSafeAreaPadding
         }
     }
 
@@ -957,7 +961,8 @@ public struct DrawContext: Sendable {
             shared = Shared(
                 transformedClips: newValue, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
-                enclosingScroller: shared.enclosingScroller
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
             )
         }
     }
@@ -972,7 +977,8 @@ public struct DrawContext: Sendable {
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: newValue,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
-                enclosingScroller: shared.enclosingScroller
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
             )
         }
     }
@@ -987,7 +993,8 @@ public struct DrawContext: Sendable {
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: newValue, coordinateSpaces: shared.coordinateSpaces,
-                enclosingScroller: shared.enclosingScroller
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
             )
         }
     }
@@ -1002,7 +1009,8 @@ public struct DrawContext: Sendable {
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: newValue,
-                enclosingScroller: shared.enclosingScroller
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
             )
         }
     }
@@ -1017,7 +1025,24 @@ public struct DrawContext: Sendable {
             shared = Shared(
                 transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
-                enclosingScroller: newValue
+                enclosingScroller: newValue,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding
+            )
+        }
+    }
+
+    /// The safe area padding (`.safeAreaPadding`) a scroll view placed here
+    /// adds to its content's insets — set over a scroll view, taken by it,
+    /// and gone again below it.
+    var scrollSafeAreaPadding: EdgeInsets {
+        get { shared.scrollSafeAreaPadding }
+        set {
+            guard newValue != shared.scrollSafeAreaPadding else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: newValue
             )
         }
     }

@@ -236,6 +236,7 @@ extension DrawContext {
                     && shaderCanvasInput === other.shaderCanvasInput
                     && coordinateSpaces == other.coordinateSpaces
                     && enclosingScroller === other.enclosingScroller
+                    && scrollSafeAreaPadding == other.scrollSafeAreaPadding
             ))
     }
 }

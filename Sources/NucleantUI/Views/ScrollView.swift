@@ -35,6 +35,12 @@ extension ScrollView: BuiltinView {
         // The content is not in a stack of its own; clear any inherited axis so
         // a `Spacer` inside doesn't stretch along the enclosing stack's.
         inner.stackAxis = nil
+        // The margins and anchors set for this scroll view are its own: a
+        // scroll view inside does not inherit them.
+        let margins = context.environment.contentMargins
+        let anchors = context.environment.scrollAnchors
+        if margins != ContentMargins() { inner.environment.contentMargins = ContentMargins() }
+        if anchors != ScrollAnchors() { inner.environment.scrollAnchors = ScrollAnchors() }
         let child = inner.child(0) { ctx in buildNode(content, &ctx) }
         // A scroll position the app wrote is taken now, so it is gone to
         // once this pass has placed the content.
@@ -51,6 +57,8 @@ extension ScrollView: BuiltinView {
                 axes: axes,
                 scroller: scroller,
                 targetBehavior: environment.scrollTargetBehavior,
+                margins: margins.scrollContent,
+                anchors: anchors,
                 position: position,
                 positionID: positionID,
                 effects: context.effects,
@@ -67,6 +75,10 @@ struct ScrollContent: NodeContent {
     /// Where a scroll may come to rest (`.scrollTargetBehavior`), and the
     /// environment the behavior is asked in.
     let targetBehavior: ScrollTargetBehaviorEntry?
+    /// What `.contentMargins` insets the content by, and the points
+    /// `.defaultScrollAnchor` keeps it to.
+    let margins: EdgeInsets
+    let anchors: ScrollAnchors
     /// The bindings `.scrollPosition` hands it, told where the user scrolls
     /// it once each pass is placed.
     let position: ScrollPositionEntry?
@@ -83,9 +95,20 @@ struct ScrollContent: NodeContent {
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         guard let child = node.singleChild else { return }
 
+        // Inset by its content margins and the safe area padding handed to
+        // it; the padding goes no further down than this scroll view.
+        let padding = context.scrollSafeAreaPadding
+        let insets = EdgeInsets(
+            top: margins.top + padding.top,
+            leading: margins.leading + padding.leading,
+            bottom: margins.bottom + padding.bottom,
+            trailing: margins.trailing + padding.trailing
+        )
+
         // Unconstrained along each scrollable axis: that is what lets the
-        // content be taller than the viewport.
-        var contentProposal = ProposedSize(rect.size)
+        // content be taller than the viewport. Across, the viewport inside
+        // the insets.
+        var contentProposal = ProposedSize(width: max(0, rect.width - insets.horizontal), height: max(0, rect.height - insets.vertical))
         if axes.contains(.vertical) { contentProposal.height = nil }
         if axes.contains(.horizontal) { contentProposal.width = nil }
 
@@ -96,31 +119,46 @@ struct ScrollContent: NodeContent {
         scroller.axes = axes
         scroller.targetBehavior = targetBehavior
         scroller.environment = environment
+        scroller.initialAnchor = anchors.anchor(for: .initialOffset)
+        scroller.sizeChangeAnchor = anchors.anchor(for: .sizeChanges)
         let store = AnimationStore.current
         let offset: Point
         if context.freezesMotion {
             offset = scroller.offset
         } else {
-            offset = scroller.place(viewport: rect.size, contentSize: size, at: store?.now ?? Scroller.now)
+            offset = scroller.place(viewport: rect.size, contentSize: size, insets: insets, at: store?.now ?? Scroller.now)
             if scroller.isMoving { store?.requestFrame() }
         }
 
         // The visible rect is the scroll view's own space: `.scrollView`, and
         // `.scrollView(axis:)` for each axis it scrolls along.
         var inner = context.clipped(to: rect)
+        inner.scrollSafeAreaPadding = EdgeInsets()
         for name in [ScrollViewSpaceName(axis: nil)]
             + (axes.contains(.horizontal) ? [ScrollViewSpaceName(axis: .horizontal)] : [])
             + (axes.contains(.vertical) ? [ScrollViewSpaceName(axis: .vertical)] : []) {
             inner.coordinateSpaces.append(CoordinateSpaceFrame(name: name, rect: rect, transform: context.transform))
         }
 
+        // Along an axis it scrolls, the content is where the offset puts it
+        // — moved within the container by the alignment anchor when it is
+        // shorter than that; across, it is the container.
+        let container = scroller.container
+        let alignment = anchors.anchor(for: .alignment)
+        var contentRect = Rect(origin: rect.origin - offset, size: size)
+        for (axis, along) in [(Axis.horizontal, Axis.Set.horizontal), (.vertical, .vertical)] {
+            if axes.contains(along) {
+                if let alignment, size[axis] < container[axis] {
+                    let fraction = axis == .horizontal ? alignment.x : alignment.y
+                    contentRect.origin[axis] += fraction * (container[axis] - size[axis])
+                }
+            } else {
+                contentRect.origin[axis] = rect.origin[axis] + scroller.containerOrigin[axis]
+                contentRect.size[axis] = container[axis]
+            }
+        }
+
         // A scroll target layout inside reports its views to this one.
-        let contentRect = Rect(
-            x: rect.minX - offset.x,
-            y: rect.minY - offset.y,
-            width: axes.contains(.horizontal) ? size.width : rect.width,
-            height: axes.contains(.vertical) ? size.height : rect.height
-        )
         if !context.freezesMotion {
             inner.enclosingScroller = scroller
             scroller.beginPlacingContent(at: contentRect.origin)

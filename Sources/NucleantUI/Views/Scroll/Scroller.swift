@@ -37,9 +37,24 @@ final class Scroller {
     private(set) var viewport: Size = .zero
     private(set) var contentSize: Size = .zero
 
+    /// What the content is inset by — content margins and safe area
+    /// padding — as last placed. It rests that far in from the scroll
+    /// view's edges, and scrolls past them.
+    private(set) var insets = EdgeInsets()
+
     /// Where it is, as last sampled: the point of the content at the
-    /// top-leading corner of the viewport.
+    /// top-leading corner of the viewport — before zero by the leading
+    /// insets at the start.
     private(set) var offset: Point = .zero
+
+    /// The `.defaultScrollAnchor` points it starts at and keeps to as sizes
+    /// change. Set as it is placed.
+    var initialAnchor: UnitPoint?
+    var sizeChangeAnchor: UnitPoint?
+
+    /// Whether it has been placed — the first time, it starts at its
+    /// initial anchor.
+    private var hasBeenPlaced = false
 
     private(set) var phase: ScrollPhase = .idle
 
@@ -137,13 +152,26 @@ final class Scroller {
     /// Whether a finger is dragging it.
     var isDragging: Bool { dragOffset != nil }
 
-    /// The offsets it can rest at along each axis.
+    /// The offsets it can rest at along each axis: from the leading inset
+    /// before the content's start to the trailing inset past its end.
     var horizontalBounds: ClosedRange<Double> {
-        0...max(0, contentSize.width - viewport.width)
+        let start = -insets.leading
+        return start...max(start, contentSize.width + insets.trailing - viewport.width)
     }
 
     var verticalBounds: ClosedRange<Double> {
-        0...max(0, contentSize.height - viewport.height)
+        let start = -insets.top
+        return start...max(start, contentSize.height + insets.bottom - viewport.height)
+    }
+
+    /// The viewport inside the insets — what the content is shown in, and
+    /// where in the viewport that starts.
+    var container: Size {
+        Size(width: max(0, viewport.width - insets.horizontal), height: max(0, viewport.height - insets.vertical))
+    }
+
+    var containerOrigin: Point {
+        Point(x: insets.leading, y: insets.top)
     }
 
     /// The clock the frames are stamped with (`AnimationStore.now`), read
@@ -156,22 +184,57 @@ final class Scroller {
 
     /// Placed in `viewport` with content of `contentSize`, at `time`: where
     /// the content is now.
-    func place(viewport: Size, contentSize: Size, at time: Double) -> Point {
+    func place(viewport: Size, contentSize: Size, insets: EdgeInsets = EdgeInsets(), at time: Double) -> Point {
         if targetBehavior != nil, self.viewport != .zero, viewport != self.viewport, resizedFrom == nil {
             resizedFrom = (offset, self.viewport)
         }
+        let before = (horizontal: horizontalBounds, vertical: verticalBounds)
         self.viewport = viewport
         self.contentSize = contentSize
+        self.insets = insets
+        guard hasBeenPlaced else {
+            hasBeenPlaced = true
+            offset = startingOffset()
+            return offset
+        }
         if let dragOffset {
             offset = banded(dragOffset)
         } else if isMoving {
             advance(to: time)
         } else {
-            // At rest, it rests inside: content that shrank, or a viewport
-            // that grew, takes it back to the edge.
+            // At rest, it keeps its place as the sizes change — and rests
+            // inside: content that shrank, or a viewport that grew, takes it
+            // back to the edge.
+            if request == nil { offset = keptPlace(from: before) }
             offset = clamped(offset)
         }
         return offset
+    }
+
+    /// Where it starts: the initial anchor's point of the range it can rest
+    /// in — the start, without one.
+    private func startingOffset() -> Point {
+        let anchor = initialAnchor ?? .topLeading
+        let horizontal = horizontalBounds
+        let vertical = verticalBounds
+        return clamped(Point(
+            x: horizontal.lowerBound + anchor.x * (horizontal.upperBound - horizontal.lowerBound),
+            y: vertical.lowerBound + anchor.y * (vertical.upperBound - vertical.lowerBound)
+        ))
+    }
+
+    /// Where it is after the range it can rest in moved from `before`: as
+    /// far from the size-change anchor's point of the range as it was — from
+    /// the start, without one.
+    private func keptPlace(from before: (horizontal: ClosedRange<Double>, vertical: ClosedRange<Double>)) -> Point {
+        let anchor = sizeChangeAnchor ?? .topLeading
+        func kept(_ value: Double, _ old: ClosedRange<Double>, _ new: ClosedRange<Double>, _ fraction: Double) -> Double {
+            value + (new.lowerBound - old.lowerBound) * (1 - fraction) + (new.upperBound - old.upperBound) * fraction
+        }
+        return Point(
+            x: kept(offset.x, before.horizontal, horizontalBounds, anchor.x),
+            y: kept(offset.y, before.vertical, verticalBounds, anchor.y)
+        )
     }
 
     /// Sample both motions at `time`, ending the ones that are over.
@@ -276,22 +339,25 @@ final class Scroller {
         return moved
     }
 
-    /// The offset that shows `rect`, in the content's own space: its
-    /// `anchor` point at the viewport's same point, or — without one — the
-    /// least move that shows all of it.
+    /// The offset that shows `rect`, in the content's own space, in the
+    /// container — the viewport inside the insets: its `anchor` point at
+    /// the container's same point, or — without one — the least move that
+    /// shows all of it.
     func offset(showing rect: Rect, anchor: UnitPoint?) -> Point {
         var target = offset
         for (axis, along) in [(Axis.horizontal, Axis.Set.horizontal), (.vertical, .vertical)] where axes.contains(along) {
             let start = rect.origin[axis]
             let length = rect.size[axis]
-            let visible = viewport[axis]
+            let lead = containerOrigin[axis]
+            let visible = container[axis]
+            let shown = offset[axis] + lead
             if let anchor {
                 let fraction = axis == .horizontal ? anchor.x : anchor.y
-                target[axis] = start + fraction * length - fraction * visible
-            } else if start < offset[axis] || length > visible {
-                target[axis] = start
-            } else if start + length > offset[axis] + visible {
-                target[axis] = start + length - visible
+                target[axis] = start + fraction * length - fraction * visible - lead
+            } else if start < shown || length > visible {
+                target[axis] = start - lead
+            } else if start + length > shown + visible {
+                target[axis] = start + length - visible - lead
             }
         }
         return clamped(target)
@@ -322,7 +388,7 @@ final class Scroller {
     /// point of the viewport (the nearest, between two).
     func positionedView(anchor: UnitPoint?) -> ViewNode? {
         guard !targetNodes.isEmpty else { return nil }
-        let visible = Rect(origin: offset, size: viewport)
+        let visible = Rect(origin: offset + containerOrigin, size: container)
         guard let anchor else {
             for (index, frame) in targetFrames.enumerated()
             where frame.maxX > visible.minX && frame.minX < visible.maxX
@@ -331,7 +397,7 @@ final class Scroller {
             }
             return nil
         }
-        let point = Point(x: offset.x + anchor.x * viewport.width, y: offset.y + anchor.y * viewport.height)
+        let point = visible.origin + Point(x: anchor.x * visible.width, y: anchor.y * visible.height)
         var best: (index: Int, distance: Double)?
         for (index, frame) in targetFrames.enumerated() {
             let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
@@ -408,22 +474,25 @@ final class Scroller {
     /// behavior; `nil` without one.
     private func restingPlace(proposing proposed: Point, from origin: Point, velocity: Vector) -> Point? {
         guard let behavior = targetBehavior else { return nil }
-        var target = ScrollTarget(rect: Rect(origin: proposed, size: viewport))
+        // Targets are rects of the content the container — the viewport
+        // inside the insets — shows.
+        let lead = containerOrigin
+        var target = ScrollTarget(rect: Rect(origin: proposed + lead, size: container))
         let context = ScrollTargetBehaviorContext(
-            originalTarget: ScrollTarget(rect: Rect(origin: origin, size: viewport)),
+            originalTarget: ScrollTarget(rect: Rect(origin: origin + lead, size: container)),
             velocity: velocity,
             contentSize: contentSize,
-            containerSize: viewport,
+            containerSize: container,
             axes: axes,
             environment: environment,
             targetFrames: targetFrames
         )
         behavior.updateTarget(&target, context)
-        var resting = target.rect.origin
-        // The rect's anchor point at the viewport's same point.
+        var resting = target.rect.origin - lead
+        // The rect's anchor point at the container's same point.
         if let anchor = target.anchor {
-            resting.x += anchor.x * (target.rect.width - viewport.width)
-            resting.y += anchor.y * (target.rect.height - viewport.height)
+            resting.x += anchor.x * (target.rect.width - container.width)
+            resting.y += anchor.y * (target.rect.height - container.height)
         }
         return clamped(resting)
     }
