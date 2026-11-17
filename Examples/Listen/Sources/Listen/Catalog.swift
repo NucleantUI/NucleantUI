@@ -3,9 +3,10 @@
 //  Listen
 //
 //  Everything there is to listen to: sixteen albums by made-up artists,
-//  their tracks, and the lines each track sings. A value built once
-//  (`Catalog.shared`) and handed to the screens; the shelves on Listen Now
-//  are views of it.
+//  forty more put together from word lists so the shelves run on past the
+//  widest window (an iPad on its side), their tracks, and the lines each
+//  track sings. A value built once (`Catalog.shared`) and handed to the
+//  screens; the shelves on Listen Now are views of it.
 //
 
 import NucleantUI
@@ -13,13 +14,13 @@ import NucleantUI
 struct Catalog {
     let albums: [Album]
     let friends = ["Ola", "Devi", "Priya", "Sam", "Lena", "Kofi", "Hana", "Ruben", "Theo", "Mei"]
-    let genres = ["Dream pop", "Indie", "Afrobeat", "Synth-pop", "Folk", "Electronic", "Jazz", "Ambient", "Rock", "Soul"]
+    let genres = Catalog.genreNames
 
     static let shared = Catalog()
 
     private init() {
         var trackID = 0
-        albums = Self.sources.enumerated().map { index, source in
+        albums = (Self.sources + Self.generatedSources(count: 40)).enumerated().map { index, source in
             let tracks = source.tracks.enumerated().map { number, title in
                 defer { trackID += 1 }
                 return Track(
@@ -53,7 +54,12 @@ struct Catalog {
 
     var newReleases: [Album] { albums.filter(\.isNew) }
 
-    var madeForYou: [Album] { [albums[3], albums[6], albums[9], albums[1], albums[11], albums[7], albums[12], albums[4]] }
+    /// A hand-picked eight, then older albums from the rest: two dozen.
+    var madeForYou: [Album] {
+        let picked = [albums[3], albums[6], albums[9], albums[1], albums[11], albums[7], albums[12], albums[4]]
+        let more = albums.dropFirst(Self.sources.count).filter { !$0.isNew }
+        return Array((picked + more).prefix(24))
+    }
 
     /// One song from each album, for the Top Songs list.
     var topSongs: [(album: Album, track: Track)] {
@@ -75,6 +81,8 @@ struct Catalog {
         }
         return (albums, tracks)
     }
+
+    private static let genreNames = ["Dream pop", "Indie", "Afrobeat", "Synth-pop", "Folk", "Electronic", "Jazz", "Ambient", "Rock", "Soul"]
 
     // MARK: - The source
 
@@ -204,6 +212,79 @@ struct Catalog {
             tracks: ["Open Water", "Swell", "Horizon", "Sea Legs", "Cross Current", "Sailmaker", "Landfall", "Deep Blue"]
         ),
     ]
+
+    // MARK: - Made-up albums
+
+    /// `count` albums put together from word lists — no two titles alike,
+    /// none like the sixteen above — each with a colour of its own; every
+    /// third one new this year.
+    private static func generatedSources(count: Int) -> [Source] {
+        let adjectives = [
+            "Silver", "Quiet", "Electric", "Hollow", "Golden", "Lucid", "Wild", "Crystal",
+            "Faded", "Secret", "Amber", "Distant", "Restless", "Gentle", "Static", "Burning",
+        ]
+        let nouns = [
+            "Rivers", "Signals", "Echoes", "Machines", "Seasons", "Islands", "Letters", "Engines",
+            "Mirrors", "Orchids", "Valleys", "Tides", "Postcards", "Cities", "Weather", "Horizons",
+        ]
+        let artists = [
+            "Lumen Bay", "Oskar Vale", "Lantern Hill Club", "Nadia Sol", "Iris & The Fold", "Marlow",
+            "Echo Park Social", "Yara Quinn", "North Atlas", "Celeste Ono", "The Driftwood Set", "Kai Moreno",
+            "Saffron Hill", "Linnea Strand", "Low Orbit", "Tobias Rae",
+        ]
+        let firstWords = ["Midnight", "Summer", "Little", "Open", "Broken", "Golden", "Second", "Paper", "Slow", "Neon", "Long", "Silent"]
+        let secondWords = ["Drive", "Heart", "Window", "Light", "Road", "Song", "Rain", "Fire", "Morning", "Dance", "Wave", "Line"]
+        let motifs: [Motif] = [.rings, .stripes, .sun, .grid, .waves, .dots]
+        let blurbs = [
+            "recorded in a week, mostly live, mostly at night.",
+            "a record about leaving, and about coming back.",
+            "big choruses, small rooms, and one very loud organ.",
+            "songs written on the road between two long tours.",
+            "the sound of a band finally finding its own.",
+        ]
+        return (0..<count).map { index in
+            let genre = genreNames[(index * 7) % genreNames.count]
+            let artist = artists[(index * 3) % artists.count]
+            let isNew = index % 3 == 0
+            let hue = Double((index * 47) % 360) / 360
+            return Source(
+                title: "\(adjectives[index % adjectives.count]) \(nouns[(index * 7 + index / adjectives.count + 3) % nouns.count])",
+                artist: artist,
+                year: isNew ? 2026 : 2018 + index % 8,
+                genre: genre,
+                palette: Palette(
+                    light: shade(hue, saturation: 0.38, brightness: 0.96),
+                    deep: shade(hue + 0.07, saturation: 0.78, brightness: 0.36),
+                    ink: Color(white: 0.98)
+                ),
+                motif: motifs[(index * 5) % motifs.count],
+                isNew: isNew,
+                blurb: "\(genre) from \(artist): \(blurbs[index % blurbs.count])",
+                tracks: (0..<(7 + index % 4)).map { number in
+                    "\(firstWords[(index + number * 5) % firstWords.count]) \(secondWords[(index * 3 + number * 7) % secondWords.count])"
+                }
+            )
+        }
+    }
+
+    /// The colour of `hue` (0…1, wrapping) at that saturation and
+    /// brightness.
+    private static func shade(_ hue: Double, saturation: Double, brightness: Double) -> Color {
+        let h = (hue - hue.rounded(.down)) * 6
+        let c = brightness * saturation
+        let x = c * (1 - abs(h.truncatingRemainder(dividingBy: 2) - 1))
+        let m = brightness - c
+        let (r, g, b): (Double, Double, Double)
+        switch Int(h) {
+        case 0: (r, g, b) = (c, x, 0)
+        case 1: (r, g, b) = (x, c, 0)
+        case 2: (r, g, b) = (0, c, x)
+        case 3: (r, g, b) = (0, x, c)
+        case 4: (r, g, b) = (x, 0, c)
+        default: (r, g, b) = (c, 0, x)
+        }
+        return Color(red: Float(r + m), green: Float(g + m), blue: Float(b + m))
+    }
 
     // MARK: - Lyrics
 
