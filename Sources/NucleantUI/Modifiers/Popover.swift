@@ -6,7 +6,7 @@
 //  placed; while the binding is true the host draws the content on a panel
 //  in its overlay slot — over the whole window, clipped by nothing — with
 //  an arrow pointing at the view, and a scrim under it that closes it on a
-//  press anywhere else. The panel goes above the view when there is room,
+//  press anywhere else. Escape closes the innermost one too. The panel goes above the view when there is room,
 //  else below, else beside it.
 //
 
@@ -33,7 +33,8 @@ extension View {
     /// space above is short, or to its trailing then leading side when
     /// neither fits — always inside the window — and carries an arrow that
     /// points at the view. A press outside sets `isPresented` false and
-    /// goes no further.
+    /// goes no further. Escape sets it false too, for the innermost
+    /// popover, unless a view's `.onKeyPress` keeps the key.
     public func popover<Content: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder content: () -> Content
