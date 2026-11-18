@@ -320,8 +320,8 @@ inside is a row that opens its items beside it as the pointer moves over
 it (a tap, on touch), to the left when the right edge has no room, nested
 as deep as you like; moving onto another row of the panel it hangs off
 closes it. A `Menu` on its own is a button that opens its items under
-itself. A press anywhere outside closes everything and goes no further.
-No keyboard navigation yet.
+itself. A press anywhere outside closes everything and goes no further,
+and so does Escape. No keyboard navigation through the rows yet.
 
 `.onHover { hovering in … }` is what the rows use, and is yours too — a
 mouse only; a finger never hovers.
@@ -344,7 +344,8 @@ arrow pointing at the view it is on: above the view when there is room,
 else below, else to its trailing then leading side, and always inside the
 window. The content is ordinary views — buttons in it are buttons, not
 menu rows. A press anywhere outside sets the binding false and goes no
-further; the content can set it false itself. A view that leaves the tree
+further, and Escape sets it false too, for the innermost popover; the
+content can set it false itself. A view that leaves the tree
 while presenting takes its popover with it. Popovers and context menus
 share the host's overlay slot, the menu on top.
 

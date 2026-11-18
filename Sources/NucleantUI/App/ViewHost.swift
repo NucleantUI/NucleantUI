@@ -1088,7 +1088,20 @@ public final class ViewHost {
             heldKeys.insert(keyCode)
         }
         let press = KeyPress(phase: isRepeat ? .repeat : .down, keyCode: keyCode, characters: characters, modifiers: modifiers)
+        // Escape closes what is open over the window, one thing per press,
+        // the top one first. An open menu has the keys, as on macOS, so it
+        // goes before any view. A popover goes after the views' own
+        // `.onKeyPress`, so a view can keep Escape for itself.
+        let isEscape = keyCode == 0x35 && !isRepeat
+        if isEscape, contextMenu != nil {
+            dismissContextMenu()
+            return
+        }
         if offerKeyPress(press) { return }
+        if isEscape, let innermost = popoverPresenter.popovers.last {
+            innermost.dismiss()
+            return
+        }
         let focused = focusedTarget()
         if keyCode == 0x30, !modifiers.contains(.command), !modifiers.contains(.option) {
             // Nothing focused, a tab stop that passes Tab on, or ⌃Tab out of

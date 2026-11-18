@@ -29,7 +29,7 @@ extension View {
     /// The items are views: `Button`s become rows, `Menu`s rows that open a
     /// submenu beside them, `Divider` a rule between them, and `if` works
     /// as in any builder. A row runs its action and closes the menu; a
-    /// press anywhere else closes it without one.
+    /// press anywhere else, or Escape, closes it without one.
     public func contextMenu<MenuItems: View>(
         @ViewBuilder menuItems: () -> MenuItems
     ) -> some View {
