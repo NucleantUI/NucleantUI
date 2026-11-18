@@ -392,6 +392,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         // A finger has no scroll wheel, and no right button.
         host.scrollsOnDrag = true
         host.opensContextMenuOnLongPress = true
+        // Text is typed on the on-screen keyboard `syncSoftKeyboard` asks for.
+        host.hasSoftKeyboard = true
         // Seeded once; a later appearance change is not tracked on iOS yet.
         defer { applyColorScheme(Self.systemColorScheme()) }
 
@@ -808,7 +810,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         if host.update() {
             markNeedsRedraw()
         }
-        #if os(Android)
+        #if os(Android) || os(iOS)
         syncSoftKeyboard()
         #endif
         // Out of sight, nothing reaches the GPU. The pass above still builds,
@@ -843,6 +845,22 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     @MainActor
     private func syncSoftKeyboard() {
         let kind: AndroidSurfaceHost.TextInputKind
+        switch host.focusedTextInput {
+        case .none: kind = .none
+        case .singleLine: kind = .singleLine
+        case .multiLine: kind = .multiLine
+        }
+        if platformWindow?.textInputKind != kind {
+            platformWindow?.textInputKind = kind
+        }
+    }
+    #elseif os(iOS)
+    /// Put the on-screen keyboard up while the view with the keys takes
+    /// text, and away when it takes none. Every frame, so focus moved by a
+    /// tap, by Tab or by a focused view leaving the tree all count.
+    @MainActor
+    private func syncSoftKeyboard() {
+        let kind: PlatformWindow<HostingWindow>.TextInputKind
         switch host.focusedTextInput {
         case .none: kind = .none
         case .singleLine: kind = .singleLine
@@ -1011,7 +1029,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     public func on_mouse_down(x: Double, y: Double) {
         MainActor.assumeIsolated {
             let point = viewPoint(x: x, y: y)
-            let modifiers = Self.currentModifiers
+            let modifiers = currentModifiers
             if delegate(at: point)?.windowMouseDown(at: point, modifiers: modifiers) == true {
                 delegateHasMouse = true
                 host.clearFocus()
@@ -1084,7 +1102,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     /// none does.
     public func on_key_down(keyCode: UInt16, characters: String?) {
         MainActor.assumeIsolated {
-            let modifiers = Self.currentModifiers
+            let modifiers = currentModifiers
             if let delegate = input.delegate, !host.hasFocusedView,
                delegate.windowKeyDown(keyCode: keyCode, characters: characters, modifiers: modifiers) {
                 return
@@ -1095,7 +1113,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     public func on_key_up(keyCode: UInt16, characters: String?) {
         MainActor.assumeIsolated {
-            let modifiers = Self.currentModifiers
+            let modifiers = currentModifiers
             if let delegate = input.delegate, !host.hasFocusedView,
                delegate.windowKeyUp(keyCode: keyCode, characters: characters, modifiers: modifiers) {
                 return
@@ -1108,7 +1126,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     /// platform's callbacks carry no modifiers, but they run while AppKit is
     /// dispatching that event — so it is `NSApp.currentEvent`, when that is
     /// a key event or a press, and otherwise the keyboard's live state.
-    private static var currentModifiers: EventModifiers {
+    @MainActor
+    private var currentModifiers: EventModifiers {
         #if os(macOS)
         let current = NSApp.currentEvent
         let flags = current.map { [.keyDown, .keyUp, .leftMouseDown].contains($0.type) } == true
@@ -1131,6 +1150,16 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         if GetKeyState(VK_SHIFT) < 0 { modifiers.insert(.shift) }
         if control && !alt { modifiers.insert(.command) }
         if alt && !control { modifiers.insert(.option) }
+        return modifiers
+        #elseif os(iOS)
+        // The modifiers of the key press being delivered, which the window
+        // keeps from each press's event; none for the on-screen keyboard's.
+        let flags = platformWindow?.keyModifierFlags ?? []
+        var modifiers: EventModifiers = []
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        if flags.contains(.alternate) { modifiers.insert(.option) }
+        if flags.contains(.command) { modifiers.insert(.command) }
         return modifiers
         #else
         return []
@@ -1211,7 +1240,15 @@ extension HostingWindow: WindowBaseDelegate {}
 #endif
 
 #if os(iOS)
-extension HostingWindow: WindowTouchDelegate {}
+extension HostingWindow: WindowTouchDelegate {
+    /// The on-screen keyboard put away from the keyboard: the field loses
+    /// the keys with it, as in SwiftUI.
+    public func keyboardDismissed() {
+        MainActor.assumeIsolated {
+            if host.focusedTextInput != .none { host.clearFocus() }
+        }
+    }
+}
 #endif
 
 #if os(Linux)
