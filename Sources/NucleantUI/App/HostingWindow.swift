@@ -1248,6 +1248,34 @@ extension HostingWindow: WindowTouchDelegate {
             if host.focusedTextInput != .none { host.clearFocus() }
         }
     }
+
+    /// The on-screen keyboard is about to cover `height` of the window: the
+    /// views are laid out above it, moving as the keyboard does.
+    public func keyboardHeightChanged(_ height: CGFloat, duration: TimeInterval, curve: UIView.AnimationCurve) {
+        MainActor.assumeIsolated {
+            host.setKeyboardHeight(Double(height), animation: Self.keyboardAnimation(curve: curve, duration: duration))
+        }
+    }
+
+    /// UIKit's animation curve as SwiftUI turns it into an animation. The
+    /// keyboard's own, 7, is a spring that takes no duration. A timed curve
+    /// over no time is no animation: the views jump.
+    private static func keyboardAnimation(curve: UIView.AnimationCurve, duration: TimeInterval) -> Animation? {
+        if curve.rawValue == 7 {
+            return .interpolatingSpring(mass: 3, stiffness: 1000, damping: 500)
+        }
+        guard duration > 0 else { return nil }
+        switch curve.rawValue {
+        case 0, 6: return .easeInOut(duration: duration)
+        case 1: return .easeIn(duration: duration)
+        case 2: return .easeOut(duration: duration)
+        case 3: return .linear(duration: duration)
+        case 4: return .timingCurve(0.66, 0, 0.33, 1, duration: duration)
+        // Core Animation's default timing function.
+        case 5: return .timingCurve(0.25, 0.1, 0.25, 1, duration: duration)
+        default: return nil
+        }
+    }
 }
 #endif
 

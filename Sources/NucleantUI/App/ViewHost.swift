@@ -235,6 +235,35 @@ public final class ViewHost {
         needsWindowRedraw = true
     }
 
+    // MARK: - Safe area
+
+    /// How much of the window the on-screen keyboard covers, in points from
+    /// its bottom edge up: the root view is laid out above it, as the
+    /// `.keyboard` safe area.
+    private(set) var keyboardHeight: Double = 0
+
+    /// The keyboard now covers `height` of the window: lay the tree out
+    /// again above it, moving with `animation` — the keyboard's own, so
+    /// what sits on it rides along.
+    func setKeyboardHeight(_ height: Double, animation: Animation?) {
+        guard height != keyboardHeight else { return }
+        keyboardHeight = height
+        withTransaction(Transaction(animation: animation)) {
+            Invalidator.shared.invalidate()
+        }
+    }
+
+    /// What the root view is laid out clear of: the keyboard, while it is up.
+    private var safeArea: SafeArea {
+        guard keyboardHeight > 0 else { return .none }
+        let pixel = 1 / max(environment.displayScale, 1)
+        return SafeArea(
+            container: Rect(origin: .zero, size: size),
+            elements: [SafeArea.Element(regions: .keyboard, insets: EdgeInsets(bottom: keyboardHeight))],
+            tolerance: pixel * 0.5 + 0.001
+        )
+    }
+
     // MARK: - The frame tick
 
     /// Whether the last `update()` laid the tree out and placed it — the
@@ -414,7 +443,7 @@ public final class ViewHost {
             }
         )
         rootNode = buildNode(
-            _HostRoot(content: root, overlay: AnyView(overlay), capture: self.overlay),
+            _HostRoot(content: root, overlay: AnyView(overlay), capture: self.overlay, safeArea: safeArea),
             &context
         )
         releaseDeparted()

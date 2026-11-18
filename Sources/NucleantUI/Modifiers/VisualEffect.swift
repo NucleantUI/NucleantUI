@@ -259,7 +259,7 @@ struct VisualEffectContent<Effect: VisualEffect>: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         let proxy = GeometryProxy(
-            geometry: PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces),
+            geometry: PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces, safeArea: context.safeArea),
             log: nil
         )
         var inner = context

@@ -255,6 +255,7 @@ extension DrawContext {
                     && enclosingScroller === other.enclosingScroller
                     && scrollSafeAreaPadding == other.scrollSafeAreaPadding
                     && scrollObservers === other.scrollObservers
+                    && safeArea == other.safeArea
             ))
     }
 }

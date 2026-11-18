@@ -321,7 +321,7 @@ struct ScrollTransitionPlacement {
             resolved = horizontal && !vertical ? .horizontal : .vertical
         }
         let proxy = GeometryProxy(
-            geometry: PlacedGeometry(rect: rect, transform: context.transform, spaces: spaces),
+            geometry: PlacedGeometry(rect: rect, transform: context.transform, spaces: spaces, safeArea: context.safeArea),
             log: nil
         )
         let frame = proxy.frame(in: .scrollView)

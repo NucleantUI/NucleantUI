@@ -24,6 +24,7 @@
 		2137C450E8561C6EC39CD1BD /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F306568C3E86065110367EB /* Model.swift */; };
 		2297AEED8E00D2AA22A37A8B /* NowPlayingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0588CF539CA01EB8A1E8A3A /* NowPlayingScreen.swift */; };
 		22E8A169C2F093D1E2E9161E /* BoardCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EA11AFC82636F350A558B5 /* BoardCanvas.swift */; };
+		236336D4FB43F2C5D9910ED5 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA51B14BAE0F93451A6F49CE /* Appearance.swift */; };
 		26A4B52D3E5EC6EB7CA10EF8 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94580D63BCE8785F0DDE8891 /* Appearance.swift */; };
 		298AFDF27BF0E81238EE2AF8 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314F4EC9E7CFBD53F8ADA7 /* Appearance.swift */; };
 		2CA9FE6A09F6E74DE24BDE49 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF01123260E12B7357F80012 /* Model.swift */; };
@@ -48,6 +49,7 @@
 		49E57404DE28342AE947996D /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20E9676FD7F19112D3077B78 /* Model.swift */; };
 		4D951153C67F4FFCDD77F443 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 639E5C4910E8344EC2859009 /* NucleantUI */; };
 		4E08B71AB83CD03AA9990B61 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F3091149C43009F0219EBF0 /* Appearance.swift */; };
+		4EB069F8D08E70C600FB2CB7 /* ChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E2217D22AB04B86C1ACCB19 /* ChatApp.swift */; };
 		4F1E12B3E4437E83DAF538DC /* TwentyFortyEightApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5A4CC67BDC44951C8868DE /* TwentyFortyEightApp.swift */; };
 		4F8A8DB1F8C32B8607DDA0B1 /* DestinationScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01D7544CD96E35369793A39 /* DestinationScreen.swift */; };
 		50BBD425716CA55DC78C0B0C /* Guide.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5551F2E5E855913E0784FCA /* Guide.swift */; };
@@ -75,6 +77,7 @@
 		65A31DA2D957DAD8459C1556 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D93702B8FBD8246B465D1ED /* Appearance.swift */; };
 		66F486295B00945FCA966642 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4000E4D4D22051FDFC0B554A /* Model.swift */; };
 		6C5DFBA801C2A0AB60E185C3 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 5615A19AC128F30AF7455DA1 /* NucleantUI */; };
+		6F196454F8B3FE6608E0E0CE /* ThreadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8670C00044C73FBA376F6A44 /* ThreadScreen.swift */; };
 		6F93FFF6025B346D2F9A56F5 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7CC091C5BF331569852DBF /* Appearance.swift */; };
 		70D11CD24579B342EDFA913F /* Books.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0519923B885B9F257D27A80 /* Books.swift */; };
 		7111E8A6E6549185A5DC5F30 /* Inspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 005321CF439E0786AD0FCCAE /* Inspector.swift */; };
@@ -89,6 +92,7 @@
 		911FCB1BAF23C010CB93D11A /* IssuesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3AB0ACB7A3BF0E519F02F9 /* IssuesApp.swift */; };
 		933AC0B13C908E9DF11C3C60 /* IssueBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D365B032239F4201B30C58A5 /* IssueBrowser.swift */; };
 		949474829127FA52D775458B /* HighlightScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC41B2C6211EB4ADD3306F7 /* HighlightScreen.swift */; };
+		9A0D05869BEC96B95FED0FB4 /* Inbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68608375683A05A986D22565 /* Inbox.swift */; };
 		9BBFE476D5E533DCB91F799A /* saved.md in Resources */ = {isa = PBXBuildFile; fileRef = 74600F9C22BC45EC7F3A9430 /* saved.md */; };
 		9C86913DE50A9A43609027F1 /* NucleantAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F7E9785C099C23668F7D45FD /* NucleantAudio */; };
 		9CCA6284EDD143B2F4A813DB /* Recipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1C04ABD659486FEA2F41E9 /* Recipes.swift */; };
@@ -126,6 +130,7 @@
 		CB260C0CAC0E541A9DB43A5F /* SettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6134BE1A92B49E6152E7D2 /* SettingsPane.swift */; };
 		D021FEF30DBF3F740C5CF66D /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 46D5D45B736B93100EA87A47 /* NucleantUI */; };
 		D143AC483C72E0F1AD80ADFB /* GalleryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706D6F607FC2387588D1902D /* GalleryScreen.swift */; };
+		D49863F67B1A6BB1BC48B953 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 553E4DDF3B16009D2262CAC8 /* NucleantUI */; };
 		D4F2DA96673398791F1A95B4 /* AlbumScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFEC7E8AF1F67D21A597851A /* AlbumScreen.swift */; };
 		D5AFF379BB29125036495470 /* BookmarksApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB5B3D3D249847FB7876EE3 /* BookmarksApp.swift */; };
 		D61E1591752D9AB8ACC31D30 /* ReaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CF68775FAF4CA1DA3A1B4E /* ReaderApp.swift */; };
@@ -164,6 +169,7 @@
 		1BA36B2714FD9C20C65D1B59 /* Material */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Material; path = ../Icons/Sources/Icons/Material; sourceTree = SOURCE_ROOT; };
 		1C29A38F8949884C75ED18D0 /* Deck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deck.swift; sourceTree = "<group>"; };
 		1DC41B2C6211EB4ADD3306F7 /* HighlightScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightScreen.swift; sourceTree = "<group>"; };
+		1E2217D22AB04B86C1ACCB19 /* ChatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatApp.swift; sourceTree = "<group>"; };
 		1ED24231BEB2B455E20F20E2 /* Atlas.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Atlas.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20E9676FD7F19112D3077B78 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		21C60C6D08A4863980C8B512 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
@@ -181,6 +187,7 @@
 		4000E4D4D22051FDFC0B554A /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		4041A0C348F32817C09863B0 /* BundleModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleModule.swift; sourceTree = "<group>"; };
 		42E080FC360319FEFCAE14B6 /* Tasks.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Tasks.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		43290C13934B07BFB98F39BE /* Chat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Chat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		43DE5EB39D9F7B75EE38C700 /* SamplerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SamplerApp.swift; sourceTree = "<group>"; };
 		44A1D2EFA4393F85B88CF434 /* BookScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookScreen.swift; sourceTree = "<group>"; };
 		458F6BF078EFFEA64E7E013F /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
@@ -197,6 +204,7 @@
 		607EF935D161CA008C6F9A0C /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		648A31860592C31000D03E31 /* Flashcards.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Flashcards.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		66AEE120293FB0DBB8F77849 /* Shelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shelf.swift; sourceTree = "<group>"; };
+		68608375683A05A986D22565 /* Inbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inbox.swift; sourceTree = "<group>"; };
 		6E68A85BD6054A0825936DD0 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		6F0621BF6ED84E57B68241D7 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		6F3091149C43009F0219EBF0 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
@@ -214,6 +222,7 @@
 		7E36BAB18E0EBDD840469C8A /* Editor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Editor.swift; sourceTree = "<group>"; };
 		827E7874B284C1269528BB9E /* Photos.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Photos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		828ED88613A59BFCB7C219F2 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
+		8670C00044C73FBA376F6A44 /* ThreadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadScreen.swift; sourceTree = "<group>"; };
 		86C6CECB90D63E2315980C4D /* ClickEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickEngine.swift; sourceTree = "<group>"; };
 		89163FEA939C2FB6ADAB25F4 /* Reader.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Reader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		89B2088D13A0718E9DC3D3C5 /* Sampler.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sampler.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -249,6 +258,7 @@
 		C4A56C62650CFE06109E5C9A /* CardFace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardFace.swift; sourceTree = "<group>"; };
 		C84ABBA0274F6D02B64F3619 /* RecipePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipePage.swift; sourceTree = "<group>"; };
 		C8C2941DBF771C5217EC385B /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
+		CA51B14BAE0F93451A6F49CE /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		CBFF7DF6D9E5DF0D38BD8E59 /* LibraryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryScreen.swift; sourceTree = "<group>"; };
 		CE1C04ABD659486FEA2F41E9 /* Recipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recipes.swift; sourceTree = "<group>"; };
 		CF01123260E12B7357F80012 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
@@ -280,6 +290,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				07B03661BD067ACFD825D6C3 /* NucleantUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0813261677FE6558EF80DE32 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D49863F67B1A6BB1BC48B953 /* NucleantUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -531,6 +549,7 @@
 				1ED24231BEB2B455E20F20E2 /* Atlas.app */,
 				BC93A5A5A0E3510F0E873A2F /* Bookmarks.app */,
 				EE88B55A4863F6052F2A0BEB /* Calculator.app */,
+				43290C13934B07BFB98F39BE /* Chat.app */,
 				A1879D982A8ED5EDBFA4FA0E /* Compositor.app */,
 				E9A5F3049632CB3C403BC389 /* Dashboard.app */,
 				0987578549CCDCB330B5CFC1 /* Finder.app */,
@@ -679,6 +698,18 @@
 			path = ../Compositor/Sources/Compositor;
 			sourceTree = "<group>";
 		};
+		89209AA3EBBDD3CA715E5F64 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				CA51B14BAE0F93451A6F49CE /* Appearance.swift */,
+				1E2217D22AB04B86C1ACCB19 /* ChatApp.swift */,
+				68608375683A05A986D22565 /* Inbox.swift */,
+				8670C00044C73FBA376F6A44 /* ThreadScreen.swift */,
+			);
+			name = Chat;
+			path = ../Chat/Sources/Chat;
+			sourceTree = "<group>";
+		};
 		9557D988AC10231897B9FCF8 /* Calculator */ = {
 			isa = PBXGroup;
 			children = (
@@ -742,6 +773,7 @@
 				16F1DD79114F129DF7EA21AA /* Atlas */,
 				F8683DEF2D4BF9662272EA33 /* Bookmarks */,
 				9557D988AC10231897B9FCF8 /* Calculator */,
+				89209AA3EBBDD3CA715E5F64 /* Chat */,
 				8393164D0A2D07198E12AD86 /* Compositor */,
 				8274271927248D21EB1894F1 /* Dashboard */,
 				46B4EDDC9473BC6E3073533A /* Finder */,
@@ -1144,6 +1176,25 @@
 			productReference = 742CE13C7413A5697864806F /* Listen.app */;
 			productType = "com.apple.product-type.application";
 		};
+		83588270DE5DB4E682CA523B /* Chat */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 356F2B08678DDB5C10998833 /* Build configuration list for PBXNativeTarget "Chat" */;
+			buildPhases = (
+				B3733045A4E434D4B1563038 /* Sources */,
+				0813261677FE6558EF80DE32 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Chat;
+			packageProductDependencies = (
+				553E4DDF3B16009D2262CAC8 /* NucleantUI */,
+			);
+			productName = Chat;
+			productReference = 43290C13934B07BFB98F39BE /* Chat.app */;
+			productType = "com.apple.product-type.application";
+		};
 		8DCA2A3516D8F89DC745DC63 /* Recipes */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CCAABC4088D3A5227CEE1691 /* Build configuration list for PBXNativeTarget "Recipes" */;
@@ -1318,6 +1369,10 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					83588270DE5DB4E682CA523B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					8DCA2A3516D8F89DC745DC63 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -1361,6 +1416,7 @@
 				3BDBDFD827CB024BC09FBDFF /* Atlas */,
 				2F024D7E6F1A16BFCC3B6396 /* Bookmarks */,
 				7D102039452452C42320DAD7 /* Calculator */,
+				83588270DE5DB4E682CA523B /* Chat */,
 				405AFBE4DE5E0E195B761A4B /* Compositor */,
 				4F13DF3496F3029A58FB88C3 /* Dashboard */,
 				8264AA6F6AE8A71F7558DB3B /* Finder */,
@@ -1629,6 +1685,17 @@
 			files = (
 				A3824C8C958AADACABA1229F /* Appearance.swift in Sources */,
 				0966A44D3C417B32CFA7C638 /* TasksApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B3733045A4E434D4B1563038 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				236336D4FB43F2C5D9910ED5 /* Appearance.swift in Sources */,
+				4EB069F8D08E70C600FB2CB7 /* ChatApp.swift in Sources */,
+				9A0D05869BEC96B95FED0FB4 /* Inbox.swift in Sources */,
+				6F196454F8B3FE6608E0E0CE /* ThreadScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2147,6 +2214,31 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Moodboard;
 				PRODUCT_NAME = Moodboard;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6A10FEF77A33A3281734771A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Chat;
+				PRODUCT_NAME = Chat;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -2839,6 +2931,31 @@
 			};
 			name = Release;
 		};
+		F5A19160D63EE644C7E7EA84 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Chat;
+				PRODUCT_NAME = Chat;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		F8EE8891B7A9C46C8929329B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2915,6 +3032,15 @@
 			buildConfigurations = (
 				A93746AB376C6A16BC5FDB0D /* Debug */,
 				8007FB7DD8B1C85DF7A5247F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		356F2B08678DDB5C10998833 /* Build configuration list for PBXNativeTarget "Chat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F5A19160D63EE644C7E7EA84 /* Debug */,
+				6A10FEF77A33A3281734771A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -3153,6 +3279,10 @@
 			productName = NucleantUI;
 		};
 		53D73B413EB077FD58473A68 /* NucleantUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NucleantUI;
+		};
+		553E4DDF3B16009D2262CAC8 /* NucleantUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NucleantUI;
 		};

@@ -930,10 +930,12 @@ public struct DrawContext: Sendable {
         let enclosingScroller: Scroller?
         let scrollSafeAreaPadding: EdgeInsets
         let scrollObservers: ScrollObserver?
+        let safeArea: SafeArea
 
         static let none = Shared(
             transformedClips: [], shaderCanvasInput: nil, animation: nil, coordinateSpaces: [],
-            enclosingScroller: nil, scrollSafeAreaPadding: EdgeInsets(), scrollObservers: nil
+            enclosingScroller: nil, scrollSafeAreaPadding: EdgeInsets(), scrollObservers: nil,
+            safeArea: .none
         )
 
         init(
@@ -943,7 +945,8 @@ public struct DrawContext: Sendable {
             coordinateSpaces: [CoordinateSpaceFrame],
             enclosingScroller: Scroller?,
             scrollSafeAreaPadding: EdgeInsets,
-            scrollObservers: ScrollObserver?
+            scrollObservers: ScrollObserver?,
+            safeArea: SafeArea
         ) {
             self.transformedClips = transformedClips
             self.shaderCanvasInput = shaderCanvasInput
@@ -952,6 +955,7 @@ public struct DrawContext: Sendable {
             self.enclosingScroller = enclosingScroller
             self.scrollSafeAreaPadding = scrollSafeAreaPadding
             self.scrollObservers = scrollObservers
+            self.safeArea = safeArea
         }
     }
 
@@ -966,7 +970,8 @@ public struct DrawContext: Sendable {
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
                 scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
-                scrollObservers: shared.scrollObservers
+                scrollObservers: shared.scrollObservers,
+                safeArea: shared.safeArea
             )
         }
     }
@@ -983,7 +988,8 @@ public struct DrawContext: Sendable {
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
                 scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
-                scrollObservers: shared.scrollObservers
+                scrollObservers: shared.scrollObservers,
+                safeArea: shared.safeArea
             )
         }
     }
@@ -1000,7 +1006,8 @@ public struct DrawContext: Sendable {
                 animation: newValue, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
                 scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
-                scrollObservers: shared.scrollObservers
+                scrollObservers: shared.scrollObservers,
+                safeArea: shared.safeArea
             )
         }
     }
@@ -1017,7 +1024,8 @@ public struct DrawContext: Sendable {
                 animation: shared.animation, coordinateSpaces: newValue,
                 enclosingScroller: shared.enclosingScroller,
                 scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
-                scrollObservers: shared.scrollObservers
+                scrollObservers: shared.scrollObservers,
+                safeArea: shared.safeArea
             )
         }
     }
@@ -1034,7 +1042,8 @@ public struct DrawContext: Sendable {
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: newValue,
                 scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
-                scrollObservers: shared.scrollObservers
+                scrollObservers: shared.scrollObservers,
+                safeArea: shared.safeArea
             )
         }
     }
@@ -1051,7 +1060,8 @@ public struct DrawContext: Sendable {
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
                 scrollSafeAreaPadding: newValue,
-                scrollObservers: shared.scrollObservers
+                scrollObservers: shared.scrollObservers,
+                safeArea: shared.safeArea
             )
         }
     }
@@ -1069,7 +1079,25 @@ public struct DrawContext: Sendable {
                 animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
                 enclosingScroller: shared.enclosingScroller,
                 scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
-                scrollObservers: newValue
+                scrollObservers: newValue,
+                safeArea: shared.safeArea
+            )
+        }
+    }
+
+    /// The safe area this is placed in: the host's, under its root view —
+    /// the keyboard, while it is up — and none anywhere else.
+    var safeArea: SafeArea {
+        get { shared.safeArea }
+        set {
+            guard newValue != shared.safeArea else { return }
+            shared = Shared(
+                transformedClips: shared.transformedClips, shaderCanvasInput: shared.shaderCanvasInput,
+                animation: shared.animation, coordinateSpaces: shared.coordinateSpaces,
+                enclosingScroller: shared.enclosingScroller,
+                scrollSafeAreaPadding: shared.scrollSafeAreaPadding,
+                scrollObservers: shared.scrollObservers,
+                safeArea: newValue
             )
         }
     }

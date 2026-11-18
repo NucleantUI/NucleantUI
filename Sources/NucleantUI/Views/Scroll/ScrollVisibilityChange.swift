@@ -88,7 +88,7 @@ struct ScrollVisibilityChangeContent: NodeContent {
     /// innermost scroll view's viewport.
     private func isInView(_ rect: Rect, context: DrawContext) -> Bool {
         let proxy = GeometryProxy(
-            geometry: PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces),
+            geometry: PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces, safeArea: context.safeArea),
             log: nil
         )
         guard let scroll = proxy.bounds(of: .scrollView) else { return true }

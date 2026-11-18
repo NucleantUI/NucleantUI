@@ -228,6 +228,8 @@ struct _HostRoot {
     let overlay: AnyView?
     /// Where slot `[1]` paints — read by the host after the pass.
     let capture: OverlayCapture
+    /// What slot `[0]` is laid out clear of.
+    let safeArea: SafeArea
 
     var body: Never { bodyUnavailable() }
 }
@@ -267,16 +269,19 @@ extension _HostRoot: BuiltinView {
     func makeNode(_ context: inout BuildContext) -> ViewNode {
         let content = context.child(0) { ctx in buildNode(self.content, &ctx) }
         let overlay = context.child(1) { ctx in buildNode(self.overlay, &ctx) }
-        return ContentNode(content: HostRootContent(capture: capture), children: [content, overlay])
+        return ContentNode(content: HostRootContent(capture: capture, safeArea: safeArea), children: [content, overlay])
     }
 }
 
-/// Both slots get the whole window. By `children`, not `layoutChildren`:
-/// an empty overlay is a transparent group that flattening would drop,
-/// shifting the slots. Slot `[0]` paints into the window's list; slot `[1]`
-/// into the capture, for the host to composite last.
+/// Slot `[0]` gets the window inside its safe area, and the safe area with
+/// it, for `.ignoresSafeArea` to reach back out into; slot `[1]` gets the
+/// whole window. By `children`, not `layoutChildren`: an empty overlay is a
+/// transparent group that flattening would drop, shifting the slots. Slot
+/// `[0]` paints into the window's list; slot `[1]` into the capture, for
+/// the host to composite last.
 struct HostRootContent: NodeContent {
     let capture: OverlayCapture
+    let safeArea: SafeArea
 
     func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
         proposal.replacingUnspecifiedDimensions()
@@ -289,7 +294,19 @@ struct HostRootContent: NodeContent {
             }
             return
         }
-        node.children[0].place(in: rect, proposal: proposal, context: context, into: &list)
+        let insets = safeArea.insets(of: .all)
+        let safe = rect.insetBy(insets)
+        var inside = context
+        inside.safeArea = safeArea
+        node.children[0].place(
+            in: safe,
+            proposal: ProposedSize(
+                width: proposal.width.map { max(0, $0 - insets.horizontal) },
+                height: proposal.height.map { max(0, $0 - insets.vertical) }
+            ),
+            context: inside,
+            into: &list
+        )
         capture.list = DisplayList()
         capture.frame = nil
         let host = ShaderHost.current

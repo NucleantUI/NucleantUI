@@ -45,10 +45,13 @@ public struct GeometryProxy {
 
     /// The safe area inset of the container view.
     ///
-    /// Zero: NucleantUI has no safe areas yet — every view is laid out over
-    /// the whole window.
+    /// At each edge of the container that is on the safe area's edge, how
+    /// far it is from there to the window's edge: the keyboard's height at
+    /// the bottom, for a container down on the keyboard. Zero at any other
+    /// edge — the keyboard is the only safe area so far.
     public var safeAreaInsets: EdgeInsets {
-        EdgeInsets()
+        log?.noteSafeArea()
+        return placed.safeAreaInsets
     }
 
     /// Returns the container view's bounds rectangle, converted to a defined
@@ -82,12 +85,18 @@ extension GeometryProxy: ViewInput {
 }
 
 /// Where a view was placed: its rect in layout space, the transform it was
-/// drawn under, and the named spaces above it — everything a proxy answers
-/// from.
+/// drawn under, the named spaces above it and the safe area it is in —
+/// everything a proxy answers from.
 struct PlacedGeometry: Equatable {
     var rect: Rect
     var transform: Transform
     var spaces: [CoordinateSpaceFrame]
+    var safeArea: SafeArea
+
+    /// How far the rect reaches into the safe area at each edge.
+    var safeAreaInsets: EdgeInsets {
+        safeArea.insets(of: .all, at: rect)
+    }
 
     /// The rect as seen from `space` — the box around it, when a rotation
     /// stands between the two.
@@ -145,11 +154,16 @@ final class GeometryReadLog {
     var builtWith: PlacedGeometry?
 
     private var readsSize = false
+    private var readsSafeArea = false
     private var frames: Set<CoordinateSpace> = []
     private var bounds: Set<AnyHashable> = []
 
     func noteSize() {
         readsSize = true
+    }
+
+    func noteSafeArea() {
+        readsSafeArea = true
     }
 
     func noteFrame(in space: CoordinateSpace) {
@@ -164,6 +178,7 @@ final class GeometryReadLog {
     /// than at `old`.
     func answersDiffer(between old: PlacedGeometry, and new: PlacedGeometry) -> Bool {
         if readsSize && old.rect.size != new.rect.size { return true }
+        if readsSafeArea && old.safeAreaInsets != new.safeAreaInsets { return true }
         for space in frames where old.frame(in: space) != new.frame(in: space) {
             return true
         }
