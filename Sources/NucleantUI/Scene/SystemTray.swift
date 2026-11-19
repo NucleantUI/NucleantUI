@@ -24,7 +24,7 @@ import NucleantWindow
 ///             Button("Start") { model.start() }
 ///             Button("Reset") { model.reset() }
 ///             Divider()
-///             Button("Quit") { model.quit() }
+///             Button("Quit Timer") { Self.quit() }
 ///         }
 ///     }
 /// }

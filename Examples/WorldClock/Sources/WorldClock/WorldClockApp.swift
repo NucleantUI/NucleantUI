@@ -337,8 +337,8 @@ func worldClockPreview() -> some View {
 
 // MARK: - Menu bar
 
-/// The window under the menu bar item: each city on a row, and the way to
-/// the big window.
+/// The window under the menu bar item: each city on a row, the way to the
+/// big window, and out of the app.
 @View
 struct MenuBarPanel {
     let clock: WorldClock
@@ -370,8 +370,15 @@ struct MenuBarPanel {
                 .padding(horizontal: 14, vertical: 8)
             }
             Divider()
-            Button("Open World Clock") { openWindow(id: "main") }
-                .padding(12)
+            HStack {
+                Button("Open World Clock") { openWindow(id: "main") }
+                Spacer()
+                // With the window closed the app has no Dock icon and no
+                // menus: this is the way out.
+                Button("Quit") { WorldClockApp.quit() }
+                    .tint(Theme.muted)
+            }
+            .padding(12)
         }
         .frame(width: 300)
         .background(Theme.background)

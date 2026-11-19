@@ -64,6 +64,30 @@ extension NucleantApp {
     #endif
 }
 
+extension NucleantApp {
+    /// Quit the app, as its Quit menu item does — the one way out of an app
+    /// that is only in the system tray, with no Dock icon and no menus:
+    ///
+    /// ```swift
+    /// SystemTray("Timer", systemImage: "timer") {
+    ///     Button("Start") { model.start() }
+    ///     Divider()
+    ///     Button("Quit Timer") { Self.quit() }
+    /// }
+    /// ```
+    ///
+    /// On macOS. On iOS an app doesn't quit itself, and elsewhere it is not
+    /// wired yet; there it logs and does nothing.
+    @MainActor
+    public static func quit() {
+        #if os(macOS)
+        NSApplication.shared.terminate(nil)
+        #else
+        nucleantLogError("NucleantUI: quitting the app is not wired on this platform\n")
+        #endif
+    }
+}
+
 /// Knobs the runtime reads at launch. A namespace rather than statics on
 /// `AppRuntime`, which is generic and so can't hold stored type properties.
 public enum AppRuntimeSettings {
@@ -160,7 +184,7 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         trays.insert = { [weak self] item in self?.insertTrayItem(item) }
         trays.refresh = { [weak self] item in self?.refreshTrayItem(item) }
         trays.remove = { [weak self] item in self?.removeTrayItem(item) }
-        trays.quit = { NSApplication.shared.terminate(nil) }
+        trays.quit = { A.quit() }
         trays.present = windows.present
         trays.windows = windows
         systemTrays = trays
