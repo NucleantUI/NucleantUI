@@ -14,26 +14,36 @@ import NucleantWindow
 
 @MainActor
 final class AppWindows<Node: NucleantContainerNode> {
-    /// The scenes, in the order the app declares them.
+    /// The window scenes, in the order the app declares them.
     let scenes: [_WindowScene<Node>]
+
+    /// Whether the app's first scene is one of these, and opens at launch.
+    let opensWindowAtLaunch: Bool
 
     /// The windows open now, in the order they opened, each with the index
     /// of the scene it is from.
-    private(set) var windows: [(scene: Int, window: HostingWindow<Node>)] = []
+    private(set) var windows: [(scene: Int, window: HostingWindow<Node>)] = [] {
+        didSet { onWindowsChange?() }
+    }
+
+    /// Told when a window opens or closes — the Dock icon follows them.
+    var onWindowsChange: (@MainActor () -> Void)?
 
     /// Brings a window made from a scene up on screen. The runtime's puts
     /// it on the app's GPU device first.
     var present: @MainActor (HostingWindow<Node>) throws -> Void = { try $0.present() }
 
     init<S: Scene>(_ scene: S) {
-        var scenes: [_WindowScene<Node>] = []
-        scene._windowScenes(into: &scenes)
-        self.scenes = scenes
+        var scenes = _AppScenes<Node>()
+        scene._scenes(into: &scenes)
+        self.scenes = scenes.windows
+        self.opensWindowAtLaunch = scenes.opensWindowAtLaunch
     }
 
-    /// What the app shows at launch: the first scene's window.
+    /// What the app shows at launch: the first scene's window, when the
+    /// first scene is a window scene.
     func launch() {
-        guard !scenes.isEmpty else { return }
+        guard opensWindowAtLaunch else { return }
         open(scene: 0)
     }
 
@@ -68,14 +78,7 @@ final class AppWindows<Node: NucleantContainerNode> {
             return
         }
         for window in scenes[index].makeWindows() {
-            window.host.environment.supportsMultipleWindows = supportsMultipleWindows
-            window.host.environment.openWindow = OpenWindowAction { [weak self] id in
-                self?.openWindow(id: id)
-            }
-            window.host.environment.dismissWindow = DismissWindowAction(
-                dismiss: { [weak window] in window?.close() },
-                dismissID: { [weak self] id in self?.dismissWindow(id: id) }
-            )
+            wire(window) { [weak window] in window?.close() }
             // Closed, it goes: its engine, its tree, its state.
             window.onClose = { [weak self, weak window] in
                 self?.windows.removeAll { $0.window === window }
@@ -88,6 +91,19 @@ final class AppWindows<Node: NucleantContainerNode> {
                 nucleantLogError("NucleantUI: window present failed: \(error)\n")
             }
         }
+    }
+
+    /// Hand `window`'s views the actions that open and close the app's
+    /// windows; `dismiss` is what closing the window they are in does.
+    func wire(_ window: HostingWindow<Node>, dismiss: @escaping @MainActor @Sendable () -> Void) {
+        window.host.environment.supportsMultipleWindows = supportsMultipleWindows
+        window.host.environment.openWindow = OpenWindowAction { [weak self] id in
+            self?.openWindow(id: id)
+        }
+        window.host.environment.dismissWindow = DismissWindowAction(
+            dismiss: dismiss,
+            dismissID: { [weak self] id in self?.dismissWindow(id: id) }
+        )
     }
 
     // MARK: - Menu bar

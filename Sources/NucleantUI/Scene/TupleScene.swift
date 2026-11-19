@@ -22,9 +22,9 @@ public struct TupleScene<each Content: Scene>: Scene {
         return windows
     }
 
-    public func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
+    public func _scenes<Node: NucleantContainerNode>(into scenes: inout _AppScenes<Node>) {
         for scene in repeat (each value) {
-            scene._windowScenes(into: &scenes)
+            scene._scenes(into: &scenes)
         }
     }
 

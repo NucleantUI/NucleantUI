@@ -25,10 +25,11 @@ public protocol Scene {
     /// Every window this scene makes, made at once.
     func _makeWindows<Node: NucleantContainerNode>() -> [HostingWindow<Node>]
 
-    /// The scenes that open windows — each `WindowGroup` and `Window` —
-    /// in the order they are declared. The app opens the first one's
-    /// window at launch, and the others' when asked for them by id.
-    func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>])
+    /// The scenes the app shows — each `WindowGroup`, `Window` and
+    /// `SystemTray` — in the order they are declared. When the first is a
+    /// window scene the app opens its window at launch, and the others'
+    /// when asked for them by id.
+    func _scenes<Node: NucleantContainerNode>(into scenes: inout _AppScenes<Node>)
 
     /// The scene's `.commands`, added to the app's menu bar.
     func _lowerCommands(into menuBar: MenuBar)
@@ -39,7 +40,7 @@ extension Scene {
         body._makeWindows()
     }
 
-    public func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
+    public func _scenes<Node: NucleantContainerNode>(into scenes: inout _AppScenes<Node>) {
         if Body.self == Never.self {
             // A primitive scene that only makes its windows: one scene,
             // opening them all, with no id to be asked for by.
@@ -47,7 +48,7 @@ extension Scene {
                 self._makeWindows()
             })
         } else {
-            body._windowScenes(into: &scenes)
+            body._scenes(into: &scenes)
         }
     }
 
@@ -59,6 +60,60 @@ extension Scene {
 extension Scene where Body == Never {
     public var body: Never {
         preconditionFailure("body should not be called on the primitive scene \(Self.self).")
+    }
+}
+
+/// The scenes an app shows, as its body declares them: its window scenes
+/// and its system tray items, each in order, and which kind came first.
+@MainActor
+public struct _AppScenes<Node: NucleantContainerNode> {
+    public private(set) var windows: [_WindowScene<Node>] = []
+    public private(set) var systemTrays: [_SystemTrayScene<Node>] = []
+
+    /// Whether the first scene declared is a window scene, the one whose
+    /// window the app opens at launch. A `SystemTray` first opens none.
+    public private(set) var opensWindowAtLaunch = false
+
+    /// What `.dockIcon(_:)` said, the first one in the body; `nil` for none.
+    public private(set) var dockIcon: Visibility?
+
+    private var isEmpty = true
+
+    public init() {}
+
+    public mutating func append(_ window: _WindowScene<Node>) {
+        if isEmpty { opensWindowAtLaunch = true }
+        isEmpty = false
+        windows.append(window)
+    }
+
+    public mutating func append(_ tray: _SystemTrayScene<Node>) {
+        isEmpty = false
+        systemTrays.append(tray)
+    }
+
+    /// `.dockIcon(_:)` over these scenes, unless one inside them said it.
+    public mutating func sayDockIcon(_ visibility: Visibility) {
+        if dockIcon == nil { dockIcon = visibility }
+    }
+
+    /// `other`'s scenes, after these.
+    public mutating func append(contentsOf other: _AppScenes<Node>) {
+        if isEmpty { opensWindowAtLaunch = other.opensWindowAtLaunch }
+        if dockIcon == nil { dockIcon = other.dockIcon }
+        isEmpty = isEmpty && other.isEmpty
+        windows += other.windows
+        systemTrays += other.systemTrays
+    }
+
+    /// Each window scene replaced by what `transform` makes of it.
+    public mutating func mapWindows(_ transform: (_WindowScene<Node>) -> _WindowScene<Node>) {
+        windows = windows.map(transform)
+    }
+
+    /// Each tray replaced by what `transform` makes of it.
+    public mutating func mapSystemTrays(_ transform: (_SystemTrayScene<Node>) -> _SystemTrayScene<Node>) {
+        systemTrays = systemTrays.map(transform)
     }
 }
 
