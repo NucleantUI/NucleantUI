@@ -57,12 +57,8 @@ Two targets need more than their sources:
 
 ## Known problems (2026-11-03)
 
-All 19 targets build for macOS, and 17 build for the iOS Simulator too.
+All 19 targets build for macOS and for the iOS Simulator.
 
-- **Metronome and Sampler do not build for iOS.** NucleantAudio has macOS
-  and Windows backends only (`AudioPlayer+MacOS.swift`,
-  `AudioFileLoader+MacOS.swift`, …), so `AudioBackend` and `decode` are
-  missing on iOS.
 - **Nothing runs in the iOS 26 Simulator yet.** MoltenVK 1.2.11 aborts in
   `vkCreateInstance`, called from NucleantVulkan's `makeMetalInstance`: the
   simulator's Metal driver asserts `MTLPixelFormatInvalid is not supported
