@@ -38,7 +38,7 @@ struct DemoApp: NucleantApp {
 ## Adding it
 
 ```swift
-.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.3.5"))
+.package(url: "https://github.com/NucleantUI/NucleantUI.git", .upToNextMinor(from: "0.3.6"))
 ```
 
 and `import NucleantUI`. `swift build` at this package's root builds the
