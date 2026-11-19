@@ -168,7 +168,9 @@ struct CityTime {
 struct Theme {
     static let background = BackgroundStyle.background
     static let panel = BackgroundStyle.secondaryBackground
-    static let dayFace = DynamicShapeStyle(light: Color(hex: 0xF2F3F6), dark: Color(hex: 0x3A3F4B))
+    static let dayFace = DynamicShapeStyle(light: Color(hex: 0xFFFFFF), dark: Color(hex: 0x3A3F4B))
+    /// The edge of a face, so a day face on a light window still shows.
+    static let rim = DynamicShapeStyle(light: Color(white: 0, opacity: 0.18), dark: Color(white: 1, opacity: 0.14))
     static let nightFace = DynamicShapeStyle(light: Color(hex: 0x2B2F38), dark: Color(hex: 0x15171C))
     static let dayInk = DynamicShapeStyle(light: Color(hex: 0x1C1E24), dark: Color(hex: 0xE9EAEE))
     static let nightInk = Color(hex: 0xE9EAEE)
@@ -215,6 +217,7 @@ struct ClockFace {
 
         ZStack {
             Circle().fill(time.isNight ? AnyShapeStyle(Theme.nightFace) : AnyShapeStyle(Theme.dayFace))
+            Circle().stroke(Theme.rim, lineWidth: max(1, 1.5 * scale))
             // Twelve hour marks.
             PathShape { size in
                 let c = Point(x: size.width / 2, y: size.height / 2)
@@ -350,37 +353,44 @@ struct MenuBarPanel {
             if clock.cities.isEmpty {
                 Text("No cities yet")
                     .foregroundStyle(.secondary)
-                    .padding(16)
+                    .padding(18)
             }
             ForEach(clock.cities) { city in
                 let time = CityTime(city: city, at: clock.now)
-                HStack(spacing: 12) {
-                    ClockFace(time: time, diameter: 36)
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 14) {
+                    ClockFace(time: time, diameter: 48)
+                    // What is left of the row once the clock and the time
+                    // have theirs, so neither of them wraps.
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(city.name)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
+                            .lineLimit(1)
                         Text("\(time.day), \(time.offset)")
-                            .font(.footnote)
+                            .font(.system(size: 13))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                    Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Text(time.digits)
-                        .font(.system(size: 18, weight: .light, design: .monospaced))
+                        .font(.system(size: 24, weight: .light, design: .monospaced))
+                        .lineLimit(1)
                 }
-                .padding(horizontal: 14, vertical: 8)
+                .padding(horizontal: 16, vertical: 10)
             }
             Divider()
-            HStack {
+            HStack(spacing: 12) {
+                // The row but for what Quit takes.
                 Button("Open World Clock") { openWindow(id: "main") }
-                Spacer()
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 // With the window closed the app has no Dock icon and no
                 // menus: this is the way out.
                 Button("Quit") { WorldClockApp.quit() }
-                    .tint(Theme.muted)
+                    .lineLimit(1)
             }
-            .padding(12)
+            .padding(horizontal: 16, vertical: 12)
         }
-        .frame(width: 300)
+        .frame(width: 380)
         .background(Theme.background)
         .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }
