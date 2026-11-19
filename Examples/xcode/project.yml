@@ -103,8 +103,7 @@ targetTemplates:
           UIApplicationSupportsMultipleScenes: false
         UILaunchScreen: {}
         UIApplicationSupportsIndirectInputEvents: true
-        UIStatusBarHidden: true
-        UIViewControllerBasedStatusBarAppearance: false
+        UIViewControllerBasedStatusBarAppearance: true
         UIRequiresFullScreen: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

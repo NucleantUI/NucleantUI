@@ -399,6 +399,13 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
         attachCanvas(engine: engine, width: win_rect.z, height: win_rect.w)
 
+        // What the views ask of the status bar and the Home indicator. UIKit
+        // asks the window's root view controller.
+        host.onSystemBarsChange = { [weak self] in
+            self?.followSystemBars()
+        }
+        followSystemBars()
+
         platformWindow.makeKeyAndVisible()
         // Points here — `on_size` applies the scale itself, and `win_rect`
         // above is already in pixels.
@@ -641,6 +648,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         AndroidSurfaceHost.onAppearanceChanged = { [weak self] in
             MainActor.assumeIsolated {
                 self?.applyColorScheme(Self.systemColorScheme())
+                self?.followSystemBars()
             }
         }
         // What covers the window: the soft keyboard from the bottom up, and
@@ -659,6 +667,13 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         }
         followSafeArea()
         followKeyboard(duration: 0)
+        // What the views ask of the status bar and the navigation bar, and
+        // the scheme the bars' icons are drawn for. The Activity reads them
+        // after every frame.
+        host.onSystemBarsChange = { [weak self] in
+            self?.followSystemBars()
+        }
+        followSystemBars()
 
         platformWindow.present()
     }
@@ -896,6 +911,17 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             bottom: insets.bottom, trailing: insets.right
         ))
     }
+
+    /// The status bar and the navigation bar hidden or shown as the views
+    /// ask — `.statusBarHidden(_:)`, `.persistentSystemOverlays(_:)` — with
+    /// their icons dark over a light window. `.automatic` shows a bar, as
+    /// it does in SwiftUI.
+    @MainActor
+    private func followSystemBars() {
+        platformWindow?.statusBarHidden = host.statusBarVisibility == .hidden
+        platformWindow?.navigationBarHidden = host.persistentSystemOverlays == .hidden
+        platformWindow?.lightSystemBars = host.environment.colorScheme == .light
+    }
     #elseif os(iOS)
     /// Put the on-screen keyboard up while the view with the keys takes
     /// text, and away when it takes none. Every frame, so focus moved by a
@@ -911,6 +937,15 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         if platformWindow?.textInputKind != kind {
             platformWindow?.textInputKind = kind
         }
+    }
+
+    /// The status bar and the Home indicator hidden or shown as the views
+    /// ask — `.statusBarHidden(_:)`, `.persistentSystemOverlays(_:)`.
+    /// `.automatic` shows them, as it does in SwiftUI.
+    @MainActor
+    private func followSystemBars() {
+        platformWindow?.statusBarHidden = host.statusBarVisibility == .hidden
+        platformWindow?.homeIndicatorAutoHidden = host.persistentSystemOverlays == .hidden
     }
     #endif
 

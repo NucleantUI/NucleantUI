@@ -3,8 +3,9 @@
 //  Reader
 //
 //  A chapter on a page, the bar above it titled with the chapter and the
-//  controls below it. A tap on the page hides the bar and the controls and
-//  gives the page the whole window; another tap brings them back. The
+//  controls below it. A tap on the page hides the bar and the controls,
+//  and the system's status bar and Home indicator with them, and gives the
+//  page the whole screen; another tap brings them back. The
 //  chapter on screen is the one the route named until the reader turns to
 //  another — that is this screen's own state; where the book was left is
 //  the library's.
@@ -87,7 +88,11 @@ struct ReadingScreen {
         }
         .background(Theme.page)
         .navigationTitle(book.name(ofChapter: chapter))
-        .toolbarVisibility(isImmersive ? .hidden : .visible, for: .navigationBar)
+        // Immersive, the page has the screen to itself: no bar of the
+        // stack's, no status bar, and no Home indicator (on Android, no
+        // navigation bar).
+        .toolbarVisibility(isImmersive ? .hidden : .visible, for: .navigationBar, .statusBar)
+        .persistentSystemOverlays(isImmersive ? .hidden : .automatic)
         .onChange(of: chapter, initial: true) {
             library.read(book, at: chapter)
         }
