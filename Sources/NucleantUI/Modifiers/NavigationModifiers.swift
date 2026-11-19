@@ -7,12 +7,14 @@
 //  when it builds its screens and its bar.
 //
 
-/// A bar a container draws, for `.toolbarVisibility(_:for:)` to name.
+/// A bar a container or the system draws, for `.toolbarVisibility(_:for:)`
+/// to name.
 public struct ToolbarPlacement: Hashable, Sendable {
     enum Bar: Hashable, Sendable {
         case automatic
         case navigationBar
         case bottomBar
+        case statusBar
     }
 
     let bar: Bar
@@ -28,6 +30,12 @@ public struct ToolbarPlacement: Hashable, Sendable {
     /// The bar along the bottom of a `NavigationStack`, with the screen's
     /// `.bottomBar` and `.status` items.
     public static let bottomBar = ToolbarPlacement(bar: .bottomBar)
+
+    /// The system's status bar across the top of the screen, with the
+    /// clock and the battery, on iOS and Android. Hidden, it gives its
+    /// strip to the app, and the window's safe area shrinks with it. The
+    /// other platforms have none, and nothing happens there.
+    public static let statusBar = ToolbarPlacement(bar: .statusBar)
 }
 
 
@@ -84,6 +92,9 @@ extension View {
     /// `.automatic` visibility shows the bar. Other screens keep their own
     /// setting: hiding the bar on a pushed screen brings it back when that
     /// screen is popped.
+    ///
+    /// `.statusBar` is the system's bar, not the stack's: it works the same
+    /// way as `.statusBarHidden(_:)`, and on a view outside any stack too.
     public func toolbarVisibility(_ visibility: Visibility, for bars: ToolbarPlacement...) -> some View {
         navigationBarVisibility(visibility, for: bars)
     }
@@ -197,7 +208,7 @@ struct ToolbarVisibilityModifier: PrimitiveModifier, Equatable {
     let visibility: Visibility
     let bars: [ToolbarPlacement]
 
-    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+    func makeContent(_ context: inout BuildContext) -> SystemBarContent<StatusBarVisibilityKey> {
         if let router = context.environment.navigationRouter,
            let screen = context.environment.navigationScreen {
             // `.automatic` is a stack's main bar, the navigation bar.
@@ -208,7 +219,9 @@ struct ToolbarVisibilityModifier: PrimitiveModifier, Equatable {
                 router.storage.setBottomBarVisibility(visibility, for: screen)
             }
         }
-        return environmentContent(context)
+        // The status bar is the window's, asked for up the tree like
+        // `.statusBarHidden(_:)` asks.
+        return SystemBarContent(visibility: bars.contains(.statusBar) ? visibility : nil)
     }
 }
 
