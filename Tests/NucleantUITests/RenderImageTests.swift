@@ -95,16 +95,14 @@ struct OffscreenImages {
     }
 
     /// The point of rooting an offscreen tree at `OffscreenRender.rootIndex`:
-    /// a render leaves the window's frame alone.
+    /// a render leaves no work for any tree.
     @Test
     func anOffscreenRenderDirtiesNothing() {
-        _ = Invalidator.shared.consume()
+        let waiting = Invalidator.shared.waitingTrees
         _ = renderImage(size: Size(width: 8, height: 8)) {
             Color(red: 1, green: 1, blue: 0)
         }
-        let work = Invalidator.shared.consume()
-        #expect(work.paths.isEmpty)
-        #expect(work.full == false)
+        #expect(Invalidator.shared.waitingTrees == waiting)
     }
 
     /// And the other half of being a snapshot: no pass ran, so the window's

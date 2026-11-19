@@ -19,7 +19,7 @@ dependency to
 
 | Example | Kind of app | What it shows |
 | --- | --- | --- |
-| [Calculator](Calculator) | utility | a keypad of custom controls (`DragGesture` with a pressed state, release-inside to fire), a value-type engine, flexible rows, a window held to its content's size (`.windowResizability(.contentSize)`, `.windowIdealSize(.maximum)`) |
+| [Calculator](Calculator) | utility | a keypad of custom controls (`DragGesture` with a pressed state, release-inside to fire), an `@Observable` engine per window, flexible rows, a window held to its content's size (`.windowResizability(.contentSize)`, `.windowIdealSize(.maximum)`); a paper tape every calculator window writes on, in a `Window` of its own that opens from the Window menu or `openWindow(id:)` — never at launch — shown where `supportsMultipleWindows` |
 | [Tasks](Tasks) | list + detail | `ForEach` over indices bound into an array (`$tasks[index]`), a detail screen pushed by `NavigationLink` editing through the same `Binding`, deleting via a flag and `navigationRouter.pop()`, filters as tap targets; toolbar items in the bar: "+ Add" as `.primaryAction`, "Clear done" as `.secondaryAction` in the "…" menu, "Delete" as the detail screen's `.destructiveAction` |
 | [Sketch](Sketch) | canvas | a `DragGesture` collecting points into a `PathShape` stroke, finished strokes as reusable child views, colour and brush pickers, undo |
 | [Dashboard](Dashboard) | data display | line, bar and ring charts drawn with `PathShape`, gradients and `.relativeSize`; stat tiles; a segmented period switch; a scrolling feed |

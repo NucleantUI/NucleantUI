@@ -216,6 +216,21 @@ struct WindowSizingScene<Base: Scene>: Scene {
         return windows
     }
 
+    func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
+        var inner: [_WindowScene<Node>] = []
+        base._windowScenes(into: &inner)
+        let apply = self.apply
+        for scene in inner {
+            scenes.append(_WindowScene(id: scene.id, title: scene.title, kind: scene.kind) {
+                let windows = scene.makeWindows()
+                for window in windows {
+                    apply(&window.sizing)
+                }
+                return windows
+            })
+        }
+    }
+
     func _lowerCommands(into menuBar: MenuBar) {
         base._lowerCommands(into: menuBar)
     }

@@ -22,6 +22,12 @@ public struct TupleScene<each Content: Scene>: Scene {
         return windows
     }
 
+    public func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
+        for scene in repeat (each value) {
+            scene._windowScenes(into: &scenes)
+        }
+    }
+
     /// Every scene's commands go into the one bar, in scene order.
     public func _lowerCommands(into menuBar: MenuBar) {
         for scene in repeat (each value) {

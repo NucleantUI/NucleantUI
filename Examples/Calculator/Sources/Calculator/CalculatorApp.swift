@@ -7,9 +7,16 @@
 //  `DragGesture` — pressed state included — rather than the framework's
 //  `Button`, to show what a control looks like from the outside.
 //
+//  Each finished calculation goes on the paper tape, a window of its own
+//  (`Window("Paper Tape", id:)`): the app opens the calculator at launch,
+//  and the tape when asked for — from the Window menu, or from the Tape
+//  button over the display (`openWindow(id:)`). File › New Window opens
+//  another calculator; every one of them writes on the same tape.
+//
 
 import Foundation
 import NucleantUI
+import Observation
 
 // MARK: - Engine
 
@@ -28,8 +35,10 @@ enum Operation: String {
 }
 
 /// A calculator that evaluates as you go, the way a desk calculator does:
-/// `2 + 3 × 4 =` is 20, not 14.
-struct Calculator {
+/// `2 + 3 × 4 =` is 20, not 14. One per calculator window.
+@MainActor
+@Observable
+final class Calculator {
     /// The digits being typed, as typed — "0.50" stays "0.50" until an
     /// operation consumes it.
     private(set) var entry = "0"
@@ -37,6 +46,8 @@ struct Calculator {
     private(set) var pending: Operation? = nil
     /// After `=` or an operator the next digit starts a fresh entry.
     private var startsFresh = true
+    /// The numbers and operators of the calculation under way, for the tape.
+    private var terms: [String] = []
 
     var display: String {
         if startsFresh, let accumulator, pending == nil || entry == "0" {
@@ -50,7 +61,7 @@ struct Calculator {
         return "\(Calculator.format(accumulator)) \(pending.rawValue)"
     }
 
-    mutating func digit(_ d: Character) {
+    func digit(_ d: Character) {
         if startsFresh {
             entry = "0"
             startsFresh = false
@@ -64,33 +75,53 @@ struct Calculator {
         }
     }
 
-    mutating func operation(_ op: Operation) {
+    func operation(_ op: Operation) {
+        if startsFresh, pending != nil, !terms.isEmpty {
+            // An operator straight after another takes its place.
+            terms[terms.count - 1] = op.rawValue
+        } else {
+            terms += [display, op.rawValue]
+        }
         commitPending()
         pending = op
         startsFresh = true
     }
 
-    mutating func equals() {
+    /// The finished calculation, as the tape shows it — `nil` when there
+    /// was nothing to calculate.
+    @discardableResult
+    func equals() -> String? {
+        let operand = entry
+        let calculated = pending != nil
         commitPending()
         pending = nil
         startsFresh = true
+        defer { terms = [] }
+        guard calculated else { return nil }
+        return (terms + [operand, "=", display]).joined(separator: " ")
     }
 
-    mutating func clear() { self = Calculator() }
+    func clear() {
+        entry = "0"
+        accumulator = nil
+        pending = nil
+        startsFresh = true
+        terms = []
+    }
 
-    mutating func negate() {
+    func negate() {
         let value = -(Double(entry) ?? 0)
         entry = Calculator.format(value)
         startsFresh = false
     }
 
-    mutating func percent() {
+    func percent() {
         let value = (Double(entry) ?? 0) / 100
         entry = Calculator.format(value)
         startsFresh = false
     }
 
-    private mutating func commitPending() {
+    private func commitPending() {
         let value = Double(entry) ?? 0
         if let pending, let accumulator {
             let result = pending.apply(accumulator, value)
@@ -110,6 +141,65 @@ struct Calculator {
         while text.hasSuffix("0") { text.removeLast() }
         if text.hasSuffix(".") { text.removeLast() }
         return text
+    }
+}
+
+// MARK: - Paper tape
+
+/// Every calculation finished in any calculator window, oldest first. One
+/// per app, like the tape of a desk calculator.
+@MainActor
+@Observable
+final class PaperTape {
+    static let shared = PaperTape()
+
+    private(set) var lines: [String] = []
+
+    func add(_ line: String) {
+        lines.append(line)
+    }
+
+    func clear() {
+        lines.removeAll()
+    }
+}
+
+/// The tape: the calculations, newest at the bottom, and a way to tear it
+/// off.
+@View
+struct PaperTapeView {
+    @Environment(\.colorScheme) private var system
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if PaperTape.shared.lines.isEmpty {
+                Text("No calculations yet")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        ForEach(Array(PaperTape.shared.lines.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 15, design: .monospaced))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(14)
+                }
+                .defaultScrollAnchor(.bottom)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("Clear Tape") { PaperTape.shared.clear() }
+                    .disabled(PaperTape.shared.lines.isEmpty)
+            }
+            .padding(10)
+        }
+        .frame(minWidth: 220, minHeight: 240)
+        .background(Theme.background)
+        .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }
 }
 
@@ -179,6 +269,8 @@ struct Key {
 struct CalculatorView {
     @State private var calc = Calculator()
     @Environment(\.colorScheme) private var system
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
 
     var body: some View {
         VStack(spacing: 10) {
@@ -207,7 +299,9 @@ struct CalculatorView {
                 digitKey("0")
                 HStack(spacing: 10) {
                     digitKey(".")
-                    Key(label: "=", style: .operation) { calc.equals() }
+                    Key(label: "=", style: .operation) {
+                        if let line = calc.equals() { PaperTape.shared.add(line) }
+                    }
                 }
             }
         }
@@ -219,10 +313,18 @@ struct CalculatorView {
 
     var display: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Text(calc.history)
-                .font(.system(size: 18, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(minHeight: 22)
+            HStack {
+                // The tape is a window of its own, where there can be more
+                // than one.
+                if supportsMultipleWindows {
+                    Button("Tape") { openWindow(id: "paper-tape") }
+                }
+                Spacer()
+                Text(calc.history)
+                    .font(.system(size: 18, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minHeight: 22)
             Text(calc.display)
                 .font(.system(size: 52, weight: .light, design: .monospaced))
                 .lineLimit(1)
@@ -262,5 +364,11 @@ struct CalculatorApp: NucleantApp {
         .windowResizability(.contentSize)
         .windowIdealSize(.maximum)
         .commands { AppearanceCommands() }
+
+        // Opened from the Window menu or the Tape button, never at launch.
+        Window("Paper Tape", id: "paper-tape") {
+            PaperTapeView()
+        }
+        .defaultSize(width: 280, height: 420)
     }
 }

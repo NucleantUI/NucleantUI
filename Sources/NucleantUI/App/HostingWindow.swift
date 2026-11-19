@@ -46,6 +46,15 @@ import CVulkan
 import WinSDK
 #endif
 
+#if os(macOS)
+/// Where the next window's top-left corner goes, so windows opened one after
+/// another cascade instead of piling up at the centre. `nil` until the first
+/// window opens, which stays centred. At file scope: a generic class has no
+/// stored statics.
+@MainActor
+private var nextCascadePoint: NSPoint?
+#endif
+
 public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @unchecked Sendable {
 
     //public typealias Node = NucleantRenderNode
@@ -194,6 +203,58 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         }
     }
 
+    // MARK: - Closing
+
+    /// Told once the window has closed — its close button, File › Close,
+    /// `dismissWindow` — after the platform is done closing it, so what
+    /// lets go of the window last doesn't do it from inside that.
+    var onClose: (@MainActor () -> Void)?
+
+    /// The platform closed the window.
+    @MainActor
+    func didClose() {
+        onClose?()
+        onClose = nil
+    }
+
+    /// Close the window, as its close button does. One never put on screen
+    /// has nothing for the platform to close, and is closed at once.
+    @MainActor
+    func close() {
+        #if os(macOS)
+        if let platformWindow {
+            platformWindow.close()
+            return
+        }
+        #else
+        if renderEngine != nil {
+            nucleantLogError("NucleantUI: closing a window from the app is not wired on this platform yet\n")
+            return
+        }
+        #endif
+        didClose()
+    }
+
+    /// Whether the app can have more than one window open on this platform:
+    /// macOS's. Elsewhere so far, the app's first window is the one it has.
+    static var supportsMultipleWindows: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Bring the window in front of the app's others, and give it the keys.
+    @MainActor
+    func bringToFront() {
+        #if os(macOS)
+        platformWindow?.makeKeyAndOrderFront(nil)
+        #else
+        nucleantLogError("NucleantUI: bringing a window to the front is not wired on this platform yet\n")
+        #endif
+    }
+
     /// The scheme the window shows: the app's override if it set one, else
     /// what the system says.
     @MainActor
@@ -277,6 +338,15 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         self.renderEngine = engine
         self.platformWindow = platformWindow
         platformWindow.win_delegate = self
+        // This object holds the window; AppKit releasing it as well on close
+        // would release it once too often.
+        platformWindow.isReleasedWhenClosed = false
+        platformWindow.on_close = { [weak self] in
+            // Mid-close, from inside AppKit: the window goes once it's done.
+            DispatchQueue.main.async {
+                self?.didClose()
+            }
+        }
 
         displayScale = Double(platformWindow.metalLayer.contentsScale)
 
@@ -297,8 +367,10 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         // A window built from a bare `contentRect` sits at the screen's
         // bottom-left corner (AppKit's origin), which on a multi-display setup
         // is easy to lose entirely. Centre it, as a freshly opened document
-        // window would be.
+        // window would be — and each one after it down and to the right of
+        // the last, as AppKit cascades, rather than on top of it.
         platformWindow.center()
+        nextCascadePoint = platformWindow.cascadeTopLeft(from: nextCascadePoint ?? .zero)
         platformWindow.makeKeyAndOrderFront(nil)
         platformWindow.makeFirstResponder(platformWindow.contentView)
         // The Edit menu's actions, for the view in the tree that has the keys.

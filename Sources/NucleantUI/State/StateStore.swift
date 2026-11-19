@@ -177,12 +177,12 @@ final class StateStorage<Value>: StateSlot, AnyStateStorage {
 
     private func didChange(via chain: [AnyKeyPath]) {
         version &+= 1
-        if isReadDuringPlacement, let path = owner.standingPath {
-            Invalidator.shared.invalidate(owner: path)
+        if isReadDuringPlacement, let position = owner.standingPosition {
+            Invalidator.shared.invalidate(owner: position)
         }
         // A reader no longer standing has nothing to rebuild.
         readers.forEachReader(reachedBy: chain) { reader in
-            if let path = reader.standingPath { Invalidator.shared.invalidate(owner: path) }
+            if let position = reader.standingPosition { Invalidator.shared.invalidate(owner: position) }
         }
     }
 
@@ -284,73 +284,113 @@ final class DependencyTracker {
 /// The seam between "some state changed" and "the window redraws".
 ///
 /// Writes name the view that owns the state, so a rebuild can start there
-/// instead of at the root. `needsFullRebuild` is the fallback for the cases a
+/// instead of at the root. A full rebuild is the fallback for the cases a
 /// scoped rebuild can't serve — a resize, or a dirty path the builder has no
 /// record for because the tree changed shape.
+///
+/// Several trees stand at once, a window's each, and their paths are alike:
+/// every one starts at its own root. So the work is filed by the tree the
+/// written view stands in — by its root position — and each host takes its
+/// own (`consume(tree:)`), never another window's. What names no view —
+/// `invalidate()`, `requestPlacement()` — is every tree's, and each serves
+/// it once.
 @MainActor
 public final class Invalidator {
     public static let shared = Invalidator()
 
-    private(set) var dirtyPaths: Set<[Int]> = []
-    private(set) var needsFullRebuild = false
+    /// What one tree has waiting for its next frame.
+    struct Work {
+        /// Rebuild from the root.
+        var full = false
+        /// The views to rebuild, by their paths in the tree.
+        var paths: Set<[Int]> = []
+        /// Lay the tree out and place it again, with nothing to build.
+        var placement = false
+        /// The transaction the writes were made in — `withAnimation`'s, most
+        /// often. `nil` when none was.
+        var transaction: Transaction?
+    }
 
-    /// The transaction the writes since the last frame were made in —
-    /// `withAnimation`'s, most often. `nil` when none was.
-    private var transaction: Transaction?
+    /// Each tree's work, by its root position.
+    private var trees: [ObjectIdentifier: Work] = [:]
+
+    /// The requests made of every tree so far, counted, and how many of
+    /// them each tree has served: a tree has one to serve while its count
+    /// is behind.
+    private var everyTree = Requests()
+    private var served: [ObjectIdentifier: Requests] = [:]
+
+    private struct Requests: Equatable {
+        var fullRebuilds: UInt64 = 0
+        var placements: UInt64 = 0
+    }
 
     private init() {}
 
-    /// Invalidate the subtree rooted at the view that owns the written state.
+    /// Invalidate the subtree rooted at the view standing at `position`,
+    /// the one that owns the written state or read it.
     ///
     /// A path inside an offscreen tree is dropped: that tree is a snapshot
-    /// (`OffscreenRender`), so nothing re-runs for the write, and no host has
-    /// a record standing at the path — a window handed one would fall back to
-    /// rebuilding itself from the root for a tree it cannot even see.
-    func invalidate(owner path: [Int]) {
+    /// (`OffscreenRender`), so nothing re-runs for the write, and no host
+    /// would ever take it.
+    func invalidate(owner position: ViewPosition) {
+        let path = position.path
         guard path.first != OffscreenRender.rootIndex else { return }
-        dirtyPaths.insert(path)
-        noteTransaction()
+        let tree = ObjectIdentifier(position.root)
+        trees[tree, default: Work()].paths.insert(path)
+        noteTransaction(for: tree)
+    }
+
+    /// Invalidate the whole tree rooted at `root` — its window resized, or
+    /// its safe area moved.
+    func invalidate(tree root: ViewPosition) {
+        let tree = ObjectIdentifier(root)
+        trees[tree, default: Work()].full = true
+        noteTransaction(for: tree)
     }
 
     /// File the transaction the running code is in, if any, with the frame
-    /// that will serve this write.
-    private func noteTransaction() {
+    /// of `tree` that will serve this write.
+    private func noteTransaction(for tree: ObjectIdentifier) {
         guard let current = TransactionScope.current else { return }
         for completion in current.completions {
             completion.isClaimed = true
         }
-        if transaction == nil {
-            transaction = current
+        if trees[tree]?.transaction == nil {
+            trees[tree]?.transaction = current
         } else {
-            transaction?.merge(current)
+            trees[tree]?.transaction?.merge(current)
         }
     }
 
-    /// Invalidate everything — a resize, or an explicit host-level request.
+    /// Invalidate every tree: each rebuilds from its root on its next frame.
     public func invalidate() {
-        needsFullRebuild = true
-        noteTransaction()
+        everyTree.fullRebuilds &+= 1
     }
 
     /// Something placed moved without any view changing — a scroll view's
-    /// offset under a finger: the next frame lays the tree out and places
-    /// it again, and builds nothing for it.
-    private(set) var needsPlacement = false
-
+    /// offset under a finger: the next frame lays the trees out and places
+    /// them again, and builds nothing for it. The scroll view doesn't know
+    /// which tree it is in, so every tree does.
     func requestPlacement() {
-        needsPlacement = true
+        everyTree.placements &+= 1
     }
 
-    var isDirty: Bool { needsFullRebuild || !dirtyPaths.isEmpty }
+    /// Take the work waiting for the tree rooted at `root`, and clear it.
+    /// A tree's first call finds nothing asked of every tree: it builds from
+    /// its root anyway.
+    func consume(tree root: ViewPosition) -> Work {
+        let tree = ObjectIdentifier(root)
+        var work = trees.removeValue(forKey: tree) ?? Work()
+        let seen = served[tree] ?? everyTree
+        if seen.fullRebuilds != everyTree.fullRebuilds { work.full = true }
+        if seen.placements != everyTree.placements { work.placement = true }
+        served[tree] = everyTree
+        return work
+    }
 
-    /// Take the accumulated work and clear it.
-    func consume() -> (full: Bool, paths: Set<[Int]>, placement: Bool, transaction: Transaction?) {
-        defer {
-            needsFullRebuild = false
-            dirtyPaths.removeAll(keepingCapacity: true)
-            needsPlacement = false
-            transaction = nil
-        }
-        return (needsFullRebuild, dirtyPaths, needsPlacement, transaction)
+    /// The trees with work waiting, by their roots.
+    var waitingTrees: Set<ObjectIdentifier> {
+        Set(trees.keys)
     }
 }

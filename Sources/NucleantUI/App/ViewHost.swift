@@ -248,7 +248,7 @@ public final class ViewHost {
     func setSafeAreaInsets(_ insets: EdgeInsets) {
         guard insets != containerSafeAreaInsets else { return }
         containerSafeAreaInsets = insets
-        Invalidator.shared.invalidate()
+        Invalidator.shared.invalidate(tree: records.rootPosition)
     }
 
     /// How much of the window the on-screen keyboard covers, in points from
@@ -263,7 +263,7 @@ public final class ViewHost {
         guard height != keyboardHeight else { return }
         keyboardHeight = height
         withTransaction(Transaction(animation: animation)) {
-            Invalidator.shared.invalidate()
+            Invalidator.shared.invalidate(tree: records.rootPosition)
         }
     }
 
@@ -318,7 +318,7 @@ public final class ViewHost {
             for completion in completions { completion.run() }
         }
 
-        let work = Invalidator.shared.consume()
+        let work = Invalidator.shared.consume(tree: records.rootPosition)
         let full = needsFullRebuild || work.full
         // Something still moving is laid out again even with nothing dirty.
         guard full || !work.paths.isEmpty || needsRepaint || work.placement || animations.wantsFrame else { return false }
@@ -443,7 +443,7 @@ public final class ViewHost {
         needsFullRebuild = true
         needsWindowRedraw = true
         PlacementRecorder.shared.invalidateAll()
-        Invalidator.shared.invalidate()
+        Invalidator.shared.invalidate(tree: records.rootPosition)
     }
 
     // MARK: - Building

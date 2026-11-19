@@ -7,14 +7,14 @@
 //  stand on.
 //
 //  This is the only place a tree runs outside `ViewHost`, and it is
-//  deliberately a *snapshot* rather than a second live host. Two things in the
-//  framework are process-global by design: `Invalidator.shared`, the dirty set
-//  every state write lands in, keyed by structural path; and
-//  `ShaderHost.current`, the registry of the pass being laid out. A second
-//  live tree would take the window's dirty paths for its own and nest a pass
-//  inside a pass. So an offscreen tree renders when it is asked to and at no
-//  other time, and its paths are rooted at `rootIndex` — a slot no window tree
-//  can produce — so that nothing it reads can dirty anything.
+//  deliberately a *snapshot* rather than a second live host. It renders from
+//  inside a window's pass, where `ShaderHost.current`, the registry of the
+//  pass being laid out, is the window's: a live tree would nest a pass inside
+//  a pass. And a live tree needs a host to take its writes from
+//  `Invalidator.shared`, which files every write under the tree it was made
+//  in. So an offscreen tree renders when it is asked to and at no other time,
+//  and its paths are rooted at `rootIndex` — a slot no window tree can
+//  produce — so that nothing it reads files work no one would take.
 //
 //  What it keeps across renders is the tree itself: the same records, so a second render reuses the views that are equivalent and the
 //  `@State` inside them keeps its value. What it does not do is re-run for

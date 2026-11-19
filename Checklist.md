@@ -8,7 +8,7 @@ change that adds the API.
 - [x] Scene / SceneBuilder
 - [x] WindowGroup
 - [x] .defaultSize / .windowResizability / .windowIdealSize
-- [ ] Window
+- [x] Window
 - [ ] Settings
 - [ ] MenuBarExtra
 - [ ] DocumentGroup
@@ -17,7 +17,7 @@ change that adds the API.
 - [x] CommandGroup
 - [x] .commands
 - [x] .keyboardShortcut
-- [ ] openWindow / dismissWindow
+- [x] openWindow / dismissWindow
 - [ ] ScenePhase
 - [x] #Preview
 

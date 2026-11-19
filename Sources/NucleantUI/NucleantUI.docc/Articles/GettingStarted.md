@@ -60,6 +60,23 @@ struct Greeting {
 }
 ```
 
+The body can list more scenes after the first. Only the first opens at
+launch; the others open when a view asks for one by its id, with
+``EnvironmentValues/openWindow``, or from the menu bar — File › New Window
+opens another window from a ``WindowGroup``, and each ``Window`` is listed in
+the Window menu:
+
+```swift
+var body: some Scene {
+    WindowGroup("Hello") {
+        Greeting()
+    }
+    Window("About Hello", id: "about") {
+        AboutHello()
+    }
+}
+```
+
 Build and run it like any executable package:
 
 ```sh

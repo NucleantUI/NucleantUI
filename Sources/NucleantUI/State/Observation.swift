@@ -46,7 +46,7 @@ extension Invalidator {
     }
 
     private func invalidate(_ reader: PositionHandle) {
-        if let path = reader.standingPath { invalidate(owner: path) }
+        if let position = reader.standingPosition { invalidate(owner: position) }
     }
 }
 

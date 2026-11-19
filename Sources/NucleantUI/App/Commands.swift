@@ -228,6 +228,10 @@ struct CommandsScene<Base: Scene, Content: Commands>: Scene {
         base._makeWindows()
     }
 
+    func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
+        base._windowScenes(into: &scenes)
+    }
+
     func _lowerCommands(into menuBar: MenuBar) {
         base._lowerCommands(into: menuBar)
         commands._lower(into: menuBar)

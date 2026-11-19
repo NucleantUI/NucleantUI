@@ -286,12 +286,12 @@ final class AnimationStore {
     func invalidateScheduledRebuilds() {
         for position in rebuilds where position.rebuildsNextFrame && !position.hasLeft {
             position.rebuildsNextFrame = false
-            Invalidator.shared.invalidate(owner: position.path)
+            Invalidator.shared.invalidate(owner: position)
         }
         rebuilds.removeAll(keepingCapacity: true)
         // A container whose exit is over, still standing.
         for position in finishedExits where !position.hasLeft && !position.transitionSlots.isEmpty {
-            Invalidator.shared.invalidate(owner: position.path)
+            Invalidator.shared.invalidate(owner: position)
         }
         finishedExits.removeAll()
         guard !timelines.isEmpty else { return }
@@ -300,7 +300,7 @@ final class AnimationStore {
             guard !position.hasLeft, let due = position.nextTimelineDate else { return true }
             guard due <= date else { return false }
             position.nextTimelineDate = nil
-            Invalidator.shared.invalidate(owner: position.path)
+            Invalidator.shared.invalidate(owner: position)
             return true
         }
     }
