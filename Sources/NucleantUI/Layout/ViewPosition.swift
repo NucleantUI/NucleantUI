@@ -197,6 +197,16 @@ final class ViewPosition {
         return path
     }
 
+    /// The root of the tree this position is in: which tree, of the ones
+    /// standing at once, a write here dirties.
+    var root: ViewPosition {
+        var position = self
+        while let parent = position.parent {
+            position = parent
+        }
+        return position
+    }
+
     @inline(__always)
     private func index(of key: Int) -> Int? {
         if let indices { return indices[key] }
@@ -394,8 +404,13 @@ final class PositionHandle: Hashable, @unchecked Sendable {
 
     /// The path of the position while it stands in the tree.
     var standingPath: [Int]? {
+        standingPosition?.path
+    }
+
+    /// The position while it stands in the tree.
+    var standingPosition: ViewPosition? {
         guard let position, !position.hasLeft else { return nil }
-        return position.path
+        return position
     }
 
     /// The last build of the view at the position while it stands — its

@@ -11,10 +11,12 @@ import Foundation
 import Testing
 @testable import NucleantUI
 
-/// Every suite that drives a host, one after another. A host shares the
-/// process-wide invalidation queue (`Invalidator.shared`) with any other
-/// host in the process, so two hosts running at once would take each
-/// other's state changes; the suites are nested in this one, serialized.
+/// Every suite that drives a host, one after another. Each host takes only
+/// its own tree's state changes, but hosts share process-wide state — what
+/// every tree is asked at once (`Invalidator.shared.invalidate()`, a scroll
+/// view's placement), the tracking of which view reads what — so suites
+/// interleaving at their `await`s would see each other's; they are nested
+/// in this one, serialized.
 @MainActor
 @Suite(.serialized)
 enum HostedViews {}

@@ -723,7 +723,7 @@ final class ShaderSlotRegistry<N: NucleantContainerNode> {
             }
             let bytes = track(pack, at: key)
             guard (bytes.count + 3) / 4 <= slot.backend.argumentCapacity else {
-                if let path = key.standingPath { Invalidator.shared.invalidate(owner: path) }
+                if let position = key.standingPosition { Invalidator.shared.invalidate(owner: position) }
                 continue
             }
             changedInputs.remove(key)

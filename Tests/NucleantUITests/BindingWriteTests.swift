@@ -49,7 +49,7 @@ extension HostedViews {
         }
 
         private func dirtied() -> Set<[Int]> {
-            Invalidator.shared.consume().paths
+            Invalidator.shared.consume(tree: tree.rootPosition).paths
         }
 
         @Test func aWriteToOnePartComparesAndWritesThatPart() {

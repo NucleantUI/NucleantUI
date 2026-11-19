@@ -530,9 +530,9 @@ enum ShaderHost {
     /// re-rendered from wherever a model happens to live — outside any pass,
     /// before the first one, after the last. This is what it reaches for, set
     /// when the window attaches its canvas and cleared when the registry is
-    /// torn down. One window's, as with every other global here
-    /// (`Invalidator.shared`, `AnimationStore.current`): a second window's
-    /// textures would need a registry threaded to them instead.
+    /// torn down. One window's — the one that attached last: a texture made
+    /// outside a pass in a second window would need a registry threaded to
+    /// it instead.
     ///
     /// Weak: the window owns its registry, and a window that has gone leaves
     /// this nil rather than a registry whose engine is dead.

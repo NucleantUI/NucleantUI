@@ -93,8 +93,10 @@ swift test --filter NavigationBarVisibilityTests    # one suite
 ```
 
 A new suite must be nested in `extension HostedViews` (a `.serialized`
-suite): every host shares `Invalidator.shared`, so two running at once
-take each other's state changes.
+suite): hosts share process-wide state — what every tree is asked at once
+(`Invalidator.shared.invalidate()`, a scroll view's placement), the
+tracking of which view reads what — so two suites interleaving at their
+`await`s would see each other's.
 
 ## Gotchas
 

@@ -85,9 +85,10 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
 
     private let app: A
 
-    /// Windows are held for the process's lifetime — each owns its engine and
-    /// platform window, and `PlatformWindow` only weakly references back.
-    private var windows: [HostingWindow<A.RenderNode>] = []
+    /// The app's window scenes and the windows open from them — each owns
+    /// its engine and platform window, and `PlatformWindow` only weakly
+    /// references back. Made at launch, from the scenes the body declares.
+    private var windows: AppWindows<A.RenderNode>?
 
     #if os(macOS)
     /// The GPU device every window renders with: made before the first window
@@ -115,25 +116,21 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         // missing init looks like from the outside.
         ThorEngine.ensureInitialized(threads: AppRuntimeSettings.thorVGThreadCount)
 
-        windows = app.body._makeWindows()
+        let windows = AppWindows<A.RenderNode>(app.body)
+        self.windows = windows
         #if os(macOS)
         do {
-            let device = try VulkanRenderDevice<A.RenderNode>()
-            renderDevice = device
-            for window in windows {
-                window.renderDevice = device
-            }
+            renderDevice = try VulkanRenderDevice<A.RenderNode>()
         } catch {
             nucleantLogError("NucleantUI: no GPU device for the windows to share: \(error)\n")
         }
-        #endif
-        for window in windows {
-            do {
-                try window.present()
-            } catch {
-                nucleantLogError("NucleantUI: window present failed: \(error)\n")
-            }
+        windows.present = { [weak self] window in
+            window.renderDevice = self?.renderDevice
+            try window.present()
         }
+        #endif
+        // The first scene's window; the others open when asked for.
+        windows.launch()
         // Always, even with no `.commands`: the standard menus are what give
         // the app Quit, Close and the Edit shortcuts.
         installCommands(self)
@@ -233,10 +230,13 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
 }
 
 extension AppRuntime: WindowCommands {
-    /// The scenes' `.commands`, lowered. Evaluated when installed, so the
-    /// menu reflects the state the scene body reads at that moment.
+    /// The items that open the scenes' windows, then the scenes'
+    /// `.commands`, lowered — so a `CommandGroup` can replace or sit next to
+    /// New Window. Evaluated when installed, so the menu reflects the state
+    /// the scene body reads at that moment.
     public var menuBar: MenuBar {
         let menuBar = MenuBar()
+        windows?.lowerCommands(into: menuBar)
         app.body._lowerCommands(into: menuBar)
         return menuBar
     }

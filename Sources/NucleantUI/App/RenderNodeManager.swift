@@ -52,8 +52,8 @@ final class RenderSlot: Hashable, @unchecked Sendable {
         return position.standingPath.map { "\($0)" } ?? "(left)"
     }
 
-    /// The path of the view while it stands — to dirty it.
-    var standingPath: [Int]? { position?.standingPath }
+    /// Where the view stands while it does — to dirty it.
+    var standingPosition: ViewPosition? { position?.standingPosition }
 
 
     static func == (a: RenderSlot, b: RenderSlot) -> Bool { a === b }

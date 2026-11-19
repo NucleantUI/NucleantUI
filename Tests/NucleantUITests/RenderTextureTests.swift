@@ -121,20 +121,17 @@ struct RenderTextures {
         #expect(refreshed.pixels == renderImage(size: size) { Swatch(level: 9) }.pixels)
     }
 
-    /// A model an offscreen tree read must not dirty the window's frame: the
-    /// tree is rooted at a slot no window tree can produce, and `Invalidator`
+    /// A model an offscreen tree read must not leave work behind: the tree
+    /// is rooted at a slot no window tree can produce, and `Invalidator`
     /// drops paths from it. Without that, every write to a model a texture
-    /// read would send the window into a full rebuild for a tree it cannot
-    /// see.
+    /// read would file work for a tree no host ever takes.
     @Test
     func anOffscreenReadNeverDirtiesTheWindow() {
         let level = Level(value: 1)
         _ = renderTexture(size: Size(width: 8, height: 8)) { Swatch(level: level.value) }
-        _ = Invalidator.shared.consume()
+        let waiting = Invalidator.shared.waitingTrees
         level.value = 2
-        let work = Invalidator.shared.consume()
-        #expect(work.paths.isEmpty)
-        #expect(work.full == false)
+        #expect(Invalidator.shared.waitingTrees == waiting)
     }
 
     /// The tree is kept across renders, so a view that is still equivalent is
