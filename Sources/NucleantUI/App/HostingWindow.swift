@@ -643,6 +643,22 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
                 self?.applyColorScheme(Self.systemColorScheme())
             }
         }
+        // What covers the window: the soft keyboard from the bottom up, and
+        // the system bars and the display cutout at its edges. The Activity
+        // reports both from its window insets, from its first layout on, so
+        // they can be there already.
+        AndroidSurfaceHost.onKeyboardHeightChanged = { [weak self] duration in
+            MainActor.assumeIsolated {
+                self?.followKeyboard(duration: duration)
+            }
+        }
+        AndroidSurfaceHost.onSafeAreaInsetsChanged = { [weak self] in
+            MainActor.assumeIsolated {
+                self?.followSafeArea()
+            }
+        }
+        followSafeArea()
+        followKeyboard(duration: 0)
 
         platformWindow.present()
     }
@@ -853,6 +869,32 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         if platformWindow?.textInputKind != kind {
             platformWindow?.textInputKind = kind
         }
+    }
+
+    /// The soft keyboard covers `AndroidSurfaceHost.keyboardHeight` of the
+    /// window now, or will in `duration` seconds: the views are laid out
+    /// above it, moving as it does. Android moves the keyboard on its own
+    /// curve when an app follows it; one with no duration follows a
+    /// gesture, a frame at a time.
+    @MainActor
+    private func followKeyboard(duration: Double) {
+        host.setKeyboardHeight(
+            AndroidSurfaceHost.keyboardHeight,
+            animation: duration > 0 ? .timingCurve(0.2, 0, 0, 1, duration: duration) : nil
+        )
+    }
+
+    /// The system bars and the display cutout keep
+    /// `AndroidSurfaceHost.safeAreaInsets` clear: the views are laid out
+    /// inside them, as the `.container` safe area. Left and right are the
+    /// leading and trailing edges.
+    @MainActor
+    private func followSafeArea() {
+        let insets = AndroidSurfaceHost.safeAreaInsets
+        host.setSafeAreaInsets(EdgeInsets(
+            top: insets.top, leading: insets.left,
+            bottom: insets.bottom, trailing: insets.right
+        ))
     }
     #elseif os(iOS)
     /// Put the on-screen keyboard up while the view with the keys takes
