@@ -239,8 +239,8 @@ public final class ViewHost {
 
     /// What the platform keeps clear at the window's edges — on iOS the
     /// status bar, the sensor housing, the home indicator and the rounded
-    /// corners: the root view is laid out inside it, as the `.container`
-    /// safe area.
+    /// corners, on Android the system bars and the display cutout: the root
+    /// view is laid out inside it, as the `.container` safe area.
     private(set) var containerSafeAreaInsets = EdgeInsets()
 
     /// The window's edges now keep `insets` clear: lay the tree out again
