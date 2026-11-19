@@ -170,6 +170,9 @@ struct ScrollContent: NodeContent {
             : context.clipped(to: rect)
         inner.scrollSafeAreaPadding = EdgeInsets()
         inner.scrollObservers = nil
+        // Content that scrolls is nowhere in particular against the
+        // window's edges: it reaches into no safe area.
+        inner.safeArea = .none
         for name in [ScrollViewSpaceName(axis: nil)]
             + (axes.contains(.horizontal) ? [ScrollViewSpaceName(axis: .horizontal)] : [])
             + (axes.contains(.vertical) ? [ScrollViewSpaceName(axis: .vertical)] : []) {

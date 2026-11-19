@@ -1257,6 +1257,18 @@ extension HostingWindow: WindowTouchDelegate {
         }
     }
 
+    /// The window's edges keep `insets` clear: the views are laid out
+    /// inside them, as the `.container` safe area. Left and right are the
+    /// leading and trailing edges.
+    public func safeAreaInsetsChanged(_ insets: UIEdgeInsets) {
+        MainActor.assumeIsolated {
+            host.setSafeAreaInsets(EdgeInsets(
+                top: Double(insets.top), leading: Double(insets.left),
+                bottom: Double(insets.bottom), trailing: Double(insets.right)
+            ))
+        }
+    }
+
     /// UIKit's animation curve as SwiftUI turns it into an animation. The
     /// keyboard's own, 7, is a spring that takes no duration. A timed curve
     /// over no time is no animation: the views jump.

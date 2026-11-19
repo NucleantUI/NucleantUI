@@ -45,9 +45,10 @@ struct IgnoresSafeAreaModifier: PrimitiveModifier, Equatable {
     }
 }
 
-/// Sized as what it wraps; placed out into the safe area it touches. Not
-/// pure: how far it reaches depends on where in the window it is, which a
-/// kept placement moved somewhere else would not see.
+/// Sized as what it wraps; placed out into the safe area it touches. How far
+/// it reaches depends on where in the window it is as well as on its rect
+/// and context, so a kept placement under a safe area is never drawn again
+/// moved (`PlacementRecord.likeness`).
 struct IgnoresSafeAreaContent: NodeContent {
     let regions: SafeAreaRegions
     let edges: Edge.Set

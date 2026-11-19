@@ -46,9 +46,9 @@ public struct GeometryProxy {
     /// The safe area inset of the container view.
     ///
     /// At each edge of the container that is on the safe area's edge, how
-    /// far it is from there to the window's edge: the keyboard's height at
-    /// the bottom, for a container down on the keyboard. Zero at any other
-    /// edge — the keyboard is the only safe area so far.
+    /// far it is from there to the window's edge: the status bar's height at
+    /// the top, the home indicator's at the bottom — or the keyboard's,
+    /// while it is up. Zero at any other edge, and inside a scroll view.
     public var safeAreaInsets: EdgeInsets {
         log?.noteSafeArea()
         return placed.safeAreaInsets

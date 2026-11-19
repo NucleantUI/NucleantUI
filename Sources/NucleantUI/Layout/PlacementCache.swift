@@ -80,6 +80,9 @@ struct PlacementRecord {
         guard self.epoch == epoch, self.rect.size == rect.size, self.proposal == proposal else { return .different }
         let moved = self.rect.origin != rect.origin
         if moved, context.animation != nil { return .different }
+        // Somewhere else under a safe area, what it reaches into can be
+        // different too (`IgnoresSafeAreaContent`).
+        if moved, context.safeArea != .none { return .different }
         guard self.context.placesLike(context) else { return .different }
         return moved ? .moved(dx: rect.minX - self.rect.minX, dy: rect.minY - self.rect.minY) : .same
     }
@@ -305,3 +308,4 @@ extension KeyPressContent { static var placesPurely: Bool { true } }
 extension DropTargetContent { static var placesPurely: Bool { true } }
 extension ContextMenuContent { static var placesPurely: Bool { true } }
 extension TransitionTraitContent { static var placesPurely: Bool { true } }
+extension IgnoresSafeAreaContent { static var placesPurely: Bool { true } }

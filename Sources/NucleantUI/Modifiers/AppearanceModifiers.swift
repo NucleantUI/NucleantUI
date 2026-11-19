@@ -45,9 +45,19 @@ extension View {
         self.overlay(overlay(), alignment: alignment)
     }
 
-    /// `style` filling a rectangle behind this view, stretched to its size.
+    /// `style` filling a rectangle behind this view, stretched to its size —
+    /// and out into the window's own safe area (`.container`) at every edge
+    /// where the view is on its edge: a bar's or a screen's color runs on
+    /// under the status bar and the home indicator. Not under the keyboard.
     public func background<S: ShapeStyle>(_ style: S) -> some View {
-        background(Rectangle().fill(style))
+        background(Rectangle().fill(style).ignoresSafeArea(.container, edges: .all))
+    }
+
+    /// `style` filling a rectangle behind this view, stretched to its size —
+    /// and out into the window's own safe area (`.container`) at `edges`,
+    /// where the view is on its edge. `[]` keeps it to the view.
+    public func background<S: ShapeStyle>(_ style: S, ignoresSafeAreaEdges edges: Edge.Set) -> some View {
+        background(Rectangle().fill(style).ignoresSafeArea(.container, edges: edges))
     }
 
     /// A stroked outline just inside this view's bounds.
