@@ -90,6 +90,9 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
     /// references back. Made at launch, from the scenes the body declares.
     private var windows: AppWindows<A.RenderNode>?
 
+    /// The app's `SystemTray` items, kept up to date with its body.
+    private var systemTrays: AppSystemTrays<A.RenderNode>?
+
     #if os(macOS)
     /// The GPU device every window renders with: made before the first window
     /// and kept for the process, so a node belongs to the app, not to one
@@ -128,12 +131,72 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
             window.renderDevice = self?.renderDevice
             try window.present()
         }
+        windows.onWindowsChange = { [weak self] in
+            self?.followDockIcon()
+        }
         #endif
         // The first scene's window; the others open when asked for.
         windows.launch()
+        startSystemTrays(windows: windows)
         // Always, even with no `.commands`: the standard menus are what give
         // the app Quit, Close and the Edit shortcuts.
         installCommands(self)
+    }
+
+    /// The body's scenes, read now.
+    private func scenes() -> _AppScenes<A.RenderNode> {
+        var scenes = _AppScenes<A.RenderNode>()
+        app.body._scenes(into: &scenes)
+        return scenes
+    }
+
+    /// Put the app's `SystemTray` items up, and keep them up to date.
+    private func startSystemTrays(windows: AppWindows<A.RenderNode>) {
+        guard !scenes().systemTrays.isEmpty else { return }
+        #if os(macOS)
+        let trays = AppSystemTrays<A.RenderNode> { [weak self] in
+            self?.scenes().systemTrays ?? []
+        }
+        trays.insert = { [weak self] item in self?.insertTrayItem(item) }
+        trays.refresh = { [weak self] item in self?.refreshTrayItem(item) }
+        trays.remove = { [weak self] item in self?.removeTrayItem(item) }
+        trays.quit = { NSApplication.shared.terminate(nil) }
+        trays.present = windows.present
+        trays.windows = windows
+        systemTrays = trays
+        trays.start()
+        #else
+        nucleantLogError("NucleantUI: SystemTray is not shown on this platform yet\n")
+        #endif
+    }
+
+    /// An app that starts in the system tray, with no window, starts with
+    /// no Dock icon (`.dockIcon(_:)`).
+    public var showsDockIconAtLaunch: Bool {
+        let scenes = scenes()
+        return scenes.showsDockIcon(hasOpenWindow: scenes.opensWindowAtLaunch)
+    }
+
+    #if os(macOS)
+    /// The Dock icon, and the app's menus with it, there or not as the
+    /// windows open now say (`.dockIcon(_:)`).
+    private func followDockIcon() {
+        let shows = scenes().showsDockIcon(hasOpenWindow: !(windows?.windows.isEmpty ?? true))
+        let policy: NSApplication.ActivationPolicy = shows ? .regular : .accessory
+        guard NSApplication.shared.activationPolicy() != policy else { return }
+        NSApplication.shared.setActivationPolicy(policy)
+        // Back in the Dock, the app comes forward with its window and menus.
+        if shows {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+    }
+    #endif
+
+    /// An app with a `SystemTray` item shown goes on with no window open —
+    /// before launch, one that declares a `SystemTray` at all.
+    public var terminatesAfterLastWindowClosed: Bool {
+        guard let systemTrays else { return scenes().systemTrays.isEmpty }
+        return !systemTrays.hasInsertedItem
     }
 
     /// Hand control to the platform event loop. Does not return.

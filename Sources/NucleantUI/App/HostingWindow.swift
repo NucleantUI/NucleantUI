@@ -245,6 +245,58 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         #endif
     }
 
+    // MARK: - System tray window
+
+    /// A `SystemTray`'s window in the `.window` style: no title bar or
+    /// buttons, over the other windows, sized to its content, and hidden
+    /// but for when it is shown under its item — until the app is clicked
+    /// out of. Set before `present()`.
+    var isTrayPanel = false
+
+    #if os(macOS)
+    /// The item the window last dropped down from.
+    private var trayAnchor: TrayAnchor?
+
+    /// When the window last went away for losing the keys: a click on its
+    /// own item takes them before the item hears of the click, and that
+    /// click closes the window rather than opening it again.
+    private var trayPanelHiddenAt: Date?
+    #endif
+
+    /// Show the tray window under `anchor`, or hide it when it is shown.
+    @MainActor
+    func toggleTrayPanel(below anchor: TrayAnchor) {
+        #if os(macOS)
+        guard let platformWindow else { return }
+        if platformWindow.isVisible {
+            platformWindow.orderOut(nil)
+            return
+        }
+        if let hiddenAt = trayPanelHiddenAt, Date().timeIntervalSince(hiddenAt) < 0.3 {
+            trayPanelHiddenAt = nil
+            return
+        }
+        trayAnchor = anchor
+        // Built, sized to what it holds and drawn at that size before it
+        // shows, so it doesn't show at another size first.
+        renderFrame(0)
+        placeTrayPanel()
+        renderFrame(0)
+        NSApp.activate(ignoringOtherApps: true)
+        platformWindow.makeKeyAndOrderFront(nil)
+        #else
+        nucleantLogError("NucleantUI: a SystemTray's window is not wired on this platform yet\n")
+        #endif
+    }
+
+    /// Hide the tray window; it keeps its views and their state.
+    @MainActor
+    func hideTrayPanel() {
+        #if os(macOS)
+        platformWindow?.orderOut(nil)
+        #endif
+    }
+
     /// Bring the window in front of the app's others, and give it the keys.
     @MainActor
     func bringToFront() {
@@ -324,10 +376,13 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
                 width: Double(win_rect.z),
                 height: Double(win_rect.w)
             ),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: isTrayPanel ? [.titled, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
+        if isTrayPanel {
+            configureTrayPanel(platformWindow)
+        }
 
         // 2. The Vulkan engine renders into that layer, on the app's device.
         let engine = if let renderDevice {
@@ -362,8 +417,24 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             }
         }
 
-        // 5. Show it.
+        // 5. Show it — a tray window only when its item is clicked.
         platformWindow.title = title
+        if isTrayPanel {
+            if let contentView = platformWindow.contentView {
+                platformWindow.makeFirstResponder(contentView)
+                let responder = EditCommandResponder(host: host)
+                responder.insert(after: contentView)
+                editCommandResponder = responder
+            }
+            if let size = platformWindow.contentView?.bounds.size {
+                on_size(w: Double(size.width), h: Double(size.height))
+            }
+            host.measuredContentSizes = [.minimum, .maximum, .ideal]
+            host.onContentSizeLimitsChange = { [weak self] limits in
+                self?.applyTrayPanelLimits(limits)
+            }
+            return
+        }
         // A window built from a bare `contentRect` sits at the screen's
         // bottom-left corner (AppKit's origin), which on a multi-display setup
         // is easy to lose entirely. Centre it, as a freshly opened document
@@ -388,6 +459,66 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
         // 7. The window's limits, from its content, once it has been built.
         followContentSizeLimits()
+    }
+
+    /// A tray window's look: no title, no buttons, not moved by its top,
+    /// above the other windows on every space, out of the Window menu — and
+    /// gone when another window, or another app, takes the keys.
+    @MainActor
+    private func configureTrayPanel(_ platformWindow: PlatformWindow<HostingWindow>) {
+        platformWindow.titleVisibility = .hidden
+        platformWindow.titlebarAppearsTransparent = true
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            platformWindow.standardWindowButton(button)?.isHidden = true
+        }
+        platformWindow.isMovable = false
+        platformWindow.level = .popUpMenu
+        platformWindow.collectionBehavior = [.canJoinAllSpaces, .transient, .ignoresCycle, .fullScreenAuxiliary]
+        platformWindow.isExcludedFromWindowsMenu = true
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: platformWindow,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let platformWindow = self.platformWindow, platformWindow.isVisible else { return }
+                self.trayPanelHiddenAt = Date()
+                platformWindow.orderOut(nil)
+            }
+        }
+    }
+
+    /// A tray window takes its content's ideal size — or the scene's
+    /// `defaultSize` — within its limits, under its item.
+    @MainActor
+    private func applyTrayPanelLimits(_ limits: ContentSizeLimits) {
+        guard let platformWindow else { return }
+        let fits: (Size?) -> Size? = { size in
+            guard let size, size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return nil }
+            return size
+        }
+        let wanted = sizing.defaultSize ?? fits(limits.ideal) ?? fits(limits.minimum) ?? Size(width: 320, height: 240)
+        let size = WindowSizing.clamp(wanted, to: limits)
+        let current = platformWindow.contentView?.bounds.size ?? .zero
+        if Double(current.width) != size.width || Double(current.height) != size.height {
+            platformWindow.setContentSize(NSSize(width: size.width, height: size.height))
+        }
+        placeTrayPanel()
+    }
+
+    /// Just under the item, centred on it, on the screen it is on.
+    @MainActor
+    private func placeTrayPanel() {
+        guard let platformWindow, let anchor = trayAnchor else { return }
+        let item = NSRect(x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height)
+        let screen = NSScreen.screens.first { $0.frame.intersects(item) } ?? NSScreen.main
+        var frame = platformWindow.frame
+        frame.origin.x = item.midX - frame.width / 2
+        frame.origin.y = item.minY - 4 - frame.height
+        if let visible = screen?.visibleFrame {
+            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+        }
+        platformWindow.setFrame(frame, display: true)
     }
 
     /// Hold the window to its content's size limits — the minimum and

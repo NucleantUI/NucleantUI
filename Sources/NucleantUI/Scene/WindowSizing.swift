@@ -216,19 +216,31 @@ struct WindowSizingScene<Base: Scene>: Scene {
         return windows
     }
 
-    func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
-        var inner: [_WindowScene<Node>] = []
-        base._windowScenes(into: &inner)
+    func _scenes<Node: NucleantContainerNode>(into scenes: inout _AppScenes<Node>) {
+        var inner = _AppScenes<Node>()
+        base._scenes(into: &inner)
         let apply = self.apply
-        for scene in inner {
-            scenes.append(_WindowScene(id: scene.id, title: scene.title, kind: scene.kind) {
+        inner.mapWindows { scene in
+            _WindowScene(id: scene.id, title: scene.title, kind: scene.kind) {
                 let windows = scene.makeWindows()
                 for window in windows {
                     apply(&window.sizing)
                 }
                 return windows
-            })
+            }
         }
+        // A tray's window, in the `.window` style, is sized the same way.
+        inner.mapSystemTrays { tray in
+            var tray = tray
+            let makePanel = tray.makePanel
+            tray.makePanel = {
+                let panel = makePanel()
+                apply(&panel.sizing)
+                return panel
+            }
+            return tray
+        }
+        scenes.append(contentsOf: inner)
     }
 
     func _lowerCommands(into menuBar: MenuBar) {

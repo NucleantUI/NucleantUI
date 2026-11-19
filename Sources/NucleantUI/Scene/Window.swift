@@ -45,7 +45,7 @@ public struct Window<Content: View>: Scene {
         [HostingWindow(title: title, root: content)]
     }
 
-    public func _windowScenes<Node: NucleantContainerNode>(into scenes: inout [_WindowScene<Node>]) {
+    public func _scenes<Node: NucleantContainerNode>(into scenes: inout _AppScenes<Node>) {
         scenes.append(_WindowScene(id: id, title: title, kind: .unique) {
             self._makeWindows()
         })

@@ -10,7 +10,7 @@ change that adds the API.
 - [x] .defaultSize / .windowResizability / .windowIdealSize
 - [x] Window
 - [ ] Settings
-- [ ] MenuBarExtra
+- [x] MenuBarExtra (as `SystemTray`, with `.systemTrayStyle`; `.dockIcon` is ours)
 - [ ] DocumentGroup
 - [x] Commands / CommandsBuilder
 - [x] CommandMenu
