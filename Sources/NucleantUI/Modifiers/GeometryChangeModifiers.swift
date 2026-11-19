@@ -110,7 +110,7 @@ struct GeometryChangeContent<T: Equatable>: NodeContent {
         // Drawn where it stood — on its way out, or in a drag's snapshot —
         // is not a new place.
         if !context.freezesMotion {
-            let geometry = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces)
+            let geometry = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces, safeArea: context.safeArea)
             effects.onGeometryChange(placed, to: transform(GeometryProxy(geometry: geometry, log: nil)), action)
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
@@ -127,7 +127,7 @@ struct GeometryTransitionContent<T: Equatable>: NodeContent {
 
     func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
         if !context.freezesMotion {
-            let geometry = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces)
+            let geometry = PlacedGeometry(rect: rect, transform: context.transform, spaces: context.coordinateSpaces, safeArea: context.safeArea)
             effects.onGeometryTransition(placed, to: transform(GeometryProxy(geometry: geometry, log: nil)), action)
         }
         node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)

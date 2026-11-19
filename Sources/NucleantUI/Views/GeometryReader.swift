@@ -98,7 +98,7 @@ struct GeometryReaderContent<Content: View>: NodeContent {
         // A reader drawn where it stood — on its way out, or in a drag's
         // snapshot — shows what it holds as it is.
         if !draw.freezesMotion {
-            let placed = PlacedGeometry(rect: rect, transform: draw.transform, spaces: draw.coordinateSpaces)
+            let placed = PlacedGeometry(rect: rect, transform: draw.transform, spaces: draw.coordinateSpaces, safeArea: draw.safeArea)
             let isStale = log.builtWith.map { log.answersDiffer(between: $0, and: placed) } ?? true
             log.current = placed
             if isStale {

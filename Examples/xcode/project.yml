@@ -136,6 +136,8 @@ targets:
     templates: [Example, ExampleSources]
   Calculator:
     templates: [Example, ExampleSources]
+  Chat:
+    templates: [Example, ExampleSources]
   Compositor:
     templates: [Example, ExampleSources]
     dependencies:
