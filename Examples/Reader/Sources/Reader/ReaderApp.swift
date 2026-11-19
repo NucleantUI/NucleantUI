@@ -15,8 +15,10 @@
 //  * The reading screen has the bar, titled with the chapter, and controls
 //    under the page: previous / next chapter and the text size. A tap on
 //    the page hides both — `.toolbarVisibility(isImmersive ? .hidden :
-//    .visible, for: .navigationBar)` — and the page takes the whole window;
-//    another tap brings them back.
+//    .visible, for: .navigationBar, .statusBar)` — and the status bar with
+//    them, `.persistentSystemOverlays(.hidden)` takes the Home indicator
+//    (Android's navigation bar) away too, and the page has the whole
+//    screen; another tap brings them back.
 //
 //  Each screen keeps its own setting: Back from the reading screen to the
 //  book's page hides the bar again, Back from there shows it.

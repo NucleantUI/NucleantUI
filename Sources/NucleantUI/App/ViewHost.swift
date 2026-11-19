@@ -72,6 +72,21 @@ public final class ViewHost {
     /// Told after a pass whose measurement changed `contentSizeLimits`.
     var onContentSizeLimitsChange: ((ContentSizeLimits) -> Void)?
 
+    /// Whether the views want the system's status bar: what
+    /// `.statusBarHidden(_:)` and `.toolbarVisibility(_:for: .statusBar)`
+    /// asked, as it reached the root. `.automatic` when nothing asked.
+    public private(set) var statusBarVisibility = Visibility.automatic
+
+    /// Whether the views want the system's persistent overlays (the Home
+    /// indicator on iOS, the navigation bar on Android): what
+    /// `.persistentSystemOverlays(_:)` asked, as it reached the root.
+    /// `.automatic` when nothing asked.
+    public private(set) var persistentSystemOverlays = Visibility.automatic
+
+    /// Told after a pass that changed `statusBarVisibility` or
+    /// `persistentSystemOverlays`.
+    var onSystemBarsChange: (() -> Void)?
+
     /// A press in flight, from its pointer going down to its release. Held
     /// rather than re-hit-tested on release, so dragging off a button reaches
     /// the button that was actually pressed — and so a drag keeps reporting
@@ -406,11 +421,24 @@ public final class ViewHost {
             for action in effects.preferenceObservers.changes() {
                 action()
             }
+            readSystemBars()
         }
         if builds {
             measureContentSizeLimits()
         }
         return windowRedrawn
+    }
+
+    /// What the tree as it now stands asks of the system bars, and the
+    /// window told if that changed.
+    private func readSystemBars() {
+        guard let rootNode else { return }
+        let statusBar = rootNode.preference(StatusBarVisibilityKey.self) ?? .automatic
+        let overlays = rootNode.preference(PersistentSystemOverlaysKey.self) ?? .automatic
+        guard statusBar != statusBarVisibility || overlays != persistentSystemOverlays else { return }
+        statusBarVisibility = statusBar
+        persistentSystemOverlays = overlays
+        onSystemBarsChange?()
     }
 
     /// The root's size offered zero, infinity and nothing in particular —

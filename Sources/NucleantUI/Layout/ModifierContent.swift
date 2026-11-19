@@ -381,6 +381,15 @@ struct ParkedContent: NodeContent {
         guard !isParked else { return }
         node.singleChild?.place(in: rect, proposal: proposal, context: context, into: &list)
     }
+
+    /// A covered screen has no say over the window's system bars: what it
+    /// asked waits until it is on top again.
+    func preference<K: PreferenceKey>(_ key: K.Type, below: K.Value?) -> K.Value? {
+        guard isParked, key == StatusBarVisibilityKey.self || key == PersistentSystemOverlaysKey.self else {
+            return below
+        }
+        return nil
+    }
 }
 
 /// `.onTapGesture` and `Button`'s pointer handling.
