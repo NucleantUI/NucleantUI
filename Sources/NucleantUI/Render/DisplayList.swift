@@ -1086,7 +1086,8 @@ public struct DrawContext: Sendable {
     }
 
     /// The safe area this is placed in: the host's, under its root view —
-    /// the keyboard, while it is up — and none anywhere else.
+    /// the window's edges, and the keyboard while it is up — and none in
+    /// the overlay or inside a scroll view.
     var safeArea: SafeArea {
         get { shared.safeArea }
         set {

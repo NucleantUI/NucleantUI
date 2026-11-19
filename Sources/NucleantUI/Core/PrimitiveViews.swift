@@ -294,7 +294,7 @@ struct HostRootContent: NodeContent {
             }
             return
         }
-        let insets = safeArea.insets(of: .all)
+        let insets = safeArea.total
         let safe = rect.insetBy(insets)
         var inside = context
         inside.safeArea = safeArea

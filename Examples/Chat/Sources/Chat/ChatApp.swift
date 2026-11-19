@@ -17,6 +17,10 @@
 //    (`.ignoresSafeArea(.keyboard)`), so it stays still while everything
 //    on it moves.
 //
+//  Everything is laid out inside the window's safe area — clear of the
+//  status bar, the sensor housing and the home indicator — while the bar
+//  and composer colors run on under them, as style backgrounds do.
+//
 //  Made for mobile platforms only: it needs an on-screen keyboard to keep
 //  clear of. It builds and runs on a desktop, but no keyboard comes up
 //  there, so nothing moves.

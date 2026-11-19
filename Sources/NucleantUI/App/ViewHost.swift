@@ -237,6 +237,20 @@ public final class ViewHost {
 
     // MARK: - Safe area
 
+    /// What the platform keeps clear at the window's edges — on iOS the
+    /// status bar, the sensor housing, the home indicator and the rounded
+    /// corners: the root view is laid out inside it, as the `.container`
+    /// safe area.
+    private(set) var containerSafeAreaInsets = EdgeInsets()
+
+    /// The window's edges now keep `insets` clear: lay the tree out again
+    /// inside them.
+    func setSafeAreaInsets(_ insets: EdgeInsets) {
+        guard insets != containerSafeAreaInsets else { return }
+        containerSafeAreaInsets = insets
+        Invalidator.shared.invalidate()
+    }
+
     /// How much of the window the on-screen keyboard covers, in points from
     /// its bottom edge up: the root view is laid out above it, as the
     /// `.keyboard` safe area.
@@ -253,13 +267,25 @@ public final class ViewHost {
         }
     }
 
-    /// What the root view is laid out clear of: the keyboard, while it is up.
+    /// What the root view is laid out clear of: the window's edges, and the
+    /// keyboard while it is up. The keyboard covers the bottom edge's inset
+    /// too, so its element is what it covers beyond that: the two together
+    /// are the keyboard's height. Not less than nothing — a keyboard lower
+    /// than the home indicator leaves the edge's inset as it is.
     private var safeArea: SafeArea {
-        guard keyboardHeight > 0 else { return .none }
+        var elements: [SafeArea.Element] = []
+        if containerSafeAreaInsets != .zero {
+            elements.append(SafeArea.Element(regions: .container, insets: containerSafeAreaInsets))
+        }
+        let overKeyboard = keyboardHeight - containerSafeAreaInsets.bottom
+        if overKeyboard > 0 {
+            elements.append(SafeArea.Element(regions: .keyboard, insets: EdgeInsets(bottom: overKeyboard)))
+        }
+        guard !elements.isEmpty else { return .none }
         let pixel = 1 / max(environment.displayScale, 1)
         return SafeArea(
             container: Rect(origin: .zero, size: size),
-            elements: [SafeArea.Element(regions: .keyboard, insets: EdgeInsets(bottom: keyboardHeight))],
+            elements: elements,
             tolerance: pixel * 0.5 + 0.001
         )
     }
