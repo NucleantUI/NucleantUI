@@ -265,6 +265,36 @@ struct RelativeSizeModifier: PrimitiveModifier, Equatable {
     }
 }
 
+// MARK: - Fixed size
+
+extension View {
+    /// Fixes this view at its ideal size on the axes chosen: the parent's
+    /// proposal there is not passed on, so the view sizes itself as if
+    /// nothing constrained it — a `Text` keeps its one line instead of
+    /// wrapping or truncating to what it was offered.
+    ///
+    /// The view keeps its ideal size even when it is larger than what its
+    /// parent offered, and is centered in what it was given.
+    public func fixedSize(horizontal: Bool, vertical: Bool) -> some View {
+        _ModifierView(content: self, modifier: FixedSizeModifier(horizontal: horizontal, vertical: vertical))
+    }
+
+    /// Fixes this view at its ideal size on both axes.
+    public func fixedSize() -> some View {
+        fixedSize(horizontal: true, vertical: true)
+    }
+}
+
+/// `.fixedSize(horizontal:vertical:)`.
+struct FixedSizeModifier: PrimitiveModifier, Equatable {
+    let horizontal: Bool
+    let vertical: Bool
+
+    func makeContent(_ context: inout BuildContext) -> FixedSizeContent {
+        FixedSizeContent(horizontal: horizontal, vertical: vertical)
+    }
+}
+
 // MARK: - Position
 
 extension View {
