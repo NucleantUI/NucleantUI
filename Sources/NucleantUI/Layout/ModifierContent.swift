@@ -143,6 +143,48 @@ struct RelativeSizeContent: NodeContent {
     }
 }
 
+/// `.fixedSize(horizontal:vertical:)` — the proposal on a fixed axis is
+/// replaced by *unspecified*, so the child reports its ideal extent there,
+/// and that is the node's size whatever the parent offered.
+struct FixedSizeContent: NodeContent {
+    let horizontal: Bool
+    let vertical: Bool
+
+    private func inner(_ proposal: ProposedSize) -> ProposedSize {
+        var inner = proposal
+        if horizontal { inner.width = nil }
+        if vertical { inner.height = nil }
+        return inner
+    }
+
+    /// On a fixed axis the proposal is ignored, so a stack has nothing to
+    /// give or take there — it sizes the node first, as it does a fixed
+    /// frame. On the other axis, the child decides.
+    func flexibility(along axis: Axis, node: ViewNode) -> LayoutPriorityClass {
+        if axis == .horizontal ? horizontal : vertical { return .fixed }
+        return node.singleChild?.flexibility(along: axis) ?? .content
+    }
+
+    func sizeThatFits(_ proposal: ProposedSize, node: ViewNode) -> Size {
+        let inner = inner(proposal)
+        return node.singleChild?.sizeThatFits(inner) ?? inner.replacingUnspecifiedDimensions()
+    }
+
+    func place(node: ViewNode, in rect: Rect, proposal: ProposedSize, context: DrawContext, into list: inout DisplayList) {
+        guard let child = node.singleChild else { return }
+        // The child keeps its ideal size even when the rect it was given
+        // differs — larger or smaller — and is centered in it.
+        let inner = inner(proposal)
+        let size = child.sizeThatFits(inner)
+        child.place(
+            in: Alignment.center.position(size, in: rect),
+            proposal: inner,
+            context: context,
+            into: &list
+        )
+    }
+}
+
 /// `.padding(_:)`.
 struct PaddingContent: NodeContent {
     let insets: EdgeInsets

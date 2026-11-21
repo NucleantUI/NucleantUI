@@ -278,6 +278,7 @@ extension PaddingContent { static var placesPurely: Bool { true } }
 extension FrameContent { static var placesPurely: Bool { true } }
 extension FramedContent { static var placesPurely: Bool { true } }
 extension RelativeSizeContent { static var placesPurely: Bool { true } }
+extension FixedSizeContent { static var placesPurely: Bool { true } }
 extension PositionContent { static var placesPurely: Bool { true } }
 extension AspectRatioContent { static var placesPurely: Bool { true } }
 extension BackgroundContent { static var placesPurely: Bool { true } }

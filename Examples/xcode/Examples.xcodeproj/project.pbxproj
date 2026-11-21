@@ -161,7 +161,7 @@
 		0C6134BE1A92B49E6152E7D2 /* SettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPane.swift; sourceTree = "<group>"; };
 		1641E9C8BC7B7D7B0965B5E9 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		16A370C857F4E8A724E5FACA /* ReadingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingScreen.swift; sourceTree = "<group>"; };
-		1893C6B4BFA8E8023BD1F009 /* Metronome.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Metronome.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1893C6B4BFA8E8023BD1F009 /* Metronome.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Metronome.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19B2C0E72BADD46947CD74F3 /* PhotoArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoArt.swift; sourceTree = "<group>"; };
 		1A5A4CC67BDC44951C8868DE /* TwentyFortyEightApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwentyFortyEightApp.swift; sourceTree = "<group>"; };
 		1ABE33F158560C1B7B43A69A /* Issues.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Issues.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -211,7 +211,7 @@
 		703A21A5B602E3CF0312D737 /* CompositeShader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositeShader.swift; sourceTree = "<group>"; };
 		706D6F607FC2387588D1902D /* GalleryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryScreen.swift; sourceTree = "<group>"; };
 		717041910FC9EF0846A28F47 /* IconsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconsApp.swift; sourceTree = "<group>"; };
-		742CE13C7413A5697864806F /* Listen.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		742CE13C7413A5697864806F /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		74600F9C22BC45EC7F3A9430 /* saved.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = saved.md; sourceTree = "<group>"; };
 		746404A93F5DE345FD262460 /* Cover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cover.swift; sourceTree = "<group>"; };
 		74EA11AFC82636F350A558B5 /* BoardCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardCanvas.swift; sourceTree = "<group>"; };
@@ -1310,7 +1310,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					1D6A5927837FD13BE638313E = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					28F966B5125A479F8D83B2C0 = {
@@ -1366,7 +1365,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					831BB915E1FDDEA314D906C5 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					83588270DE5DB4E682CA523B = {
@@ -2280,7 +2278,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2480,7 +2478,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2505,7 +2503,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2680,7 +2678,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U7AZRR7LN3;
 				INFOPLIST_FILE = Support/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
