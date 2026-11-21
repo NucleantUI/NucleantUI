@@ -247,13 +247,14 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     // MARK: - System tray window
 
+    // The system tray is on macOS for now.
+    #if os(macOS)
     /// A `SystemTray`'s window in the `.window` style: no title bar or
     /// buttons, over the other windows, sized to its content, and hidden
     /// but for when it is shown under its item — until the app is clicked
     /// out of. Set before `present()`.
     var isTrayPanel = false
 
-    #if os(macOS)
     /// The item the window last dropped down from.
     private var trayAnchor: TrayAnchor?
 
@@ -261,12 +262,10 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     /// own item takes them before the item hears of the click, and that
     /// click closes the window rather than opening it again.
     private var trayPanelHiddenAt: Date?
-    #endif
 
     /// Show the tray window under `anchor`, or hide it when it is shown.
     @MainActor
     func toggleTrayPanel(below anchor: TrayAnchor) {
-        #if os(macOS)
         guard let platformWindow else { return }
         if platformWindow.isVisible {
             platformWindow.orderOut(nil)
@@ -284,18 +283,14 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         renderFrame(0)
         NSApp.activate(ignoringOtherApps: true)
         platformWindow.makeKeyAndOrderFront(nil)
-        #else
-        nucleantLogError("NucleantUI: a SystemTray's window is not wired on this platform yet\n")
-        #endif
     }
 
     /// Hide the tray window; it keeps its views and their state.
     @MainActor
     func hideTrayPanel() {
-        #if os(macOS)
         platformWindow?.orderOut(nil)
-        #endif
     }
+    #endif
 
     /// Bring the window in front of the app's others, and give it the keys.
     @MainActor

@@ -114,8 +114,10 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
     /// references back. Made at launch, from the scenes the body declares.
     private var windows: AppWindows<A.RenderNode>?
 
+    #if os(macOS)
     /// The app's `SystemTray` items, kept up to date with its body.
     private var systemTrays: AppSystemTrays<A.RenderNode>?
+    #endif
 
     #if os(macOS)
     /// The GPU device every window renders with: made before the first window
@@ -174,10 +176,11 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         return scenes
     }
 
-    /// Put the app's `SystemTray` items up, and keep them up to date.
+    /// Put the app's `SystemTray` items up, and keep them up to date. On
+    /// macOS for now; elsewhere it does nothing.
     private func startSystemTrays(windows: AppWindows<A.RenderNode>) {
-        guard !scenes().systemTrays.isEmpty else { return }
         #if os(macOS)
+        guard !scenes().systemTrays.isEmpty else { return }
         let trays = AppSystemTrays<A.RenderNode> { [weak self] in
             self?.scenes().systemTrays ?? []
         }
@@ -189,8 +192,6 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         trays.windows = windows
         systemTrays = trays
         trays.start()
-        #else
-        nucleantLogError("NucleantUI: SystemTray is not shown on this platform yet\n")
         #endif
     }
 
@@ -219,8 +220,12 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
     /// An app with a `SystemTray` item shown goes on with no window open —
     /// before launch, one that declares a `SystemTray` at all.
     public var terminatesAfterLastWindowClosed: Bool {
+        #if os(macOS)
         guard let systemTrays else { return scenes().systemTrays.isEmpty }
         return !systemTrays.hasInsertedItem
+        #else
+        true
+        #endif
     }
 
     /// Hand control to the platform event loop. Does not return.
