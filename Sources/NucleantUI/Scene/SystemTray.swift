@@ -81,10 +81,10 @@ public struct SystemTray<Label: View, Content: View>: Scene {
 
     /// Whether the platform has a system tray. Phones and tablets don't.
     static var platformHasSystemTray: Bool {
-        #if os(iOS) || os(Android)
-        false
-        #else
+        #if !os(iOS) && !os(Android)
         true
+        #else
+        false
         #endif
     }
 

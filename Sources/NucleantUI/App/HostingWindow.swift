@@ -247,6 +247,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     // MARK: - System tray window
 
+    // Phones and tablets have no system tray, so no tray window either.
+    #if !os(iOS) && !os(Android)
     /// A `SystemTray`'s window in the `.window` style: no title bar or
     /// buttons, over the other windows, sized to its content, and hidden
     /// but for when it is shown under its item — until the app is clicked
@@ -296,6 +298,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         platformWindow?.orderOut(nil)
         #endif
     }
+    #endif
 
     /// Bring the window in front of the app's others, and give it the keys.
     @MainActor
