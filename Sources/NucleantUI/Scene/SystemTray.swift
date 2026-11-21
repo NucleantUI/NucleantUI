@@ -45,9 +45,8 @@ import NucleantWindow
 /// An app with one is in the Dock while one of its windows is open, and in
 /// the tray alone once they are closed; `.dockIcon(_:)` says otherwise.
 ///
-/// On macOS for now. iOS and Android have no system tray, and there it does
-/// nothing: no item, no window, and the app opens as though it weren't
-/// declared. Elsewhere the app logs that it shows no tray.
+/// On macOS for now. Elsewhere it does nothing: no item, no window, and the
+/// app opens as though it weren't declared.
 public struct SystemTray<Label: View, Content: View>: Scene {
     let title: String
     let systemImage: String?
@@ -79,9 +78,10 @@ public struct SystemTray<Label: View, Content: View>: Scene {
         []
     }
 
-    /// Whether the platform has a system tray. Phones and tablets don't.
+    /// Whether the app shows a system tray on this platform: on macOS for
+    /// now.
     static var platformHasSystemTray: Bool {
-        #if !os(iOS) && !os(Android)
+        #if os(macOS)
         true
         #else
         false

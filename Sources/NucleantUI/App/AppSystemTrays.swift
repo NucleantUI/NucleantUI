@@ -7,11 +7,11 @@
 //  model the label or the menu rows were made from, an `isInserted`
 //  binding — it is read again, and each item shows what it says now. In the
 //  `.window` style a click toggles the item's window, made the first time
-//  and kept, views and state, from one click to the next. Phones and
-//  tablets have no system tray, and none of it is built for them.
+//  and kept, views and state, from one click to the next. On macOS for
+//  now; elsewhere none of it is built.
 //
 
-#if !os(iOS) && !os(Android)
+#if os(macOS)
 import Foundation
 import Observation
 import NucleantVulkan
