@@ -16,3 +16,6 @@ Package.resolved
 Tools/*/.build
 *.dia
 __pycache__/
+*.d
+*.swiftmodule
+*.swiftdeps
