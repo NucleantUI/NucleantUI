@@ -117,7 +117,7 @@ func nucleantDependencies() -> [Package.Dependency] {
     return [
         .package(url: "https://github.com/NucleantUI/NucleantVulkan.git", .upToNextMinor(from: "0.1.4")),
         .package(url: "https://github.com/NucleantUI/NucleantThorVG.git", .upToNextMinor(from: "0.1.0")),
-        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMinor(from: "0.1.4")),
+        .package(url: "https://github.com/NucleantUI/NucleantApplication.git", .upToNextMinor(from: "0.1.7")),
         .package(url: "https://github.com/NucleantUI/NucleantSkia.git", .upToNextMinor(from: "0.1.0")),
     ]
 }
