@@ -22,6 +22,7 @@ final class EnvironmentLibrary {
 final class LibraryProbe {
     var name: String?
     var found = false
+    var scheme: ColorScheme?
 }
 
 @View
@@ -42,6 +43,20 @@ struct OptionalLibraryReader {
 
     var body: some View {
         let _ = probe.name = library?.name
+        Color.clear
+    }
+}
+
+/// Reads the library by its type and the color scheme by its key path.
+@View
+struct LibraryAndSchemeReader {
+    let probe: LibraryProbe
+    @Environment(EnvironmentLibrary.self) private var library
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let _ = probe.name = library.name
+        let _ = probe.scheme = scheme
         Color.clear
     }
 }
@@ -91,6 +106,20 @@ extension HostedViews {
                     .environment(EnvironmentLibrary(name: "City"))
             )
             #expect(probe.name == nil)
+        }
+
+        @Test(arguments: [ColorScheme.light, .dark])
+        func anObjectAndAKeyPathValueAreReadTogether(scheme: ColorScheme) {
+            let probe = LibraryProbe()
+            let library = EnvironmentLibrary(name: "City")
+
+            _ = Harness(LibraryAndSchemeReader(probe: probe).colorScheme(scheme).environment(library))
+            #expect(probe.name == "City")
+            #expect(probe.scheme == scheme)
+
+            _ = Harness(LibraryAndSchemeReader(probe: probe).environment(library).colorScheme(scheme))
+            #expect(probe.name == "City")
+            #expect(probe.scheme == scheme)
         }
 
         @Test func theSubscriptReadsTheObject() {

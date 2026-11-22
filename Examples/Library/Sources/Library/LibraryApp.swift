@@ -15,6 +15,12 @@
 //  A change made four layers down — borrowing a book — shows in the totals
 //  at the top, since every layer reads the same object.
 //
+//  Key-path values travel the same environment beside it: layer 1 reads
+//  `@Environment(\.colorScheme)` next to the library and applies the View
+//  menu's System / Light / Dark choice with `.colorScheme(_:)`, and every
+//  layer's frame reads `\.colorScheme` again for its colors — below that
+//  write, so it sees the choice.
+//
 
 import NucleantUI
 import Observation
@@ -26,6 +32,7 @@ struct LibraryApp: NucleantApp {
             LibraryRoot()
         }
         .defaultSize(width: 520, height: 760)
+        .commands { AppearanceCommands() }
     }
 }
 
@@ -84,10 +91,12 @@ struct LibraryRoot {
 
 // MARK: - Layers
 
-/// Layer 1: where the library is put in the environment.
+/// Layer 1: where the library is put in the environment. It reads the
+/// window's color scheme beside it, and hands down the View menu's choice.
 @View
 struct LibraryScreen {
     @Environment(Library.self) private var library
+    @Environment(\.colorScheme) private var system
 
     var body: some View {
         ScrollView {
@@ -102,6 +111,8 @@ struct LibraryScreen {
             }
             .padding(20)
         }
+        .background(.background)
+        .colorScheme(AppearanceModel.shared.appearance.scheme ?? system)
     }
 }
 
@@ -164,20 +175,24 @@ struct LayerBox<Content: View> {
     let name: String
     let note: String?
     let content: Content
+    @Environment(\.colorScheme) private var scheme
 
-    init(_ layer: Int, _ name: String, note: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ layer: Int, _ name: String, note: String? = nil, _viewID: ViewID = #viewID, @ViewBuilder content: () -> Content) {
         self.layer = layer
         self.name = name
         self.note = note
         self.content = content()
+        self._viewID = _viewID
     }
 
+    /// Bright on dark, deeper on light.
     private var tint: Color {
+        let dark = scheme == .dark
         switch layer {
-        case 1: Color(hex: 0x4F7CFF)
-        case 2: Color(hex: 0x2EB67D)
-        case 3: Color(hex: 0xF2994A)
-        default: Color(hex: 0xBB6BD9)
+        case 1: return Color(hex: dark ? 0x4F7CFF : 0x2A55D4)
+        case 2: return Color(hex: dark ? 0x2EB67D : 0x1E8A5C)
+        case 3: return Color(hex: dark ? 0xF2994A : 0xC46A1A)
+        default: return Color(hex: dark ? 0xBB6BD9 : 0x8E3FB0)
         }
     }
 
