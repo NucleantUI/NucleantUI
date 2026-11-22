@@ -3,6 +3,8 @@
 //  NucleantUI
 //
 
+import Observation
+
 /// A key into `EnvironmentValues`.
 public protocol EnvironmentKey {
     associatedtype Value
@@ -317,26 +319,56 @@ final class EnvironmentEntryOf<K: EnvironmentKey>: EnvironmentEntry {
     }
 }
 
-/// Reads one environment value.
+/// Reads one environment value, or an `Observable` object set with
+/// `.environment(_:)`.
 ///
 /// ```swift
 /// @Environment(\.foregroundStyle) private var foreground
+/// @Environment(Library.self) private var library
+/// @Environment(Library.self) private var library: Library?
 /// ```
 @propertyWrapper
 @MainActor
 public struct Environment<Value>: DynamicProperty {
 
-    private let keyPath: KeyPath<EnvironmentValues, Value>
+    private enum Source {
+        /// A value, or an optional object, read as it is.
+        case keyPath(KeyPath<EnvironmentValues, Value>)
+        /// An object that has to be there.
+        case object(KeyPath<EnvironmentValues, Value?>)
+    }
+
+    private let source: Source
 
     /// The value, once the view is bound.
     private var value: Value?
+    private var isBound = false
 
     public init(_ keyPath: KeyPath<EnvironmentValues, Value>) {
-        self.keyPath = keyPath
+        source = .keyPath(keyPath)
+    }
+
+    /// Reads the object of `objectType` set above this view with
+    /// `.environment(_:)`. Reading it when none was set is a programming
+    /// error; read it as `Value?` to allow for that.
+    public init(_ objectType: Value.Type) where Value: AnyObject & Observable {
+        source = .object(\EnvironmentValues[objectKey: EnvironmentObjectKey<Value>()])
+    }
+
+    /// Reads the object of `objectType` set above this view with
+    /// `.environment(_:)`, or nil when none was.
+    public init<T>(_ objectType: T.Type) where Value == T?, T: AnyObject & Observable {
+        source = .keyPath(\EnvironmentValues[objectKey: EnvironmentObjectKey<T>()])
     }
 
     public var wrappedValue: Value {
         guard let value else {
+            if isBound {
+                preconditionFailure(
+                    "No Observable object of type \(Value.self) found. A View.environment(_:) "
+                    + "for \(Value.self) may be missing as an ancestor of this view."
+                )
+            }
             preconditionFailure(
                 "@Environment read before the view was built — environment values "
                 + "are only available inside `body`."
@@ -346,7 +378,40 @@ public struct Environment<Value>: DynamicProperty {
     }
 
     public mutating func _bind(to context: BindingContext) {
-        value = context.environment[keyPath: keyPath]
+        switch source {
+        case .keyPath(let keyPath):
+            value = context.environment[keyPath: keyPath]
+        case .object(let keyPath):
+            value = context.environment[keyPath: keyPath]
+        }
+        isBound = true
+    }
+}
+
+// MARK: - Observable objects
+
+/// The key an `Observable` object of type `T` is kept under. A struct, so a
+/// key path can name it: a metatype can't be a key path's index.
+struct EnvironmentObjectKey<T: AnyObject & Observable>: EnvironmentKey, Hashable {
+    static var defaultValue: T? { nil }
+}
+
+extension EnvironmentValues {
+    /// The `Observable` object of `objectType` set with `.environment(_:)`,
+    /// or nil when none was.
+    ///
+    /// ```swift
+    /// Canvas { context, size in
+    ///     let profile = context.environment[Profile.self]
+    /// }
+    /// ```
+    public subscript<T: AnyObject & Observable>(objectType: T.Type) -> T? {
+        self[EnvironmentObjectKey<T>.self]
+    }
+
+    subscript<T: AnyObject & Observable>(objectKey key: EnvironmentObjectKey<T>) -> T? {
+        get { self[EnvironmentObjectKey<T>.self] }
+        set { self[EnvironmentObjectKey<T>.self] = newValue }
     }
 }
 

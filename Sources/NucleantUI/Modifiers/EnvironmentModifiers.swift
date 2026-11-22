@@ -3,6 +3,8 @@
 //  NucleantUI
 //
 
+import Observation
+
 extension View {
 
     /// Sets one environment value for this view and everything inside it.
@@ -11,6 +13,13 @@ extension View {
         _ value: Value
     ) -> some View {
         _ModifierView(content: self, modifier: EnvironmentKeyPathModifier(keyPath: keyPath, value: value))
+    }
+
+    /// Puts an `Observable` object in the environment of this view and
+    /// everything inside it, for `@Environment(T.self)` to read. Nil takes
+    /// away one set above.
+    public func environment<T: AnyObject & Observable>(_ object: T?) -> some View {
+        _ModifierView(content: self, modifier: EnvironmentObjectModifier(object: object))
     }
 
     /// Fixes the appearance for this view and everything inside it,
@@ -108,6 +117,24 @@ struct EnvironmentKeyPathModifier<Value>: PrimitiveModifier {
 
     func _isEquivalent(to other: EnvironmentKeyPathModifier<Value>) -> Bool {
         keyPath == other.keyPath && _areEquivalent(value, other.value)
+    }
+}
+
+/// `.environment(_:)` with an `Observable` object. Two applications are the
+/// same when they set the same object.
+struct EnvironmentObjectModifier<T: AnyObject & Observable>: PrimitiveModifier {
+    let object: T?
+
+    func modifyEnvironment(_ environment: inout EnvironmentValues) {
+        environment[objectKey: EnvironmentObjectKey<T>()] = object
+    }
+
+    func makeContent(_ context: inout BuildContext) -> EnvironmentContent {
+        environmentContent(context)
+    }
+
+    func _isEquivalent(to other: EnvironmentObjectModifier<T>) -> Bool {
+        object === other.object
     }
 }
 
