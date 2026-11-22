@@ -23,6 +23,10 @@
 /// `step`, the value snaps to the nearest step from the lower bound. The
 /// filled part of the track is the tint. The label sits before the track,
 /// the value labels at either end of it.
+///
+/// A slider made without a label — `Slider(value: $volume)`, or with only
+/// value labels — or with a blank one (`EmptyView`, or a `Text("")`) keeps
+/// no room for it: the track starts and ends at the labels there are.
 @View
 public struct Slider<Label: View, ValueLabel: View> {
     /// The caller's value, as a `Double` — the value type is only generic in
@@ -70,10 +74,12 @@ public struct Slider<Label: View, ValueLabel: View> {
 
     public var body: some View {
         HStack(spacing: 8) {
-            if !labelsHidden {
+            if !labelsHidden && !isBlank(label) {
                 label
             }
-            minimumValueLabel
+            if !isBlank(minimumValueLabel) {
+                minimumValueLabel
+            }
             _SliderTrack(
                 fraction: fraction,
                 fill: isEnabled ? tint : AnyShapeStyle(controlTrackColor),
@@ -94,9 +100,21 @@ public struct Slider<Label: View, ValueLabel: View> {
                         onEditingChanged(false)
                     }
             )
-            maximumValueLabel
+            if !isBlank(maximumValueLabel) {
+                maximumValueLabel
+            }
         }
         .opacity(isEnabled ? 1 : 0.5)
+    }
+
+    /// Whether a label shows nothing: an `EmptyView`, as a slider made
+    /// without one has, or a text with no characters. A blank label is left
+    /// out along with the room beside it, so the track starts and ends at
+    /// the labels there are.
+    private func isBlank<V: View>(_ view: V) -> Bool {
+        if V.self == EmptyView.self { return true }
+        if let text = view as? Text { return text.content.isEmpty }
+        return false
     }
 
     /// Where the value sits along the range, 0…1.
@@ -194,6 +212,55 @@ extension Slider where ValueLabel == EmptyView {
 }
 
 @MainActor
+extension Slider where Label == EmptyView {
+    /// Creates a slider with value labels at either end of the track but no
+    /// label before it.
+    ///
+    /// ```swift
+    /// Slider(value: $volume) {
+    ///     Text("0%")
+    /// } maximumValueLabel: {
+    ///     Text("100%")
+    /// }
+    /// ```
+    ///
+    /// SwiftUI has no slider with value labels and no label; there, the
+    /// label is hidden with `.labelsHidden()`.
+    public init<V: BinaryFloatingPoint>(
+        value: Binding<V>,
+        in bounds: ClosedRange<V> = 0...1,
+        _viewID: ViewID = #viewID,
+        @ViewBuilder minimumValueLabel: () -> ValueLabel,
+        @ViewBuilder maximumValueLabel: () -> ValueLabel,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) where V.Stride: BinaryFloatingPoint {
+        self.init(
+            value: value, bounds: bounds, step: nil,
+            label: EmptyView(), minimumValueLabel: minimumValueLabel(), maximumValueLabel: maximumValueLabel(),
+            onEditingChanged: onEditingChanged, _viewID: _viewID
+        )
+    }
+
+    /// Creates a slider stepping by `step`, with value labels at either end
+    /// of the track but no label before it.
+    public init<V: BinaryFloatingPoint>(
+        value: Binding<V>,
+        in bounds: ClosedRange<V>,
+        step: V.Stride = 1,
+        _viewID: ViewID = #viewID,
+        @ViewBuilder minimumValueLabel: () -> ValueLabel,
+        @ViewBuilder maximumValueLabel: () -> ValueLabel,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) where V.Stride: BinaryFloatingPoint {
+        self.init(
+            value: value, bounds: bounds, step: step,
+            label: EmptyView(), minimumValueLabel: minimumValueLabel(), maximumValueLabel: maximumValueLabel(),
+            onEditingChanged: onEditingChanged, _viewID: _viewID
+        )
+    }
+}
+
+@MainActor
 extension Slider where Label == EmptyView, ValueLabel == EmptyView {
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
@@ -259,8 +326,12 @@ extension Slider {
     }
 }
 
+/// The older order, `onEditingChanged` before the label. `Slider(value:) {
+/// Text("Volume") }` fits these as well as the ones above, so they give way
+/// to those: they are only picked when nothing else fits.
 @MainActor
 extension Slider where ValueLabel == EmptyView {
+    @_disfavoredOverload
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
         in bounds: ClosedRange<V> = 0...1,
@@ -275,6 +346,7 @@ extension Slider where ValueLabel == EmptyView {
         )
     }
 
+    @_disfavoredOverload
     public init<V: BinaryFloatingPoint>(
         value: Binding<V>,
         in bounds: ClosedRange<V>,

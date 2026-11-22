@@ -7,7 +7,8 @@
 //
 //  * `Stepper` for the tempo — hold a button and it keeps stepping. One
 //    more, with no label, sits beside Start / Tap: just the − / + buttons;
-//  * `Slider` for the tempo too, and for the volume, with value labels;
+//  * `Slider` for the tempo too, with no label — only the range at either
+//    end — and for the volume, with value labels;
 //  * `Picker` in four styles: the meter as segments (`ForEach` tagging
 //    each segment with its id), the subdivision as radio buttons, the sound
 //    as a pop-up menu (explicit `.tag`s and a `Divider`), and the presets as
@@ -53,14 +54,13 @@ struct TempoPanel {
                 accentsFirstBeat: metronome.accentsFirstBeat
             )
 
+            // No label before the track — the tempo above says what it is —
+            // only the range at either end.
             Slider(value: $metronome.tempoValue, in: 30...300, step: 1) {
-                Text("Tempo")
-            } minimumValueLabel: {
                 Text("30").font(.footnote).foregroundStyle(.secondary)
             } maximumValueLabel: {
                 Text("300").font(.footnote).foregroundStyle(.secondary)
             }
-            .labelsHidden()
             .padding(.horizontal, 24)
 
             HStack(spacing: 10) {
