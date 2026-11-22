@@ -41,6 +41,9 @@ import AppKit
 /// The prompt, or the label when there is none, is the placeholder shown
 /// while the text is empty. How the field is drawn is the
 /// `.textFieldStyle(_:)` around it.
+///
+/// A field can also be made without a label — `TextField(text: $query,
+/// prompt: Text("Search"))` — when nothing but the prompt names it.
 @View
 public struct TextField<Label: View> {
     let label: Label
@@ -536,6 +539,75 @@ extension TextField {
     ) {
         self.init(
             label: label(),
+            prompt: prompt,
+            source: .value(FormatterValue(value: value, formatter: formatter)),
+            _viewID: _viewID
+        )
+    }
+}
+
+@MainActor
+extension TextField where Label == EmptyView {
+    /// A field editing `text`, with no label: the `prompt`, when there is
+    /// one, is its placeholder.
+    ///
+    /// ```swift
+    /// TextField(text: $query, prompt: Text("Search"))
+    /// ```
+    ///
+    /// SwiftUI has no field without a label; there, the label is a title
+    /// the prompt stands in for.
+    public init(text: Binding<String>, prompt: Text? = nil, _viewID: ViewID = #viewID) {
+        self.init(label: EmptyView(), prompt: prompt, source: .text(text), _viewID: _viewID)
+    }
+
+    /// A field editing `text` with no label, that wraps and grows along
+    /// `axis` when it is `.vertical`.
+    public init(text: Binding<String>, prompt: Text? = nil, axis: Axis, _viewID: ViewID = #viewID) {
+        self.init(label: EmptyView(), prompt: prompt, source: .text(text), axis: axis, _viewID: _viewID)
+    }
+
+    /// A field editing `value` through `format`, with no label.
+    public init<F: ParseableFormatStyle>(
+        value: Binding<F.FormatInput>,
+        format: F,
+        prompt: Text? = nil,
+        _viewID: ViewID = #viewID
+    ) where F.FormatOutput == String {
+        self.init(
+            label: EmptyView(),
+            prompt: prompt,
+            source: .value(FormatStyleValue(value: value, format: format)),
+            _viewID: _viewID
+        )
+    }
+
+    /// A field editing an optional `value` through `format`, with no label:
+    /// text that doesn't parse, or none, makes it `nil`.
+    public init<F: ParseableFormatStyle>(
+        value: Binding<F.FormatInput?>,
+        format: F,
+        prompt: Text? = nil,
+        _viewID: ViewID = #viewID
+    ) where F.FormatOutput == String {
+        self.init(
+            label: EmptyView(),
+            prompt: prompt,
+            source: .value(OptionalFormatStyleValue(value: value, format: format)),
+            _viewID: _viewID
+        )
+    }
+
+    /// A field editing `value` through `formatter`, with no label: text it
+    /// can't parse leaves the value as it was.
+    public init<V>(
+        value: Binding<V>,
+        formatter: Formatter,
+        prompt: Text? = nil,
+        _viewID: ViewID = #viewID
+    ) {
+        self.init(
+            label: EmptyView(),
             prompt: prompt,
             source: .value(FormatterValue(value: value, formatter: formatter)),
             _viewID: _viewID

@@ -42,7 +42,8 @@ struct IssueBrowser {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                TextField("Filter", text: $filter, prompt: Text("Filter by title, key or person"))
+                // No label: the prompt is all that names it.
+                TextField(text: $filter, prompt: Text("Filter by title, key or person"))
                     .frame(width: 240)
                 Button("New Issue") {
                     let issue = tracker.newIssue(in: scope)
