@@ -20,7 +20,7 @@
 
 import Foundation
 import NucleantUI
-
+import Observation
 // MARK: - Ticking
 
 /// One process-wide one-second tick. Started from `onAppear` and again
