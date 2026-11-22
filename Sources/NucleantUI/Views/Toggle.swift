@@ -17,6 +17,10 @@
 /// How it looks is the `ToggleStyle` in the environment: `.switch`,
 /// `.checkbox`, `.button`, or one of your own. `.automatic` is a checkbox
 /// on the desktop and a switch on a phone, as in SwiftUI.
+///
+/// A toggle made without a label — `Toggle(isOn: $isOn)` — or with a blank
+/// one (`EmptyView`, or `Toggle("", …)`) is the switch or box alone: no
+/// room is kept for the label.
 @View
 public struct Toggle<Label: View> {
     @Binding var isOn: Bool
@@ -31,9 +35,40 @@ public struct Toggle<Label: View> {
     public var body: some View {
         let label = self.label
         _StyledToggle(configuration: ToggleStyleConfiguration(
-            label: .init { context in buildNode(label, &context) },
+            label: .init(isBlank: labelIsBlank) { context in buildNode(label, &context) },
             isOn: $isOn
         ))
+    }
+
+    /// Whether the label shows nothing: the `EmptyView` of a toggle made
+    /// without one, a text with no characters, as `Toggle("", …)` has, or
+    /// the blank label of the toggle a style forwards with
+    /// `Toggle(configuration)`.
+    private var labelIsBlank: Bool {
+        if Label.self == EmptyView.self { return true }
+        if let text = label as? Text { return text.content.isEmpty }
+        if let forwarded = label as? ToggleStyleConfiguration.Label { return forwarded.isBlank }
+        return false
+    }
+}
+
+@MainActor
+extension Toggle where Label == EmptyView {
+    /// Creates a toggle with no label: the switch or box alone.
+    ///
+    /// ```swift
+    /// HStack {
+    ///     Text("Wi-Fi")
+    ///     Spacer()
+    ///     Toggle(isOn: $isWiFiOn)
+    ///         .toggleStyle(.switch)
+    /// }
+    /// ```
+    ///
+    /// SwiftUI has no toggle without a label; there, the label is hidden
+    /// with `.labelsHidden()`.
+    public init(isOn: Binding<Bool>, _viewID: ViewID = #viewID) {
+        self.init(isOn: isOn, _viewID: _viewID) { EmptyView() }
     }
 }
 
@@ -103,9 +138,17 @@ public struct ToggleStyleConfiguration {
     @View
     public struct Label {
         let builder: ToggleLabelBuilder
+        /// Whether the toggle's label shows nothing. The built-in styles
+        /// leave a blank label out along with the room beside it.
+        let isBlank: Bool
 
-        init(_ build: @escaping @MainActor (inout BuildContext) -> ViewNode, _viewID: ViewID = #viewID) {
+        init(
+            isBlank: Bool,
+            _ build: @escaping @MainActor (inout BuildContext) -> ViewNode,
+            _viewID: ViewID = #viewID
+        ) {
             self.builder = ToggleLabelBuilder(build: build)
+            self.isBlank = isBlank
             self._viewID = _viewID
         }
 
@@ -221,7 +264,7 @@ struct _SwitchToggle {
     var body: some View {
         let isOn = configuration.isOn
         HStack(spacing: 8) {
-            if !labelsHidden {
+            if !labelsHidden && !configuration.label.isBlank {
                 configuration.label
                 Spacer(minLength: 8)
             }
@@ -266,7 +309,7 @@ struct _CheckboxToggle {
                 }
             }
             .frame(width: 16, height: 16)
-            if !labelsHidden {
+            if !labelsHidden && !configuration.label.isBlank {
                 configuration.label
             }
         }
