@@ -35,6 +35,10 @@
 /// own or into an `AnyView`: put the `.tag` on the view you pass, not
 /// inside it.
 ///
+/// A picker made without a label — `Picker(selection: $scale) { … }` — or
+/// with a blank one (`EmptyView`, or `Picker("", …)`) is the control alone,
+/// at its own size: no room is kept for the label.
+///
 /// How it looks is the `.pickerStyle(_:)` around it: a pop-up menu
 /// (`.automatic`, `.menu`), a row of segments (`.segmented`), a list with a
 /// checkmark on the chosen row (`.inline`) or radio buttons
@@ -74,10 +78,11 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View> {
 
     public var body: some View {
         let entries = pickerEntries(of: content, as: SelectionValue.self)
+        let showsLabel = !labelsHidden && !labelIsBlank
         switch style {
         case .menu:
             HStack(spacing: 8) {
-                if !labelsHidden {
+                if showsLabel {
                     label
                     Spacer(minLength: 8)
                 }
@@ -85,7 +90,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View> {
             }
         case .segmented:
             HStack(spacing: 8) {
-                if !labelsHidden {
+                if showsLabel {
                     label
                     Spacer(minLength: 8)
                 }
@@ -93,19 +98,52 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View> {
             }
         case .inline:
             VStack(alignment: .leading, spacing: 4) {
-                if !labelsHidden {
+                if showsLabel {
                     label
                 }
                 _InlinePicker(entries: entries, selection: $selection)
             }
         case .radioGroup:
             HStack(alignment: .top, spacing: 8) {
-                if !labelsHidden {
+                if showsLabel {
                     label
                 }
                 _RadioGroupPicker(entries: entries, selection: $selection)
             }
         }
+    }
+
+    /// Whether the label shows nothing: the `EmptyView` of a picker made
+    /// without one, or a text with no characters, as `Picker("", …)` has.
+    /// A blank label is left out along with the room beside it, so the
+    /// picker is the control alone, at the control's own size.
+    private var labelIsBlank: Bool {
+        if Label.self == EmptyView.self { return true }
+        if let text = label as? Text { return text.content.isEmpty }
+        return false
+    }
+}
+
+@MainActor
+extension Picker where Label == EmptyView {
+    /// Creates a picker with no label: the control alone, at its own size.
+    ///
+    /// ```swift
+    /// Picker(selection: $length) {
+    ///     ForEach(NoteLength.allCases) { length in
+    ///         Text(length.name)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// SwiftUI has no picker without a label; there, the label is hidden
+    /// with `.labelsHidden()`.
+    public init(
+        selection: Binding<SelectionValue>,
+        _viewID: ViewID = #viewID,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(selection: selection, _viewID: _viewID, content: content) { EmptyView() }
     }
 }
 

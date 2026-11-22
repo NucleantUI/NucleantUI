@@ -11,7 +11,8 @@
 //    each segment with its id), the subdivision as radio buttons, the sound
 //    as a pop-up menu (explicit `.tag`s and a `Divider`), and the presets as
 //    an inline list over an optional selection — a manual tempo change
-//    clears it;
+//    clears it. The meter is also a pop-up with no label beside Start /
+//    Tap: a picker made without a label is the control alone;
 //  * `Toggle` as a switch, a checkbox and a button — the button is Start /
 //    Stop.
 //
@@ -70,6 +71,14 @@ struct TempoPanel {
 
                 Button("Tap") { metronome.tap() }
                     .tint(DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3)))
+
+                // The meter again, with no label: just the pop-up, beside
+                // the buttons.
+                Picker(selection: $metronome.meter) {
+                    ForEach(Meter.allCases) { meter in
+                        Text(meter.name)
+                    }
+                }
             }
         }
         .padding(24)
