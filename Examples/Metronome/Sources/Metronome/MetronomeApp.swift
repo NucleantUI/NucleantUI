@@ -128,6 +128,7 @@ struct SettingsPanel {
             VStack(alignment: .leading, spacing: 14) {
                 Stepper(value: $metronome.tempo, in: Metronome.tempoRange) {
                     Text("Tempo")
+                        .font(.system(size: 12))
                     Text("\(metronome.tempo)")
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -136,9 +137,11 @@ struct SettingsPanel {
                 Picker("Time", selection: $metronome.meter) {
                     ForEach(Meter.allCases) { meter in
                         Text(meter.name)
+                            .fixedSize()
                     }
                 }
                 .pickerStyle(.segmented)
+                .font(.system(size: 12))
 
                 Picker("Sound", selection: $metronome.sound) {
                     Text("Click").tag(ClickSound.click)
@@ -146,6 +149,7 @@ struct SettingsPanel {
                     Divider()
                     Text("Beep").tag(ClickSound.beep)
                 }
+                    .font(.system(size: 12))
 
                 Picker("Subdivide", selection: $metronome.subdivision) {
                     ForEach(Subdivision.allCases) { subdivision in
@@ -153,6 +157,7 @@ struct SettingsPanel {
                     }
                 }
                 .pickerStyle(.radioGroup)
+                .font(.system(size: 12))
 
                 Slider(value: $metronome.volume) {
                     Text("Volume")
@@ -161,6 +166,7 @@ struct SettingsPanel {
                 } maximumValueLabel: {
                     Text("100%").font(.footnote).foregroundStyle(.secondary)
                 }
+                    .font(.system(size: 12))
 
                 Divider()
 
@@ -193,10 +199,11 @@ struct SettingsPanel {
                     }
                 }
                 .pickerStyle(.inline)
+                .font(.system(size: 12))
             }
             .padding(18)
         }
-        .frame(width: 360)
+        .frame(width: 380)
         .frame(maxHeight: .infinity)
         .background(Theme.panel)
         .cornerRadius(16)
