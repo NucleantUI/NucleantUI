@@ -5,15 +5,18 @@
 //  A metronome that clicks. Every setting is one of the framework's
 //  controls bound into the `@Observable` model through `@Bindable`:
 //
-//  * `Stepper` for the tempo — hold a button and it keeps stepping;
+//  * `Stepper` for the tempo — hold a button and it keeps stepping. One
+//    more, with no label, sits beside Start / Tap: just the − / + buttons;
 //  * `Slider` for the tempo too, and for the volume, with value labels;
 //  * `Picker` in four styles: the meter as segments (`ForEach` tagging
 //    each segment with its id), the subdivision as radio buttons, the sound
 //    as a pop-up menu (explicit `.tag`s and a `Divider`), and the presets as
 //    an inline list over an optional selection — a manual tempo change
-//    clears it;
+//    clears it. The meter is also a pop-up with no label beside Start /
+//    Tap: a picker made without a label is the control alone;
 //  * `Toggle` as a switch, a checkbox and a button — the button is Start /
-//    Stop.
+//    Stop. The switch has no label: it ends a row of its own, the switch
+//    alone on the trailing edge.
 //
 
 import NucleantUI
@@ -70,6 +73,18 @@ struct TempoPanel {
 
                 Button("Tap") { metronome.tap() }
                     .tint(DynamicShapeStyle(light: Color(white: 0.55), dark: Color(white: 0.3)))
+
+                // The meter again, with no label: just the pop-up, beside
+                // the buttons.
+                Picker(selection: $metronome.meter) {
+                    ForEach(Meter.allCases) { meter in
+                        Text(meter.name)
+                    }
+                }
+
+                // The tempo a beat per minute at a time, with no label:
+                // just the − / + buttons.
+                Stepper(value: $metronome.tempo, in: Metronome.tempoRange)
             }
         }
         .padding(24)
@@ -113,6 +128,7 @@ struct SettingsPanel {
             VStack(alignment: .leading, spacing: 14) {
                 Stepper(value: $metronome.tempo, in: Metronome.tempoRange) {
                     Text("Tempo")
+                        .font(.system(size: 12))
                     Text("\(metronome.tempo)")
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -121,9 +137,11 @@ struct SettingsPanel {
                 Picker("Time", selection: $metronome.meter) {
                     ForEach(Meter.allCases) { meter in
                         Text(meter.name)
+                            .fixedSize()
                     }
                 }
                 .pickerStyle(.segmented)
+                .font(.system(size: 12))
 
                 Picker("Sound", selection: $metronome.sound) {
                     Text("Click").tag(ClickSound.click)
@@ -131,6 +149,7 @@ struct SettingsPanel {
                     Divider()
                     Text("Beep").tag(ClickSound.beep)
                 }
+                    .font(.system(size: 12))
 
                 Picker("Subdivide", selection: $metronome.subdivision) {
                     ForEach(Subdivision.allCases) { subdivision in
@@ -138,6 +157,7 @@ struct SettingsPanel {
                     }
                 }
                 .pickerStyle(.radioGroup)
+                .font(.system(size: 12))
 
                 Slider(value: $metronome.volume) {
                     Text("Volume")
@@ -146,11 +166,22 @@ struct SettingsPanel {
                 } maximumValueLabel: {
                     Text("100%").font(.footnote).foregroundStyle(.secondary)
                 }
+                    .font(.system(size: 12))
 
                 Divider()
 
-                Toggle("Accent first beat", isOn: $metronome.accentsFirstBeat)
-                    .toggleStyle(.switch)
+                // A row of its own around a switch with no label: the
+                // downbeat's colour and the text on the leading edge, the
+                // switch alone on the trailing one.
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Theme.downbeat)
+                        .frame(width: 10, height: 10)
+                    Text("Accent first beat")
+                    Spacer(minLength: 8)
+                    Toggle(isOn: $metronome.accentsFirstBeat)
+                        .toggleStyle(.switch)
+                }
 
                 Toggle("Flash on beat", isOn: $metronome.flashesOnBeat)
 
@@ -168,10 +199,11 @@ struct SettingsPanel {
                     }
                 }
                 .pickerStyle(.inline)
+                .font(.system(size: 12))
             }
             .padding(18)
         }
-        .frame(width: 360)
+        .frame(width: 380)
         .frame(maxHeight: .infinity)
         .background(Theme.panel)
         .cornerRadius(16)

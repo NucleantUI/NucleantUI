@@ -25,6 +25,10 @@ import Observation
 /// one. A press steps once; held, it keeps stepping, faster after a
 /// moment. A button whose step would leave the range is disabled, as is one
 /// with no action.
+///
+/// A stepper made without a label — `Stepper(value: $count, in: 1...99)` —
+/// or with a blank one (`EmptyView`, or `Stepper("", …)`) is the buttons
+/// alone: no room is kept for the label.
 @View
 public struct Stepper<Label: View> {
     let label: Label
@@ -60,7 +64,7 @@ public struct Stepper<Label: View> {
 
     public var body: some View {
         HStack(spacing: 8) {
-            if !labelsHidden {
+            if !labelsHidden && !labelIsBlank {
                 label
                 Spacer(minLength: 8)
             }
@@ -73,6 +77,16 @@ public struct Stepper<Label: View> {
             .background(RoundedRectangle(cornerRadius: 8).fill(.tertiaryBackground))
         }
         .opacity(isEnabled ? 1 : 0.4)
+    }
+
+    /// Whether the label shows nothing: the `EmptyView` of a stepper made
+    /// without one, or a text with no characters, as `Stepper("", …)` has.
+    /// A blank label is left out along with the room beside it, so the
+    /// stepper is the − / + buttons alone.
+    private var labelIsBlank: Bool {
+        if Label.self == EmptyView.self { return true }
+        if let text = label as? Text { return text.content.isEmpty }
+        return false
     }
 
     private func button(_ glyph: String, direction: StepperRepeater.Direction, isAvailable: Bool) -> some View {
@@ -185,6 +199,59 @@ extension Stepper where Label == Text {
         _viewID: ViewID = #viewID
     ) {
         self.init(value: value, in: bounds, step: step, _viewID: _viewID, label: { Text(title) }, onEditingChanged: onEditingChanged)
+    }
+}
+
+@MainActor
+extension Stepper where Label == EmptyView {
+    /// Creates a stepper with no label, running your own actions: the
+    /// − / + buttons alone.
+    public init(
+        onIncrement: (() -> Void)?,
+        onDecrement: (() -> Void)?,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in },
+        _viewID: ViewID = #viewID
+    ) {
+        self.init(
+            _viewID: _viewID,
+            label: { EmptyView() },
+            onIncrement: onIncrement,
+            onDecrement: onDecrement,
+            onEditingChanged: onEditingChanged
+        )
+    }
+
+    /// Creates a stepper with no label, stepping `value` by `step`: the
+    /// − / + buttons alone.
+    public init<V: Strideable>(
+        value: Binding<V>,
+        step: V.Stride = 1,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in },
+        _viewID: ViewID = #viewID
+    ) {
+        self.init(value: value, step: step, _viewID: _viewID, label: { EmptyView() }, onEditingChanged: onEditingChanged)
+    }
+
+    /// Creates a stepper with no label, stepping `value` by `step` within
+    /// `bounds`: the − / + buttons alone.
+    ///
+    /// ```swift
+    /// HStack {
+    ///     Text("\(count) copies")
+    ///     Stepper(value: $count, in: 1...99)
+    /// }
+    /// ```
+    ///
+    /// SwiftUI has no stepper without a label; there, the label is hidden
+    /// with `.labelsHidden()`.
+    public init<V: Strideable>(
+        value: Binding<V>,
+        in bounds: ClosedRange<V>,
+        step: V.Stride = 1,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in },
+        _viewID: ViewID = #viewID
+    ) {
+        self.init(value: value, in: bounds, step: step, _viewID: _viewID, label: { EmptyView() }, onEditingChanged: onEditingChanged)
     }
 }
 
