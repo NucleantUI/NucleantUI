@@ -76,17 +76,31 @@ extension NucleantApp {
     /// }
     /// ```
     ///
-    /// On macOS. On iOS an app doesn't quit itself, and elsewhere it is not
-    /// wired yet; there it logs and does nothing.
+    /// On macOS, Windows and Linux. On iOS and Android an app doesn't quit
+    /// itself, and in a browser the page decides; there it logs and does
+    /// nothing.
     @MainActor
     public static func quit() {
         #if os(macOS)
         NSApplication.shared.terminate(nil)
+        #elseif os(Linux) || os(Windows)
+        guard let quitRunningApp else {
+            nucleantLogError("NucleantUI: quit() before the app is running\n")
+            return
+        }
+        quitRunningApp()
         #else
-        nucleantLogError("NucleantUI: quitting the app is not wired on this platform\n")
+        nucleantLogError("NucleantUI: an app doesn't quit itself on this platform\n")
         #endif
     }
 }
+
+#if os(Linux) || os(Windows)
+/// What `NucleantApp.quit()` does: end the running app's event loop. Set as
+/// the app starts. At file scope: a generic class has no stored statics.
+@MainActor
+private var quitRunningApp: (@MainActor () -> Void)?
+#endif
 
 /// Knobs the runtime reads at launch. A namespace rather than statics on
 /// `AppRuntime`, which is generic and so can't hold stored type properties.
@@ -114,7 +128,7 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
     /// references back. Made at launch, from the scenes the body declares.
     private var windows: AppWindows<A.RenderNode>?
 
-    #if os(macOS)
+    #if os(macOS) || os(Linux) || os(Windows)
     /// The app's `SystemTray` items, kept up to date with its body.
     private var systemTrays: AppSystemTrays<A.RenderNode>?
     #endif
@@ -161,6 +175,16 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
             self?.followDockIcon()
         }
         #endif
+        #if os(Linux) || os(Windows)
+        // What AppKit does on macOS, asking `terminatesAfterLastWindowClosed`
+        // — no one asks it here: the last window closed, the app quits,
+        // unless it has an item in the tray to go on in.
+        quitRunningApp = { [weak self] in self?.quit() }
+        windows.onLastWindowClosed = { [weak self] in
+            guard let self, self.terminatesAfterLastWindowClosed else { return }
+            self.quit()
+        }
+        #endif
         // The first scene's window; the others open when asked for.
         windows.launch()
         startSystemTrays(windows: windows)
@@ -176,10 +200,10 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
         return scenes
     }
 
-    /// Put the app's `SystemTray` items up, and keep them up to date. On
-    /// macOS for now; elsewhere it does nothing.
+    /// Put the app's `SystemTray` items up, and keep them up to date. On the
+    /// desktops; on iOS and Android, with no tray, it does nothing.
     private func startSystemTrays(windows: AppWindows<A.RenderNode>) {
-        #if os(macOS)
+        #if os(macOS) || os(Linux) || os(Windows)
         guard !scenes().systemTrays.isEmpty else { return }
         let trays = AppSystemTrays<A.RenderNode> { [weak self] in
             self?.scenes().systemTrays ?? []
@@ -220,7 +244,7 @@ public final class AppRuntime<A: NucleantApp>: NucleantApplication {
     /// An app with a `SystemTray` item shown goes on with no window open —
     /// before launch, one that declares a `SystemTray` at all.
     public var terminatesAfterLastWindowClosed: Bool {
-        #if os(macOS)
+        #if os(macOS) || os(Linux) || os(Windows)
         guard let systemTrays else { return scenes().systemTrays.isEmpty }
         return !systemTrays.hasInsertedItem
         #else

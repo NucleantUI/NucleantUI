@@ -94,10 +94,14 @@ struct WindowTapCounter {
     }
 }
 
-/// The app's windows over `scene`, put on screen by noting their titles.
+/// The app's windows over `scene`, put on screen by noting their titles —
+/// on a platform that opens more than one, so what the scenes do then is
+/// checked wherever the tests run. `theWindowsSayWhetherMoreCanOpen` is the
+/// one about the platform's own answer.
 @MainActor
 private func appWindows<S: Scene>(_ scene: S, presented: Log) -> AppWindows<NucleantRenderNode> {
     let windows = AppWindows<NucleantRenderNode>(scene)
+    windows.supportsMultipleWindows = true
     windows.present = { window in presented(window.title) }
     return windows
 }
@@ -173,7 +177,8 @@ extension HostedViews {
         }
 
         @Test func theWindowsSayWhetherMoreCanOpen() {
-            let windows = appWindows(MailScenes().body, presented: Log())
+            let windows = AppWindows<NucleantRenderNode>(MailScenes().body)
+            windows.present = { _ in }
             windows.launch()
             #expect(windows.windows[0].window.host.environment.supportsMultipleWindows
                 == HostingWindow<NucleantRenderNode>.supportsMultipleWindows)

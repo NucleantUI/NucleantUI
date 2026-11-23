@@ -29,6 +29,10 @@ final class AppWindows<Node: NucleantContainerNode> {
     /// Told when a window opens or closes — the Dock icon follows them.
     var onWindowsChange: (@MainActor () -> Void)?
 
+    /// Told when a window closes and none is left open — where the app,
+    /// not the platform, decides whether that quits it (Windows, Linux).
+    var onLastWindowClosed: (@MainActor () -> Void)?
+
     /// Brings a window made from a scene up on screen. The runtime's puts
     /// it on the app's GPU device first.
     var present: @MainActor (HostingWindow<Node>) throws -> Void = { try $0.present() }
@@ -81,7 +85,9 @@ final class AppWindows<Node: NucleantContainerNode> {
             wire(window) { [weak window] in window?.close() }
             // Closed, it goes: its engine, its tree, its state.
             window.onClose = { [weak self, weak window] in
-                self?.windows.removeAll { $0.window === window }
+                guard let self else { return }
+                self.windows.removeAll { $0.window === window }
+                if self.windows.isEmpty { self.onLastWindowClosed?() }
             }
             windows.append((index, window))
             do {

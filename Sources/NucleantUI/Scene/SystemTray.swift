@@ -4,7 +4,8 @@
 //
 //  `SystemTray`: an app's item in the system tray — on macOS one of the
 //  icons at the right end of the menu bar, what SwiftUI calls a
-//  `MenuBarExtra`. Its content is a menu that drops down from it, or, in
+//  `MenuBarExtra`; on Windows an icon in the notification area by the clock;
+//  on Linux an item in the panel's tray. Its content is a menu that drops down from it, or, in
 //  the `.window` style, a window under it with any views in it. The app
 //  keeps the item up to date (`AppSystemTrays`): what the body read for it
 //  changes, the item changes.
@@ -14,7 +15,8 @@ import NucleantVulkan
 import NucleantWindow
 
 /// A scene that shows itself as an item in the system tray — on macOS, in
-/// the menu bar.
+/// the menu bar; on Windows, in the notification area; on Linux, in the
+/// panel's tray.
 ///
 /// ```swift
 /// @main
@@ -45,8 +47,16 @@ import NucleantWindow
 /// An app with one is in the Dock while one of its windows is open, and in
 /// the tray alone once they are closed; `.dockIcon(_:)` says otherwise.
 ///
-/// On macOS for now. Elsewhere it does nothing: no item, no window, and the
-/// app opens as though it weren't declared.
+/// Windows and most Linux trays show icons only: there the title is the
+/// item's tooltip, and an item with no image of its own shows the app's
+/// icon. Neither lets a person take an item out, so `isInserted` is only
+/// the app's to change. On Windows the menu or the window rises from the
+/// taskbar; on Linux the window goes where the item was clicked, except
+/// under Wayland, where the compositor places it.
+///
+/// On macOS, Windows and Linux. On iOS and Android, which have no tray, it
+/// does nothing: no item, no window, and the app opens as though it weren't
+/// declared.
 public struct SystemTray<Label: View, Content: View>: Scene {
     let title: String
     let systemImage: String?
@@ -78,10 +88,9 @@ public struct SystemTray<Label: View, Content: View>: Scene {
         []
     }
 
-    /// Whether the app shows a system tray on this platform: on macOS for
-    /// now.
+    /// Whether the app shows a system tray on this platform: a desktop's.
     static var platformHasSystemTray: Bool {
-        #if os(macOS)
+        #if os(macOS) || os(Linux) || os(Windows)
         true
         #else
         false
@@ -136,7 +145,8 @@ extension SystemTray where Label == Text {
     }
 
     /// An item shown by one of the platform's own icons — an SF Symbol name
-    /// on macOS — with `title` for accessibility.
+    /// on macOS, an icon-theme name on Linux, an icon resource of the
+    /// executable on Windows — with `title` for accessibility.
     public init<S: StringProtocol>(_ title: S, systemImage: String, @ViewBuilder content: () -> Content) {
         self.title = String(title)
         self.systemImage = systemImage
