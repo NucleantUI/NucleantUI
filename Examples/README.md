@@ -1,6 +1,6 @@
 # Examples
 
-Twenty-seven small apps, each a standalone SwiftPM package that depends on
+Twenty-nine small apps, each a standalone SwiftPM package that depends on
 NucleantUI from the enclosing checkout (`.package(path: "../..")`).
 Build and run any of them from its own directory:
 
@@ -21,6 +21,7 @@ dependency to
 | --- | --- | --- |
 | [Calculator](Calculator) | utility | a keypad of custom controls (`DragGesture` with a pressed state, release-inside to fire), an `@Observable` engine per window, flexible rows, a window held to its content's size (`.windowResizability(.contentSize)`, `.windowIdealSize(.maximum)`); a paper tape every calculator window writes on, in a `Window` of its own that opens from the Window menu or `openWindow(id:)` — never at launch — shown where `supportsMultipleWindows` |
 | [WorldClock](WorldClock) | utility | a city's time as an analog clock drawn with `PathShape`, light by day and dark by night; a `Window` opened at launch and again by id; the same clocks in the menu bar, a `SystemTray` in the `.window` style with its `isInserted` bound to a toggle, the time here as its title — the app stays in the menu bar with the window closed, and out of the Dock until the window opens again |
+| [EggTimer](EggTimer) | tray app | an app that lives in the system tray and nowhere else — the menu bar on macOS, the notification area on Windows, the panel's tray on Linux: a `SystemTray` in its default menu style as the only scene, so no window opens and Quit in the menu is the way out (`NucleantApp.quit()`, ⌘Q / Ctrl+Q through `.keyboardShortcut`); rows that follow an `@Observable` timer — a disabled status row, Pause or Resume and Reset only while it is going, the presets from a `ForEach`, `Divider`s between; a label of an `Image` and a `Text`, the image a dial of the time left drawn pixel by pixel into a `RasterImage` (shown with the text in macOS's menu bar, alone with the text as its tooltip where a tray shows only icons); the time kept off the clock in a `Task`, so a late tick loses nothing |
 | [Tasks](Tasks) | list + detail | `ForEach` over indices bound into an array (`$tasks[index]`), a detail screen pushed by `NavigationLink` editing through the same `Binding`, deleting via a flag and `navigationRouter.pop()`, filters as tap targets; toolbar items in the bar: "+ Add" as `.primaryAction`, "Clear done" as `.secondaryAction` in the "…" menu, "Delete" as the detail screen's `.destructiveAction` |
 | [Sketch](Sketch) | canvas | a `DragGesture` collecting points into a `PathShape` stroke, finished strokes as reusable child views, colour and brush pickers, undo |
 | [Dashboard](Dashboard) | data display | line, bar and ring charts drawn with `PathShape`, gradients and `.relativeSize`; stat tiles; a segmented period switch; a scrolling feed |
