@@ -138,6 +138,24 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     deinit {
         if let appearanceObserver { WindowsAppearance.removeObserver(appearanceObserver) }
+        releaseRenderingInOrder()
+    }
+    #endif
+
+    #if os(Linux)
+    deinit {
+        releaseRenderingInOrder()
+    }
+    #endif
+
+    #if os(Linux) || os(Windows)
+    /// `releaseRendering`, from `deinit`: the stored properties would go
+    /// engine first, freeing its device under the canvases still to flush
+    /// onto it — which crashed every app still holding a window as it quit.
+    /// Windows go on the main thread, where they were made and drawn.
+    private func releaseRenderingInOrder() {
+        guard Thread.isMainThread else { return }
+        MainActor.assumeIsolated { releaseRendering() }
     }
     #endif
 
@@ -226,6 +244,11 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             platformWindow.close()
             return
         }
+        #elseif os(Linux) || os(Windows)
+        if platformWindow != nil {
+            closeOnPlatform()
+            return
+        }
         #else
         if renderEngine != nil {
             nucleantLogError("NucleantUI: closing a window from the app is not wired on this platform yet\n")
@@ -247,8 +270,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
 
     // MARK: - System tray window
 
-    // The system tray is on macOS for now.
-    #if os(macOS)
+    // The desktops': macOS, Windows, Linux.
+    #if os(macOS) || os(Linux) || os(Windows)
     /// A `SystemTray`'s window in the `.window` style: no title bar or
     /// buttons, over the other windows, sized to its content, and hidden
     /// but for when it is shown under its item — until the app is clicked
@@ -268,7 +291,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     func toggleTrayPanel(below anchor: TrayAnchor) {
         guard let platformWindow else { return }
         if platformWindow.isVisible {
-            platformWindow.orderOut(nil)
+            hideTrayPanel()
             return
         }
         if let hiddenAt = trayPanelHiddenAt, Date().timeIntervalSince(hiddenAt) < 0.3 {
@@ -276,6 +299,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             return
         }
         trayAnchor = anchor
+        #if os(macOS)
         // Built, sized to what it holds and drawn at that size before it
         // shows, so it doesn't show at another size first.
         renderFrame(0)
@@ -283,12 +307,110 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         renderFrame(0)
         NSApp.activate(ignoringOtherApps: true)
         platformWindow.makeKeyAndOrderFront(nil)
+        #else
+        // Laid out first, so it is sized to what it holds before it shows;
+        // drawn by its frames once it is on screen.
+        if host.update() {
+            markNeedsRedraw()
+        }
+        platformWindow.show(near: anchor)
+        #endif
     }
 
     /// Hide the tray window; it keeps its views and their state.
     @MainActor
     func hideTrayPanel() {
+        #if os(macOS)
         platformWindow?.orderOut(nil)
+        #else
+        platformWindow?.hide()
+        #endif
+    }
+
+    /// The size a tray window takes: its content's ideal size — or the
+    /// scene's `defaultSize` — within its limits.
+    @MainActor
+    private func trayPanelSize(for limits: ContentSizeLimits) -> Size {
+        let fits: (Size?) -> Size? = { size in
+            guard let size, size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return nil }
+            return size
+        }
+        let wanted = sizing.defaultSize ?? fits(limits.ideal) ?? fits(limits.minimum) ?? Size(width: 320, height: 240)
+        return WindowSizing.clamp(wanted, to: limits)
+    }
+    #endif
+
+    #if os(Linux) || os(Windows)
+    /// A tray window takes its size from its content, under its item.
+    @MainActor
+    private func applyTrayPanelLimits(_ limits: ContentSizeLimits) {
+        guard let platformWindow else { return }
+        let size = trayPanelSize(for: limits)
+        guard abs(platformWindow.width - size.width) >= 0.5 || abs(platformWindow.height - size.height) >= 0.5 else { return }
+        platformWindow.setContentSize(width: size.width, height: size.height)
+        // Shown already: placed again for its new size.
+        if platformWindow.isVisible, let trayAnchor {
+            platformWindow.show(near: trayAnchor)
+        }
+    }
+
+    /// What a tray window is, set up as it is presented: hidden until its
+    /// item is clicked, sized to its content, and gone when it loses the
+    /// keys — or when it is asked to close (Alt+F4).
+    @MainActor
+    private func configureTrayPanel(_ platformWindow: PlatformWindow<HostingWindow>) {
+        platformWindow.on_deactivate = { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.platformWindow?.isVisible == true else { return }
+                self.trayPanelHiddenAt = Date()
+                self.hideTrayPanel()
+            }
+        }
+        platformWindow.on_close = { [weak self] in
+            MainActor.assumeIsolated { self?.hideTrayPanel() }
+        }
+        host.measuredContentSizes = [.minimum, .maximum, .ideal]
+        host.onContentSizeLimitsChange = { [weak self] limits in
+            self?.applyTrayPanelLimits(limits)
+        }
+    }
+
+    /// The window's close button, Alt+F4, `close()`: off the screen now, and
+    /// the app told. The platform window goes with this object, after the
+    /// engine that renders into it.
+    @MainActor
+    private func closeOnPlatform() {
+        guard let platformWindow else { return }
+        platformWindow.on_close = nil
+        platformWindow.hide()
+        releaseRendering()
+        didClose()
+    }
+
+    /// Lets go of the engine, and of what renders on it first: the window
+    /// canvas and the per-view nodes flush onto the engine's device as they
+    /// go, and the registry holds the engine unowned. Here the device is the
+    /// engine's own — there is no app-wide one, as on macOS — so the order
+    /// the stored properties would go in, the engine first, frees the
+    /// device under them.
+    @MainActor
+    private func releaseRendering() {
+        host.renderer = nil
+        host.shaderSlots = nil
+        windowCanvas = nil
+        shaderSlots = nil
+        renderEngine = nil
+    }
+
+    /// What closing the window does, for one the app keeps track of
+    /// (`onClose`): `closeOnPlatform`. Any other keeps the platform's own
+    /// close — gone, and the event loop with it once it was the last.
+    @MainActor
+    private func followCloseRequests(_ platformWindow: PlatformWindow<HostingWindow>) {
+        guard onClose != nil else { return }
+        platformWindow.on_close = { [weak self] in
+            MainActor.assumeIsolated { self?.closeOnPlatform() }
+        }
     }
     #endif
 
@@ -297,6 +419,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     func bringToFront() {
         #if os(macOS)
         platformWindow?.makeKeyAndOrderFront(nil)
+        #elseif os(Linux) || os(Windows)
+        platformWindow?.activate()
         #else
         nucleantLogError("NucleantUI: bringing a window to the front is not wired on this platform yet\n")
         #endif
@@ -488,12 +612,7 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
     @MainActor
     private func applyTrayPanelLimits(_ limits: ContentSizeLimits) {
         guard let platformWindow else { return }
-        let fits: (Size?) -> Size? = { size in
-            guard let size, size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return nil }
-            return size
-        }
-        let wanted = sizing.defaultSize ?? fits(limits.ideal) ?? fits(limits.minimum) ?? Size(width: 320, height: 240)
-        let size = WindowSizing.clamp(wanted, to: limits)
+        let size = trayPanelSize(for: limits)
         let current = platformWindow.contentView?.bounds.size ?? .zero
         if Double(current.width) != size.width || Double(current.height) != size.height {
             platformWindow.setContentSize(NSSize(width: size.width, height: size.height))
@@ -621,7 +740,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         let platformWindow = try PlatformWindow<HostingWindow>(
             width: win_rect.z,
             height: win_rect.w,
-            title: title
+            title: title,
+            role: isTrayPanel ? .trayPanel : .window
         )
 
         // 2. The engine renders through VK_KHR_wayland_surface or
@@ -668,10 +788,16 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         //    not yet.
         applyColorScheme(Self.systemColorScheme())
 
-        // 5. Show it. On X11 this is the real `xcb_map_window`; on Wayland a
-        //    window only becomes visible on its first attached buffer, so it is
-        //    the frame loop below that actually puts it on screen.
-        platformWindow.show()
+        // 5. Show it — a tray window only when its item is clicked. On X11
+        //    this is the real `xcb_map_window`; on Wayland a window only
+        //    becomes visible on its first attached buffer, so it is the frame
+        //    loop below that actually puts it on screen.
+        if isTrayPanel {
+            configureTrayPanel(platformWindow)
+        } else {
+            followCloseRequests(platformWindow)
+            platformWindow.show()
+        }
 
         // 6. Seed the size. Both backends report a resize only when one
         //    happens — a WM that honours the requested size never sends
@@ -764,7 +890,8 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
         let platformWindow = try PlatformWindow<HostingWindow>(
             width: win_rect.z,
             height: win_rect.w,
-            title: title
+            title: title,
+            role: isTrayPanel ? .trayPanel : .window
         )
 
         // 2. The engine renders through VK_KHR_win32_surface. As on Linux
@@ -799,8 +926,13 @@ public final class HostingWindow<Node: NucleantContainerNode>: NucleantWindow, @
             }
         }
 
-        // 5. Show it.
-        platformWindow.show()
+        // 5. Show it — a tray window only when its item is clicked.
+        if isTrayPanel {
+            configureTrayPanel(platformWindow)
+        } else {
+            followCloseRequests(platformWindow)
+            platformWindow.show()
+        }
 
         // 6. Seed the size: Windows reports a resize only when one happens.
         //    Points, which `on_size` scales itself.
