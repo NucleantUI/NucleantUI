@@ -15,7 +15,7 @@ are not covered here.
 
 ## Prerequisites
 
-- Xcode / Swift 6.2+ toolchain (`swift --version`).
+- Xcode / Swift 6.3+ toolchain (`swift --version`).
 - The umbrella checkout: `NucleantUI` next to its sibling submodules
   (`../NucleantVulkan`, `../NucleantSkia`, …). `Package.swift` uses them as
   path dependencies when `../NucleantVulkan` exists. MoltenVK and ThorVG
