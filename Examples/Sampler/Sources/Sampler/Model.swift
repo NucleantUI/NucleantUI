@@ -8,6 +8,7 @@
 //  finished analysing a waveform — with no `@State` copy in between.
 //
 
+import Dispatch
 import Foundation
 import Observation
 import NucleantUI
