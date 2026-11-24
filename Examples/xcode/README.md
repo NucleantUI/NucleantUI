@@ -53,7 +53,8 @@ Two targets need more than their sources:
   `Bundle.module` that SwiftPM generates for a package target and Xcode
   does not generate for an app target.
 
-**Metronome** and **Sampler** also link the `NucleantAudio` product.
+**Metronome** and **Sampler** also link the `NucleantAudio` product, from
+the NucleantAudio package on GitHub, as in their packages.
 
 ## Known problems (2026-11-03)
 

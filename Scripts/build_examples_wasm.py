@@ -81,7 +81,7 @@ SCRATCH = WORK / "build"
 VERSION_RE = re.compile(r"(\d+\.\d+(?:\.\d+)?)")
 
 # The examples that run in a browser today. Left out: Metronome and Sampler
-# (NucleantAudio has a macOS backend only).
+# (NucleantAudio, a package of its own, has no browser backend yet).
 EXAMPLES = [
     "Calculator", "Tasks", "Sketch", "Dashboard", "TwentyFortyEight", "Pomodoro", "Flashcards",
     "AnimatableShader", "Finder", "Photos", "Bookmarks", "Moodboard", "MindMap", "Reader", "Compositor", "Issues",

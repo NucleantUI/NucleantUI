@@ -7,13 +7,14 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS(.v17)],
     dependencies: [
         .package(url: "https://github.com/NucleantUI/NucleantUI.git", branch: "master"),
+        .package(url: "https://github.com/NucleantUI/NucleantAudio.git", branch: "master"),
     ],
     targets: [
         .executableTarget(
             name: "Sampler",
             dependencies: [
                 .product(name: "NucleantUI", package: "NucleantUI"),
-                .product(name: "NucleantAudio", package: "NucleantUI"),
+                .product(name: "NucleantAudio", package: "NucleantAudio"),
             ]
         ),
     ]

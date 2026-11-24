@@ -104,7 +104,7 @@ struct RenderState: AudioProcessor {
         lastTick = -1
     }
 
-    mutating func process(into buffer: UnsafeMutableBufferPointer<Float>, channels: Int, sampleRate: Double) {
+    mutating func process(into buffer: inout MutableSpan<Float>, channels: Int, sampleRate: Double) {
         self.sampleRate = sampleRate
         // Volume on a square law, closer to how loud it sounds.
         let gain = settings.volume * settings.volume

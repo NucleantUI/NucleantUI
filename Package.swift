@@ -143,7 +143,6 @@ let package = Package(
     ],
     products: [
         .library(name: "NucleantUI", targets: ["NucleantUI"]),
-        .library(name: "NucleantAudio", targets: ["NucleantAudio"]),
         .executable(name: "NucleantUIDemo", targets: ["NucleantUIDemo"]),
         .executable(name: "ExperimentalUITests", targets: ["ExperimentalUITests"]),
     ],
@@ -194,18 +193,6 @@ let package = Package(
             ],
             swiftSettings: skiaModeSettings
         ),
-        // Audio file loading and playback. Stands on its own — no NucleantUI
-        // dependency — so an app, or NucleantDSP later, can use it without the
-        // UI. One shared API; each platform's implementation lives in its own
-        // `+<Platform>.swift` file.
-        .target(
-            name: "NucleantAudio",
-            linkerSettings: [
-                // Linux: libasound and libsndfile are opened with dlopen, so
-                // building needs neither library's headers.
-                .linkedLibrary("dl", .when(platforms: [.linux])),
-            ]
-        ),
         .executableTarget(
             name: "NucleantUIDemo",
             dependencies: ["NucleantUI", .product(name: "NucleantThorVG", package: "NucleantThorVG")],
@@ -222,10 +209,6 @@ let package = Package(
             // NUCLEANT_PREVIEW: the tests' `@Preview` functions leave their
             // records, as an app's do in a preview build (PreviewTests).
             swiftSettings: skiaModeSettings + [.define("NUCLEANT_PREVIEW")]
-        ),
-        .testTarget(
-            name: "NucleantAudioTests",
-            dependencies: ["NucleantAudio"]
         ),
         .executableTarget(
             name: "ExperimentalUITests",

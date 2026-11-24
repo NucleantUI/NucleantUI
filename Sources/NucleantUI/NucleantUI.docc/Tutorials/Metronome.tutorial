@@ -8,13 +8,14 @@
 
     @Section(title: "Set up the package") {
         @ContentAndMedia {
-            Each example is a Swift package of its own that depends on NucleantUI.
+            Each example is a Swift package of its own that depends on NucleantUI;
+            this one also depends on NucleantAudio, the package its sound goes through.
         }
 
         @Steps {
             @Step {
                 Create a package named `Metronome` with an executable target, and add
-                NucleantUI to its dependencies.
+                NucleantUI and NucleantAudio to its dependencies.
 
                 @Code(name: "Package.swift", file: "tutorial-metronome-package.swift")
             }

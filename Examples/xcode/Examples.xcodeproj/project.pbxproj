@@ -1403,6 +1403,7 @@
 			mainGroup = AFDB1EA82615CFDF02CE1D4D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				F2D87352428C9CA0139A1729 /* XCRemoteSwiftPackageReference "NucleantAudio" */,
 				279C28FC287C1566492EF6E7 /* XCRemoteSwiftPackageReference "NucleantUI_PyShader" */,
 				D3725AA74FEDA576AC8768EF /* XCLocalSwiftPackageReference "../.." */,
 			);
@@ -3241,6 +3242,14 @@
 				minimumVersion = 0.0.1;
 			};
 		};
+		F2D87352428C9CA0139A1729 /* XCRemoteSwiftPackageReference "NucleantAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/NucleantUI/NucleantAudio.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -3311,6 +3320,7 @@
 		};
 		9639DC13B594A00F336E54E0 /* NucleantAudio */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = F2D87352428C9CA0139A1729 /* XCRemoteSwiftPackageReference "NucleantAudio" */;
 			productName = NucleantAudio;
 		};
 		A01927736ABED8E08346FED0 /* NucleantUI */ = {
@@ -3347,6 +3357,7 @@
 		};
 		F7E9785C099C23668F7D45FD /* NucleantAudio */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = F2D87352428C9CA0139A1729 /* XCRemoteSwiftPackageReference "NucleantAudio" */;
 			productName = NucleantAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
