@@ -80,8 +80,10 @@ GENERATED = WORK / "package"
 SCRATCH = WORK / "build"
 VERSION_RE = re.compile(r"(\d+\.\d+(?:\.\d+)?)")
 
-# The examples that run in a browser today. Left out: Metronome and Sampler
-# (NucleantAudio, a package of its own, has no browser backend yet).
+# The examples that run in a browser today. Left out: Metronome and Sampler,
+# whose sound goes through NucleantAudio's JavaScriptKit output: a side module
+# is given only the shared module's imports (NucleantApplication's
+# loadSideModule), never JavaScriptKit's.
 EXAMPLES = [
     "Calculator", "Tasks", "Sketch", "Dashboard", "TwentyFortyEight", "Pomodoro", "Flashcards",
     "AnimatableShader", "Finder", "Photos", "Bookmarks", "Moodboard", "MindMap", "Reader", "Compositor", "Issues",

@@ -18,7 +18,8 @@ import NucleantUI
 final class Player {
     /// `nil` when no output could be opened; the pads then play silent.
     private let output: AudioPlayer<ClipPlayback>?
-    private var timer: Timer?
+    /// Walks the playhead while a sample sounds.
+    private var playhead: Task<Void, Never>?
     private var duration: Double = 0
 
     init() {
@@ -41,12 +42,16 @@ final class Player {
         bank.lastTriggeredID = sample.id
         duration = clip.duration
         bank.playhead = 0
-        timer?.invalidate()
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick(bank) }
+        playhead?.cancel()
+        // Sixty times a second, on the main actor — a task rather than a run
+        // loop timer, which a browser build has no run loop for.
+        playhead = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                tick(bank)
+                try? await Task.sleep(for: .seconds(1.0 / 60))
+            }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
     }
 
     private func tick(_ bank: SampleBank) {
@@ -57,8 +62,8 @@ final class Player {
             output.withProcessor { $0.stop() }
             bank.playhead = nil
             bank.lastTriggeredID = nil
-            timer?.invalidate()
-            timer = nil
+            playhead?.cancel()
+            playhead = nil
         }
     }
 }

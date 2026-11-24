@@ -173,7 +173,7 @@ final class Metronome {
     private(set) var isFlashing = false
 
     @ObservationIgnored private let engine = ClickEngine()
-    @ObservationIgnored private var poll: Timer?
+    @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var taps: [Date] = []
 
     /// Tap tempo: the average gap between the last few taps, if they came
@@ -207,16 +207,20 @@ final class Metronome {
 
     private func startPolling() {
         guard poll == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            // The main run loop fires this on the main thread.
-            MainActor.assumeIsolated { self?.readPosition() }
+        // Sixty times a second, on the main actor, until stopped — a task
+        // rather than a run loop timer, which a browser build has no run
+        // loop for.
+        poll = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                readPosition()
+                try? await Task.sleep(for: .seconds(1.0 / 60))
+            }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        poll = timer
     }
 
     private func stopPolling() {
-        poll?.invalidate()
+        poll?.cancel()
         poll = nil
         beat = nil
         isFlashing = false
