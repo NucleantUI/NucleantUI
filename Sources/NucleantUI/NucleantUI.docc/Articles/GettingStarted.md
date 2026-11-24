@@ -7,7 +7,7 @@ Add NucleantUI to a Swift package and open your first window.
 NucleantUI is a Swift package. Depend on it from your app's `Package.swift`:
 
 ```swift
-// swift-tools-version: 6.2
+// swift-tools-version: 6.3
 import PackageDescription
 
 let package = Package(
