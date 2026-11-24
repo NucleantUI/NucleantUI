@@ -8,7 +8,6 @@
 //  finished analysing a waveform — with no `@State` copy in between.
 //
 
-import Accelerate
 import Foundation
 import Observation
 import NucleantUI
@@ -18,8 +17,8 @@ import NucleantUI
 /// A min/max envelope of a sample, the shape the waveform shader draws:
 /// `resolution` points, each the extremes of one slice of the frames.
 ///
-/// The reduction runs on a GCD global queue — `vDSP_minv`/`vDSP_maxv` over
-/// each slice, slices in parallel with `concurrentPerform`, every iteration
+/// The reduction runs on a GCD global queue — the lowest and highest frame
+/// of each slice, slices in parallel with `concurrentPerform`, every iteration
 /// writing its own index of a raw buffer so no lock is needed — and the
 /// result is assigned back on the main queue. That assignment is what
 /// redraws the waveform: the view read `negatives` while it was empty, and
@@ -70,17 +69,17 @@ final class WaveformEnvelope {
         DispatchQueue.concurrentPerform(iterations: pointCount) { point in
             let start = point * samplesPerPoint
             guard start + samplesPerPoint <= frames.count else { return }
-            frames.withUnsafeBufferPointer { buffer in
-                let slice = buffer.baseAddress!.advanced(by: start)
-                let length = vDSP_Length(samplesPerPoint)
-                var low: Float = 0
-                var high: Float = 0
-                vDSP_minv(slice, 1, &low, length)
-                vDSP_maxv(slice, 1, &high, length)
-                // Distinct index per iteration — race-free with no lock.
-                minBox.buffer[point] = min(low, 0)
-                maxBox.buffer[point] = max(high, 0)
+            // From 0, so a slice entirely above or below the line still
+            // reaches it.
+            var low: Float = 0
+            var high: Float = 0
+            for frame in frames[start..<(start + samplesPerPoint)] {
+                low = min(low, frame)
+                high = max(high, frame)
             }
+            // Distinct index per iteration — race-free with no lock.
+            minBox.buffer[point] = low
+            maxBox.buffer[point] = high
         }
         return (Array(mins), Array(maxs))
     }
@@ -160,10 +159,8 @@ final class Sample: Identifiable {
         let lower = Int(Double(frames.count) * min(trimStart, trimEnd))
         let upper = Int(Double(frames.count) * max(trimStart, trimEnd))
         guard upper > lower else { return [] }
-        var out = Array(frames[lower..<upper])
-        var scale = Float(gain)
-        vDSP_vsmul(out, 1, &scale, &out, 1, vDSP_Length(out.count))
-        return out
+        let scale = Float(gain)
+        return frames[lower..<upper].map { $0 * scale }
     }
 }
 
@@ -201,9 +198,9 @@ final class SampleBank {
 
 // MARK: - Synthesis
 
-/// Drum-machine sounds made with Accelerate: ramps from `vDSP_vramp`, sines
-/// from `vvsinf`, envelopes multiplied in with `vDSP_vmul`, and a tiny
-/// xorshift for noise. Deterministic per variant, so "Resample" is a
+/// Drum-machine sounds made as arrays of frames: sines and exponential
+/// decays, envelopes multiplied in frame by frame, and a tiny xorshift for
+/// noise. Deterministic per variant, so "Resample" is a
 /// different take every time and the same take every run.
 enum Synth {
     enum Kind { case kick, snare, hat, clap, bass, pluck, pad, noise }
@@ -232,10 +229,11 @@ enum Synth {
             return mix(tone, 0.7, hiss, 0.8)
         case .hat:
             let n = Int(sr * 0.12)
-            // Noise with a crude high-pass: differentiate.
-            var white = noise(n, &rng)
-            vDSP_vsub(white, 1, Array(white.dropFirst()) + [0], 1, &white, 1, vDSP_Length(n))
-            return multiply(white, by: decay(n, seconds: 0.03 + rng.next(in: 0...0.04), sampleRate: sr))
+            // Noise with a crude high-pass: differentiate, each frame taken
+            // from the one after it.
+            let white = noise(n, &rng)
+            let edges = (0..<n).map { i in (i + 1 < n ? white[i + 1] : 0) - white[i] }
+            return multiply(edges, by: decay(n, seconds: 0.03 + rng.next(in: 0...0.04), sampleRate: sr))
         case .clap:
             let n = Int(sr * 0.35)
             // Three short bursts then a tail.
@@ -301,29 +299,17 @@ enum Synth {
         }
     }
 
-    /// `sin(2π f t)` for `n` samples: a ramp of phases from `vDSP_vramp`,
-    /// then `vvsinf` over the whole array at once.
+    /// `sin(2π f t)` for `n` samples. Each phase is the frame's index times
+    /// the step rather than a running sum, so it does not drift.
     static func sine(_ n: Int, hz: Float, sampleRate: Float) -> [Float] {
-        var phases = [Float](repeating: 0, count: n)
-        var start: Float = 0
-        var step = 2 * Float.pi * hz / sampleRate
-        vDSP_vramp(&start, &step, &phases, 1, vDSP_Length(n))
-        var out = [Float](repeating: 0, count: n)
-        var count = Int32(n)
-        vvsinf(&out, phases, &count)
-        return out
+        let step = 2 * Float.pi * hz / sampleRate
+        return (0..<n).map { i in sin(Float(i) * step) }
     }
 
     /// `exp(-t / seconds)`.
     static func decay(_ n: Int, seconds: Float, sampleRate: Float) -> [Float] {
-        var times = [Float](repeating: 0, count: n)
-        var start: Float = 0
-        var step = -1 / (seconds * sampleRate)
-        vDSP_vramp(&start, &step, &times, 1, vDSP_Length(n))
-        var out = [Float](repeating: 0, count: n)
-        var count = Int32(n)
-        vvexpf(&out, times, &count)
-        return out
+        let step = -1 / (seconds * sampleRate)
+        return (0..<n).map { i in exp(Float(i) * step) }
     }
 
     static func adsr(_ n: Int, attack: Float, decayTo: Float, hold: Float, release: Float, sampleRate: Float) -> [Float] {
@@ -336,23 +322,17 @@ enum Synth {
         }
     }
 
+    /// Frame by frame, as long as the shorter of the two.
     static func multiply(_ a: [Float], by b: [Float]) -> [Float] {
-        let n = min(a.count, b.count)
-        var out = [Float](repeating: 0, count: n)
-        vDSP_vmul(a, 1, b, 1, &out, 1, vDSP_Length(n))
-        return out
+        (0..<min(a.count, b.count)).map { i in a[i] * b[i] }
     }
 
+    /// `a` at `ga` plus `b` at `gb`, as long as the longer of the two: the
+    /// shorter one is silent past its end.
     static func mix(_ a: [Float], _ ga: Float, _ b: [Float], _ gb: Float) -> [Float] {
-        let n = max(a.count, b.count)
-        var out = [Float](repeating: 0, count: n)
-        var ga = ga, gb = gb
-        var sa = a + [Float](repeating: 0, count: n - a.count)
-        var sb = b + [Float](repeating: 0, count: n - b.count)
-        vDSP_vsmul(sa, 1, &ga, &sa, 1, vDSP_Length(n))
-        vDSP_vsmul(sb, 1, &gb, &sb, 1, vDSP_Length(n))
-        vDSP_vadd(sa, 1, sb, 1, &out, 1, vDSP_Length(n))
-        return out
+        (0..<max(a.count, b.count)).map { i in
+            (i < a.count ? a[i] * ga : 0) + (i < b.count ? b[i] * gb : 0)
+        }
     }
 
     static func noise(_ n: Int, _ rng: inout XorShift) -> [Float] {

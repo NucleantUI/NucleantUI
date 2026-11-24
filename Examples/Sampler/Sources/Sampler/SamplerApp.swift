@@ -16,8 +16,8 @@
 //  * `ShaderArgument`s: the envelope's two float arrays, the gain, the trim
 //    and the playhead go to the GPU as named inputs, and the shader
 //    re-dispatches whenever one of them changes.
-//  * Accelerate on the CPU side: vDSP for synthesis and for the parallel
-//    min/max reduction (Model.swift).
+//  * The CPU side in plain Swift: synthesis, and the min/max reduction run
+//    in parallel with `concurrentPerform` (Model.swift).
 //
 
 import Foundation
