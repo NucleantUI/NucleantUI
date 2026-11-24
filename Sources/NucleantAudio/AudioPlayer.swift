@@ -56,6 +56,10 @@ public final class AudioPlayer<Processor: AudioProcessor> {
 public enum AudioPlayerError: Error {
     /// The output could not take `channels` channels at `sampleRate`.
     case unsupportedFormat(channels: Int, sampleRate: Double)
+    /// The default output could not be opened or started — there is none,
+    /// or the system's audio library is missing. Says why, in the system's
+    /// words.
+    case outputUnavailable(String)
     /// This platform has no audio output backend yet.
     case unsupportedPlatform
 }

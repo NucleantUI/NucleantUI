@@ -21,6 +21,9 @@ public struct AudioFileLoader: Sendable {
 public enum AudioFileError: Error {
     /// The file could not be opened or decoded.
     case unreadable(URL)
+    /// The system's decoder could not be loaded, so no file can be read —
+    /// libsndfile missing on Linux. Says which.
+    case decoderUnavailable(String)
     /// This platform has no audio decoder yet.
     case unsupportedPlatform
 }
