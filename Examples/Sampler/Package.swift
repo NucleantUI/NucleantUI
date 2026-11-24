@@ -8,7 +8,7 @@ import Foundation
 //   .package(url: "https://github.com/NucleantUI/NucleantUI.git", branch: "master")
 //
 // Its sound goes through NucleantAudio, a package of its own: the sibling
-// checkout under `NUCLEANT_LOCAL_DEV=1`, its master branch otherwise.
+// checkout under `NUCLEANT_LOCAL_DEV=1`, its 0.0 releases otherwise.
 let localDev = ["1", "true", "yes"].contains(
     (ProcessInfo.processInfo.environment["NUCLEANT_LOCAL_DEV"] ?? "").lowercased()
 )
@@ -20,7 +20,7 @@ let package = Package(
         .package(path: "../.."),
         localDev
             ? .package(path: "../../../NucleantAudio")
-            : .package(url: "https://github.com/NucleantUI/NucleantAudio.git", branch: "master"),
+            : .package(url: "https://github.com/NucleantUI/NucleantAudio.git", .upToNextMinor(from: "0.0.0")),
     ],
     targets: [
         .executableTarget(

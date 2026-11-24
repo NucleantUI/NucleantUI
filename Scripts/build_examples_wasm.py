@@ -80,14 +80,11 @@ GENERATED = WORK / "package"
 SCRATCH = WORK / "build"
 VERSION_RE = re.compile(r"(\d+\.\d+(?:\.\d+)?)")
 
-# The examples that run in a browser today. Left out: Metronome and Sampler,
-# whose sound goes through NucleantAudio's JavaScriptKit output: a side module
-# is given only the shared module's imports (NucleantApplication's
-# loadSideModule), never JavaScriptKit's.
+# The examples that run in a browser today.
 EXAMPLES = [
     "Calculator", "Tasks", "Sketch", "Dashboard", "TwentyFortyEight", "Pomodoro", "Flashcards",
     "AnimatableShader", "Finder", "Photos", "Bookmarks", "Moodboard", "MindMap", "Reader", "Compositor", "Issues",
-    "Atlas",
+    "Atlas", "Metronome", "Sampler",
 ]
 SHARED = "nucleant-shared"
 # A WASI reactor, as NucleantApplication's build_wasm_app.py builds an app:
@@ -109,6 +106,11 @@ GUARD_SIZE = 4096
 RESOURCES_ROOT = "/app"
 NUCLEANT_APPLICATION_WEB = ["nucleant-app.js"]
 NUCLEANT_VULKAN_WEB = ["nucleant-webgpu.js", "nucleant-wgpu.js", "nucleant-wasi.js", "naga_webgpu.wasm"]
+# JavaScriptKit's runtime, from the build's checkout: the shared module
+# imports JavaScriptKit when an example links a package built with it (the
+# sound of Metronome and Sampler goes through NucleantAudio's JavaScriptKit
+# output). nucleant-app.js loads it from next to itself.
+JAVASCRIPTKIT_RUNTIME = Path("JavaScriptKit") / "Plugins" / "PackageToJS" / "Templates" / "runtime.mjs"
 ZONEINFO = Path("/usr/share/zoneinfo")
 ZONEINFO_SKIPPED = {"tzdata.zi", "leapseconds", "leap-seconds.list", "posix", "right"}
 
@@ -557,6 +559,10 @@ def lay_out(output: Path, names: list[str], products: Path) -> None:
         shutil.copy2(sibling_web("NucleantApplication", "nucleant-app.js") / file_name, shared_dir / file_name)
     for file_name in NUCLEANT_VULKAN_WEB:
         shutil.copy2(sibling_web("NucleantVulkan", "nucleant-webgpu.js") / file_name, shared_dir / file_name)
+    runtime = SCRATCH / "checkouts" / JAVASCRIPTKIT_RUNTIME
+    if runtime.is_file():
+        # copyfile, not copy2: SwiftPM's checkouts are read-only.
+        shutil.copyfile(runtime, shared_dir / "javascriptkit-runtime.mjs")
     zoneinfo = pack_zoneinfo()
     if zoneinfo is None:
         print(f"warning: no {ZONEINFO} here — formatting a date in a named time zone will trap", flush=True)

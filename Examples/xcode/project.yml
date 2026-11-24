@@ -46,7 +46,7 @@ packages:
   # Metronome's and Sampler's, as their Package.swift files take it from GitHub.
   NucleantAudio:
     url: https://github.com/NucleantUI/NucleantAudio.git
-    branch: master
+    minorVersion: 0.0.0
 
 settings:
   base:
