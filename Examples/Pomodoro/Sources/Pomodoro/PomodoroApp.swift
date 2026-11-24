@@ -9,7 +9,8 @@
 //  click.
 //
 //  The tick runs only while the window is active. Out of use — minimized
-//  or hidden on a Mac, in the app switcher or off screen on iOS — it stops
+//  or hidden on a Mac, in the app switcher or off screen on iOS, minimized
+//  or on another workspace on Linux — it stops
 //  (`.onChange(of: scenePhase)`), and on the way back the session catches
 //  up on the time it was away, from the clock rather than by counting
 //  ticks that never came.

@@ -32,6 +32,13 @@
 ///   Control Center or a call, and on its way to or from the background;
 ///   in the background once it is off screen — another app, the Home
 ///   Screen, the device locked.
+/// - On Linux a window is in the background while it is out of sight —
+///   minimized, or on a workspace that isn't shown — as the window manager
+///   or compositor says: on X11 by unmapping the window or marking it
+///   hidden, which window managers do as they minimize it; on Wayland by
+///   suspending it, which a compositor with xdg-shell 6 does (GNOME's a few
+///   seconds after the window is hidden). Behind other windows, or without
+///   the keys, it is still active. It is never inactive.
 ///
 /// Where the platform doesn't say, the window stays active.
 ///
