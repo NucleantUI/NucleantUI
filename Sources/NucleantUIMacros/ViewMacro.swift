@@ -276,7 +276,12 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
     /// an optional one, which starts at `nil` — is not a parameter at all:
     /// its declaration is where it starts, and a view that wants its caller
     /// to choose the start writes that init itself. Only a `@State` with no
-    /// value, which nothing else could start, takes one. A property whose
+    /// value, which nothing else could start, takes one. A `@Bindable` takes
+    /// the object it binds into. Any other wrapper makes itself — from the
+    /// arguments it is written with (`@Query(#Predicate { … })`) or from its
+    /// `init()` (`@Query`) — and is no parameter: what the compiler's own
+    /// init would offer for one is a replacement for the whole wrapper,
+    /// whose type the syntax does not spell. A property whose
     /// type is only inferred from its initializer
     /// is left at that value rather than guessed at — the macro sees syntax,
     /// not types.
@@ -311,12 +316,15 @@ public struct ViewMacro: ExtensionMacro, MemberMacro, MemberAttributeMacro {
             case "FocusState.Binding":
                 parameters.append("\(property.name): FocusState<\(type)>.Binding")
                 assignments.append("self._\(property.name) = \(property.name)")
-            case .some(let other):
-                // An unknown wrapper: take the wrapped value if it has no
-                // initializer of its own, the same bet the compiler makes.
+            case "Bindable":
+                // The object to bind into, which only the caller has.
                 guard property.initializer == nil else { continue }
-                parameters.append("\(property.name): \(escaping)\(type)")
-                assignments.append("self._\(property.name) = \(other)(wrappedValue: \(property.name))")
+                parameters.append("\(property.name): \(type)")
+                assignments.append("self._\(property.name) = Bindable(wrappedValue: \(property.name))")
+            case .some:
+                // Any other wrapper makes itself: from its attribute's
+                // arguments, or its `init()` — `@Query`, `@Namespace`.
+                continue
             case .none:
                 if property.isLet && property.initializer != nil { continue }
                 let defaultValue = property.initializer.map { " = \($0)" } ?? ""
