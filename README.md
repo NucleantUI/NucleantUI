@@ -665,6 +665,40 @@ with a new node when `id` changes. `ThorCanvasRender(context:)` is the same
 with `onAppear` / `update` on an object of yours (`ThorRenderContext`) —
 make it `@Observable` and `update` re-runs when what it read changes.
 
+`SkiaCanvasView(context:)` is the same with the Skia API itself: an object
+of yours (`SkiaRenderContext`) whose `onAppear` / `update` are handed the
+`SkCanvas` the views around it are drawn on — at the view's origin, cut to
+its frame, in points — so what it draws sits in paint order with them and
+needs no node of its own:
+
+```swift
+@MainActor
+final class Meter: @MainActor SkiaRenderContext {
+    let level: Level                    // an @Observable model
+    let paint = SkPaint()
+
+    init(level: Level) { self.level = level }
+
+    func onAppear(context: borrowing SkCanvas, size: SIMD2<Float>) {   // once per view
+        paint.setAntiAlias(true)
+        paint.setColor4f(r: 1, g: 0.69, b: 0.25)
+    }
+
+    func update(context: borrowing SkCanvas, size: SIMD2<Float>) {     // whenever it is drawn
+        context.drawRRect(pos: .zero, size: SIMD2(size.x * Float(level.value), size.y),
+                          radius: SIMD2(4, 4), paint: paint)
+    }
+}
+
+SkiaCanvasView(context: meter)
+    .frame(height: 24)
+```
+
+`update` runs with its reads tracked like a `body`: `level.value` above
+makes this view depend on it, so a change rebuilds the view alone and the
+canvas it is on is drawn again. `SkiaCanvasView(id:context:)` runs
+`onAppear` again when `id` changes.
+
 ## Seeing what the framework does
 
 Set these in the environment when running:
