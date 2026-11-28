@@ -20,6 +20,7 @@
 		10154D3CC0AF6991B8015C0C /* IconGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0871D724BA1FC2CCCC338949 /* IconGrid.swift */; };
 		1D13B19BFE91326C4B503E7C /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8C2941DBF771C5217EC385B /* Appearance.swift */; };
 		1DC996964A3284F496B1C602 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A081F10BE85F0EB3155968E5 /* Appearance.swift */; };
+		2079B49D985EB080102EC6A0 /* NucleantSkia in Frameworks */ = {isa = PBXBuildFile; productRef = 3F535160EE4FBEE37796CF0B /* NucleantSkia */; };
 		2113880E6F8F474B5E72872A /* PhotoArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B2C0E72BADD46947CD74F3 /* PhotoArt.swift */; };
 		2137C450E8561C6EC39CD1BD /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F306568C3E86065110367EB /* Model.swift */; };
 		2297AEED8E00D2AA22A37A8B /* NowPlayingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0588CF539CA01EB8A1E8A3A /* NowPlayingScreen.swift */; };
@@ -85,13 +86,16 @@
 		7360FB01E805F15EC588E047 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 607EF935D161CA008C6F9A0C /* Model.swift */; };
 		777870960B2AB0831EF4A359 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = E590BA3C8903F72E91BE06A9 /* NucleantUI */; };
 		78B65C6BCE98B3D09D2C87BC /* CompositorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36785BC2B77BD110B9CC433C /* CompositorApp.swift */; };
+		80D4D71586EA5F28C8503CE5 /* RosettePainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6081A97250EB81060A016CE8 /* RosettePainter.swift */; };
 		8493EED56DA3B0FC1AB5C997 /* PhotosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EEAFE16E529171F42A6A2FC /* PhotosApp.swift */; };
 		87EB97415B8FD2D6F8AC1DCD /* Editor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E36BAB18E0EBDD840469C8A /* Editor.swift */; };
+		89C903B1E9405C8689AFDA53 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = F499A04CECEFADEB9B3FC5CF /* Design.swift */; };
 		8C7016BDEA041A7DB7C60FD6 /* MindMapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6012AEC0FD6A80E4500FFE23 /* MindMapApp.swift */; };
 		901033EFD14B8958FD255E15 /* LayerArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A853FB08ECFEADB36AA3BB1 /* LayerArt.swift */; };
 		911FCB1BAF23C010CB93D11A /* IssuesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3AB0ACB7A3BF0E519F02F9 /* IssuesApp.swift */; };
 		933AC0B13C908E9DF11C3C60 /* IssueBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D365B032239F4201B30C58A5 /* IssueBrowser.swift */; };
 		949474829127FA52D775458B /* HighlightScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC41B2C6211EB4ADD3306F7 /* HighlightScreen.swift */; };
+		97441E96E37EFF235E68E9DB /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = B48E98520C4001559FB40528 /* NucleantUI */; };
 		9A0D05869BEC96B95FED0FB4 /* Inbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68608375683A05A986D22565 /* Inbox.swift */; };
 		9BBFE476D5E533DCB91F799A /* saved.md in Resources */ = {isa = PBXBuildFile; fileRef = 74600F9C22BC45EC7F3A9430 /* saved.md */; };
 		9C86913DE50A9A43609027F1 /* NucleantAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F7E9785C099C23668F7D45FD /* NucleantAudio */; };
@@ -123,6 +127,7 @@
 		C16BD672064074DE313E17B2 /* SearchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00CF7DBAAE25E6897C5A2A77 /* SearchScreen.swift */; };
 		C1EE55551D580C4833BA3DC0 /* Effects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F44733D0CB042B32511CC1 /* Effects.swift */; };
 		C248F321489255D708DC2B44 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C60C6D08A4863980C8B512 /* Appearance.swift */; };
+		C2712C653EA927231787C402 /* RosettesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F7C3330B76782E1E0DB246 /* RosettesApp.swift */; };
 		C2784BEDF347988F4738A6E1 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 74B0D083329F4C709B6E2394 /* NucleantUI */; };
 		C4E0244A4C1CDA57494EF633 /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51F1477EEB25B617E422F8DE /* Sidebar.swift */; };
 		C7061F1C0540583AC5D5E0AA /* AtlasApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DF668FE17FE07B0E00E1629 /* AtlasApp.swift */; };
@@ -131,6 +136,7 @@
 		D021FEF30DBF3F740C5CF66D /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 46D5D45B736B93100EA87A47 /* NucleantUI */; };
 		D143AC483C72E0F1AD80ADFB /* GalleryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706D6F607FC2387588D1902D /* GalleryScreen.swift */; };
 		D49863F67B1A6BB1BC48B953 /* NucleantUI in Frameworks */ = {isa = PBXBuildFile; productRef = 553E4DDF3B16009D2262CAC8 /* NucleantUI */; };
+		D4E0499E181DC45E0449A4BD /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2844CF8A7CC7C55AA76A8EB /* Appearance.swift */; };
 		D4F2DA96673398791F1A95B4 /* AlbumScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFEC7E8AF1F67D21A597851A /* AlbumScreen.swift */; };
 		D5AFF379BB29125036495470 /* BookmarksApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB5B3D3D249847FB7876EE3 /* BookmarksApp.swift */; };
 		D61E1591752D9AB8ACC31D30 /* ReaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CF68775FAF4CA1DA3A1B4E /* ReaderApp.swift */; };
@@ -202,9 +208,11 @@
 		5E7CC091C5BF331569852DBF /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		6012AEC0FD6A80E4500FFE23 /* MindMapApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindMapApp.swift; sourceTree = "<group>"; };
 		607EF935D161CA008C6F9A0C /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		6081A97250EB81060A016CE8 /* RosettePainter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosettePainter.swift; sourceTree = "<group>"; };
 		648A31860592C31000D03E31 /* Flashcards.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Flashcards.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		66AEE120293FB0DBB8F77849 /* Shelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shelf.swift; sourceTree = "<group>"; };
 		68608375683A05A986D22565 /* Inbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inbox.swift; sourceTree = "<group>"; };
+		6DEAD85E7C92B73138832AAF /* Rosettes.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Rosettes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E68A85BD6054A0825936DD0 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		6F0621BF6ED84E57B68241D7 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		6F3091149C43009F0219EBF0 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
@@ -264,6 +272,8 @@
 		CF01123260E12B7357F80012 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		CF4525156EACBC9D209C7EB7 /* Player.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Player.swift; sourceTree = "<group>"; };
 		D1224CA80CE2F615B9672310 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		D2844CF8A7CC7C55AA76A8EB /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
+		D2F7C3330B76782E1E0DB246 /* RosettesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosettesApp.swift; sourceTree = "<group>"; };
 		D365B032239F4201B30C58A5 /* IssueBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueBrowser.swift; sourceTree = "<group>"; };
 		D4A414A26964BA2168A8057D /* Catalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
 		D4BD2437A15D7D176D6FE5FA /* ListenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenApp.swift; sourceTree = "<group>"; };
@@ -279,6 +289,7 @@
 		EF47CD0870264472E8533D1A /* NucleantUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = NucleantUI; path = ../..; sourceTree = SOURCE_ROOT; };
 		EFEC7E8AF1F67D21A597851A /* AlbumScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumScreen.swift; sourceTree = "<group>"; };
 		F13B2930B65FE13795EAE999 /* SlidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlidesApp.swift; sourceTree = "<group>"; };
+		F499A04CECEFADEB9B3FC5CF /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		F4B544D18215A5225F372040 /* SketchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchApp.swift; sourceTree = "<group>"; };
 		F740C62F9012636B8F1AA07C /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		FEE8004F95024EE2F84A403E /* Recipes.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Recipes.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -372,6 +383,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				B3301A0D9B011CFF6486C4D2 /* NucleantUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3A56C28EB391B37E1AF5F500 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97441E96E37EFF235E68E9DB /* NucleantUI in Frameworks */,
+				2079B49D985EB080102EC6A0 /* NucleantSkia in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -543,6 +563,18 @@
 			path = ../Sampler/Sources/Sampler;
 			sourceTree = "<group>";
 		};
+		3A33779AA2512DE92787FEF3 /* Rosettes */ = {
+			isa = PBXGroup;
+			children = (
+				D2844CF8A7CC7C55AA76A8EB /* Appearance.swift */,
+				F499A04CECEFADEB9B3FC5CF /* Design.swift */,
+				6081A97250EB81060A016CE8 /* RosettePainter.swift */,
+				D2F7C3330B76782E1E0DB246 /* RosettesApp.swift */,
+			);
+			name = Rosettes;
+			path = ../Rosettes/Sources/Rosettes;
+			sourceTree = "<group>";
+		};
 		3FDBCEEB7C4C53F0545FC427 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -564,6 +596,7 @@
 				9E0BA05376A4D695B54B5B0B /* Pomodoro.app */,
 				89163FEA939C2FB6ADAB25F4 /* Reader.app */,
 				FEE8004F95024EE2F84A403E /* Recipes.app */,
+				6DEAD85E7C92B73138832AAF /* Rosettes.app */,
 				89B2088D13A0718E9DC3D3C5 /* Sampler.app */,
 				B39FC6CB5BB1E0FFEFB3857F /* Sketch.app */,
 				ABD5F90EFB83D4628AFA1B3F /* Slides.app */,
@@ -789,6 +822,7 @@
 				A988306CAD1B8211008672BB /* Pomodoro */,
 				DA563D3C76C57B556DF8C5B3 /* Reader */,
 				69B97992777BAECA32169B8E /* Recipes */,
+				3A33779AA2512DE92787FEF3 /* Rosettes */,
 				2A329348C845038E2A4AFB41 /* Sampler */,
 				FEF4F6A3006A3870B9908809 /* Sketch */,
 				267222D2C8C8A05861ED685E /* Slides */,
@@ -1157,6 +1191,26 @@
 			productReference = 0987578549CCDCB330B5CFC1 /* Finder.app */;
 			productType = "com.apple.product-type.application";
 		};
+		827B7F617FB90DAC7717ED6B /* Rosettes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B81983A7F52A55047106D068 /* Build configuration list for PBXNativeTarget "Rosettes" */;
+			buildPhases = (
+				06951D0CF1D3CBFD35D45995 /* Sources */,
+				3A56C28EB391B37E1AF5F500 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Rosettes;
+			packageProductDependencies = (
+				B48E98520C4001559FB40528 /* NucleantUI */,
+				3F535160EE4FBEE37796CF0B /* NucleantSkia */,
+			);
+			productName = Rosettes;
+			productReference = 6DEAD85E7C92B73138832AAF /* Rosettes.app */;
+			productType = "com.apple.product-type.application";
+		};
 		831BB915E1FDDEA314D906C5 /* Listen */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C726EDA5A1CF49D94ABD5D8D /* Build configuration list for PBXNativeTarget "Listen" */;
@@ -1364,6 +1418,10 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					827B7F617FB90DAC7717ED6B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					831BB915E1FDDEA314D906C5 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -1404,6 +1462,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F2D87352428C9CA0139A1729 /* XCRemoteSwiftPackageReference "NucleantAudio" */,
+				7E09A6CB1401E4893A20A1A7 /* XCRemoteSwiftPackageReference "NucleantSkia" */,
 				279C28FC287C1566492EF6E7 /* XCRemoteSwiftPackageReference "NucleantUI_PyShader" */,
 				D3725AA74FEDA576AC8768EF /* XCLocalSwiftPackageReference "../.." */,
 			);
@@ -1430,6 +1489,7 @@
 				2A76233F741D295FD78880C6 /* Pomodoro */,
 				350BD32BB00D22AF7A70BC6A /* Reader */,
 				8DCA2A3516D8F89DC745DC63 /* Recipes */,
+				827B7F617FB90DAC7717ED6B /* Rosettes */,
 				EC22915DA727AD8A3205CA5E /* Sampler */,
 				1C0FB9B57263616B8E1AA5DB /* Sketch */,
 				DC08A4B92C84C180FC70BF57 /* Slides */,
@@ -1459,6 +1519,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		06951D0CF1D3CBFD35D45995 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4E0499E181DC45E0449A4BD /* Appearance.swift in Sources */,
+				89C903B1E9405C8689AFDA53 /* Design.swift in Sources */,
+				80D4D71586EA5F28C8503CE5 /* RosettePainter.swift in Sources */,
+				C2712C653EA927231787C402 /* RosettesApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		09D0845213CBA2A94D20E8D3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1957,6 +2028,31 @@
 			};
 			name = Debug;
 		};
+		36EFB5A092F27C05745DFC03 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Rosettes;
+				PRODUCT_NAME = Rosettes;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		3B2D6BE4500AE1A02855BCE9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2288,6 +2384,31 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Moodboard;
 				PRODUCT_NAME = Moodboard;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7C7F3B76BDC5F4031243AB41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.nucleantui.Rosettes;
+				PRODUCT_NAME = Rosettes;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -3134,6 +3255,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		B81983A7F52A55047106D068 /* Build configuration list for PBXNativeTarget "Rosettes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7C7F3B76BDC5F4031243AB41 /* Debug */,
+				36EFB5A092F27C05745DFC03 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		BBF749C1EC543B6F3E2D7933 /* Build configuration list for PBXNativeTarget "Photos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -3242,6 +3372,14 @@
 				minimumVersion = 0.0.1;
 			};
 		};
+		7E09A6CB1401E4893A20A1A7 /* XCRemoteSwiftPackageReference "NucleantSkia" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/NucleantUI/NucleantSkia.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
 		F2D87352428C9CA0139A1729 /* XCRemoteSwiftPackageReference "NucleantAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/NucleantUI/NucleantAudio.git";
@@ -3272,6 +3410,11 @@
 		3E010C94C6F2D04073213F62 /* NucleantUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NucleantUI;
+		};
+		3F535160EE4FBEE37796CF0B /* NucleantSkia */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7E09A6CB1401E4893A20A1A7 /* XCRemoteSwiftPackageReference "NucleantSkia" */;
+			productName = NucleantSkia;
 		};
 		468CCF4D32AF436B3085F90A /* NucleantUI */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -3332,6 +3475,10 @@
 			productName = NucleantUI;
 		};
 		AD499C5A4EE55DFB5E287260 /* NucleantUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NucleantUI;
+		};
+		B48E98520C4001559FB40528 /* NucleantUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NucleantUI;
 		};

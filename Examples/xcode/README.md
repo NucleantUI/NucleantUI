@@ -54,7 +54,9 @@ Two targets need more than their sources:
   does not generate for an app target.
 
 **Metronome** and **Sampler** also link the `NucleantAudio` product, from
-the NucleantAudio package on GitHub, as in their packages.
+the NucleantAudio package on GitHub, as in their packages. **Rosettes**
+links the `NucleantSkia` product the same way: it draws with the Skia API
+itself.
 
 ## Known problems (2026-11-03)
 

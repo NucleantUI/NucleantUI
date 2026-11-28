@@ -47,6 +47,11 @@ packages:
   NucleantAudio:
     url: https://github.com/NucleantUI/NucleantAudio.git
     minorVersion: 0.0.0
+  # Rosettes', as its Package.swift takes it from GitHub — the same
+  # NucleantSkia NucleantUI draws with.
+  NucleantSkia:
+    url: https://github.com/NucleantUI/NucleantSkia.git
+    minorVersion: 0.1.0
 
 settings:
   base:
@@ -185,6 +190,11 @@ targets:
     templates: [Example, ExampleSources]
   Recipes:
     templates: [Example, ExampleSources]
+  Rosettes:
+    templates: [Example, ExampleSources]
+    dependencies:
+      - package: NucleantSkia
+        product: NucleantSkia
   Sampler:
     templates: [Example, ExampleSources]
     dependencies:
