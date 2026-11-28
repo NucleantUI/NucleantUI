@@ -35,6 +35,7 @@ built for WebAssembly and drawn with WebGPU. You need a browser with WebGPU
     - <doc:AtlasExample>
     - <doc:MetronomeExample>
     - <doc:SamplerExample>
+    - <doc:RosettesExample>
 }
 
 ### One download for every example
@@ -79,6 +80,7 @@ code.
 - <doc:MindMapExample>
 - <doc:ReaderExample>
 - <doc:AtlasExample>
+- <doc:RosettesExample>
 
 ### Sound
 

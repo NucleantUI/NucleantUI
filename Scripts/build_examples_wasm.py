@@ -84,7 +84,7 @@ VERSION_RE = re.compile(r"(\d+\.\d+(?:\.\d+)?)")
 EXAMPLES = [
     "Calculator", "Tasks", "Sketch", "Dashboard", "TwentyFortyEight", "Pomodoro", "Flashcards",
     "AnimatableShader", "Finder", "Photos", "Bookmarks", "Moodboard", "MindMap", "Reader", "Compositor", "Issues",
-    "Atlas", "Metronome", "Sampler",
+    "Atlas", "Metronome", "Sampler", "Rosettes",
 ]
 SHARED = "nucleant-shared"
 # A WASI reactor, as NucleantApplication's build_wasm_app.py builds an app:
